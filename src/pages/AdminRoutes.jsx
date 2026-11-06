@@ -7,13 +7,16 @@ import {
   ChevronLeft,
   CircleAlert,
   Database,
+  Flag,
   LayoutDashboard,
   LoaderCircle,
   LogOut,
   Menu,
   RefreshCw,
   Shield,
+  ShieldAlert,
   ShieldCheck,
+  ScrollText,
   Users,
   UserRoundPlus,
   UserRoundX,
@@ -23,6 +26,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { getSupabaseClient } from '../lib/supabase.js'
+import AdminManagementPage from './AdminManagementPage.jsx'
 
 const tableNames = ['posts', 'comments', 'follows', 'groups', 'messages', 'stories']
 
@@ -48,23 +52,32 @@ function AdminRoutes() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [overview, setOverview] = useState(null)
+  const [adminRole, setAdminRole] = useState('')
   const [status, setStatus] = useState('loading')
   const [errorMessage, setErrorMessage] = useState('')
   const [signingOut, setSigningOut] = useState(false)
 
-  const requestOverview = useCallback(async () => {
+  const requestAdminData = useCallback(async () => {
     try {
-      const { data, error } = await getSupabaseClient().rpc('admin_get_overview')
-      return { data, error }
+      const client = getSupabaseClient()
+      const { data: role, error: roleError } = await client.rpc('admin_get_role')
+      if (roleError) return { error: roleError }
+      if (!role) return { error: { code: '42501', message: 'Administrator access required.' } }
+      if (!['super_admin', 'admin'].includes(role)) return { role, data: null, error: null }
+      const { data, error } = await client.rpc('admin_get_overview')
+      return { role, data, error }
     } catch (error) {
-      return { data: null, error }
+      return { error }
     }
   }, [])
 
-  const applyOverviewResult = useCallback(({ data, error }) => {
+  const applyAdminResult = useCallback(({ role, data, error }) => {
     if (error) {
       if (error.code === '42501') {
         setStatus('denied')
+      } else if (error.code === 'PGRST202' || error.code === '42883') {
+        setErrorMessage('Apply supabase/migrations/20261107023000_admin_management.sql in the Supabase SQL Editor, then refresh this page.')
+        setStatus('management-upgrade')
       } else if (isSetupError(error)) {
         setErrorMessage(error.message)
         setStatus('setup')
@@ -76,13 +89,14 @@ function AdminRoutes() {
       return
     }
 
-    if (!data?.account_metrics || !Array.isArray(data.registration_trend)) {
+    setAdminRole(role)
+    if (['super_admin', 'admin'].includes(role) && (!data?.account_metrics || !Array.isArray(data.registration_trend))) {
       setErrorMessage('Apply supabase/migrations/20261107003000_admin_dashboard_metrics.sql in the Supabase SQL Editor, then refresh this page.')
       setStatus('upgrade')
       return
     }
 
-    setOverview(data)
+    if (data) setOverview(data)
     setErrorMessage('')
     setStatus('ready')
   }, [])
@@ -91,20 +105,20 @@ function AdminRoutes() {
     if (!user) return undefined
 
     let active = true
-    requestOverview().then((result) => {
-      if (active) applyOverviewResult(result)
+    requestAdminData().then((result) => {
+      if (active) applyAdminResult(result)
     })
 
     return () => {
       active = false
     }
-  }, [applyOverviewResult, requestOverview, user])
+  }, [applyAdminResult, requestAdminData, user])
 
   const loadOverview = useCallback(async () => {
     setStatus('loading')
     setErrorMessage('')
-    applyOverviewResult(await requestOverview())
-  }, [applyOverviewResult, requestOverview])
+    applyAdminResult(await requestAdminData())
+  }, [applyAdminResult, requestAdminData])
 
   if (loading) {
     return (
@@ -138,8 +152,17 @@ function AdminRoutes() {
     return <Navigate to="/admin/overview" replace />
   }
 
-  if (location.pathname !== '/admin/overview' && location.pathname !== '/admin/overview/') {
+  const section = location.pathname.split('/')[2] || 'overview'
+  if (!['overview', 'users', 'reports', 'moderation', 'audit', 'roles'].includes(section)) {
     return <Navigate to="/admin/overview" replace />
+  }
+  if (adminRole === 'support' && ['overview', 'moderation', 'audit', 'roles'].includes(section)) {
+    return <Navigate to="/admin/reports" replace />
+  }
+  if (adminRole === 'moderator' && section === 'roles') return <Navigate to="/admin/users" replace />
+
+  if (status === 'ready' && !['super_admin', 'admin'].includes(adminRole) && section === 'overview') {
+    return <Navigate to={adminRole === 'support' ? '/admin/reports' : '/admin/users'} replace />
   }
 
   if (status === 'loading') {
@@ -218,9 +241,34 @@ function AdminRoutes() {
     )
   }
 
-  const readyTables = tableNames.filter((name) => overview.social_tables_ready?.[name])
-  const unavailableTables = tableNames.filter((name) => !overview.social_tables_ready?.[name])
-  const metrics = overview.account_metrics
+  if (status === 'management-upgrade') {
+    return (
+      <main className="admin-access-state">
+        <div className="admin-access-card admin-setup-card">
+          <div className="admin-access-icon"><Database size={25} aria-hidden="true" /></div>
+          <p className="admin-eyebrow">ADMIN MANAGEMENT UPDATE REQUIRED</p>
+          <h1>Apply the administration migration.</h1>
+          <p>This release needs the protected user management, restriction, report, and audit functions.</p>
+          <code className="admin-setup-path">supabase/migrations/20261107023000_admin_management.sql</code>
+          <details className="admin-setup-error"><summary>Database response</summary><code>{errorMessage}</code></details>
+          <button className="admin-button admin-button--secondary" type="button" onClick={loadOverview}>Retry after migration</button>
+        </div>
+      </main>
+    )
+  }
+
+  const sectionLabels = {
+    overview: 'Overview',
+    users: 'User management',
+    reports: 'Reports',
+    moderation: 'Content moderation',
+    audit: 'Audit logs',
+    roles: 'Administrator roles',
+  }
+
+  const readyTables = tableNames.filter((name) => overview?.social_tables_ready?.[name])
+  const unavailableTables = tableNames.filter((name) => !overview?.social_tables_ready?.[name])
+  const metrics = overview?.account_metrics
   const metricCards = [
     { label: 'TOTAL USERS', value: metrics.total_users, icon: Users, note: 'Accounts registered in Supabase Auth' },
     { label: 'VERIFIED USERS', value: metrics.verified_users, icon: BadgeCheck, note: 'Email address confirmed' },
@@ -229,7 +277,7 @@ function AdminRoutes() {
     { label: 'LAST 7 DAYS', value: metrics.registered_last_7_days, icon: CalendarDays, note: 'New account registrations' },
     { label: 'THIS MONTH', value: metrics.registered_this_month, icon: CalendarDays, note: 'Since the start of this month' },
   ]
-  const peakRegistrations = Math.max(1, ...overview.registration_trend.map((item) => Number(item.count)))
+  const peakRegistrations = Math.max(1, ...(overview?.registration_trend || []).map((item) => Number(item.count)))
 
   return (
     <div className={`admin-layout${collapsed ? ' admin-layout--collapsed' : ''}${sidebarOpen ? ' admin-layout--sidebar-open' : ''}`}>
@@ -238,7 +286,7 @@ function AdminRoutes() {
         <div className="admin-brand-row">
           <Link to="/admin/overview" className="admin-brand-link" aria-label="QORVEXA admin overview">
             <BrandMark compact />
-            <span className="admin-brand-copy"><strong>QORVEXA</strong><small>SUPER ADMIN</small></span>
+            <span className="admin-brand-copy"><strong>QORVEXA</strong><small>{adminRole.replace('_', ' ').toUpperCase()}</small></span>
           </Link>
           <button className="admin-icon-button admin-collapse-button" type="button" onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
             <ChevronLeft size={17} aria-hidden="true" />
@@ -251,13 +299,15 @@ function AdminRoutes() {
         <div className="admin-sidebar-caption">CONTROL CENTER</div>
         <nav className="admin-nav" aria-label="Administrator navigation">
           <span className="admin-nav-section">OVERVIEW</span>
-          <Link className="admin-nav-link admin-nav-link--active" to="/admin/overview" onClick={() => setSidebarOpen(false)}>
+          {['super_admin', 'admin'].includes(adminRole) && <Link className={`admin-nav-link${section === 'overview' ? ' admin-nav-link--active' : ''}`} to="/admin/overview" onClick={() => setSidebarOpen(false)}>
             <LayoutDashboard size={17} aria-hidden="true" /><span>Overview</span>
-          </Link>
-          <span className="admin-nav-section">ACCESS CONTROL</span>
-          <div className="admin-nav-link admin-nav-link--locked" aria-disabled="true" title="Additional admin tools will be added after their data schemas are implemented.">
-            <ShieldCheck size={17} aria-hidden="true" /><span>Role protection</span><span className="admin-lock-mark">ON</span>
-          </div>
+          </Link>}
+          <span className="admin-nav-section">COMMUNITY</span>
+          <Link className={`admin-nav-link${section === 'users' ? ' admin-nav-link--active' : ''}`} to="/admin/users" onClick={() => setSidebarOpen(false)}><Users size={17} /><span>User management</span></Link>
+          <Link className={`admin-nav-link${section === 'reports' ? ' admin-nav-link--active' : ''}`} to="/admin/reports" onClick={() => setSidebarOpen(false)}><Flag size={17} /><span>Reports</span></Link>
+          {['super_admin', 'admin', 'moderator'].includes(adminRole) && <Link className={`admin-nav-link${section === 'moderation' ? ' admin-nav-link--active' : ''}`} to="/admin/moderation" onClick={() => setSidebarOpen(false)}><ShieldAlert size={17} /><span>Content moderation</span></Link>}
+          {['super_admin', 'admin', 'moderator'].includes(adminRole) && <Link className={`admin-nav-link${section === 'audit' ? ' admin-nav-link--active' : ''}`} to="/admin/audit" onClick={() => setSidebarOpen(false)}><ScrollText size={17} /><span>Audit logs</span></Link>}
+          {adminRole === 'super_admin' && <Link className={`admin-nav-link${section === 'roles' ? ' admin-nav-link--active' : ''}`} to="/admin/roles" onClick={() => setSidebarOpen(false)}><ShieldCheck size={17} /><span>Admin roles</span></Link>}
           <div className="admin-sidebar-note">
             <span className="admin-status-dot" />
             <span>Server-verified access</span>
@@ -280,14 +330,14 @@ function AdminRoutes() {
           <button className="admin-icon-button admin-mobile-menu" type="button" onClick={() => setSidebarOpen(true)} aria-label="Open admin navigation">
             <Menu size={19} aria-hidden="true" />
           </button>
-          <div className="admin-breadcrumb"><span>QORVEXA ADMIN</span><span>/</span><strong>Overview</strong></div>
+          <div className="admin-breadcrumb"><span>QORVEXA ADMIN</span><span>/</span><strong>{sectionLabels[section]}</strong></div>
           <div className="admin-topbar-actions">
             <span className="admin-live-status"><i /> SYSTEM ONLINE</span>
             <Link className="admin-home-link" to="/" aria-label="Return to public site"><ArrowDownToLine size={16} aria-hidden="true" /><span>Public site</span></Link>
           </div>
         </header>
 
-        <section className="admin-content">
+        {section !== 'overview' ? <AdminManagementPage section={section} role={adminRole} userId={user.id} /> : <section className="admin-content">
           <div className="admin-page-heading">
             <div>
               <p className="admin-eyebrow"><Activity size={14} aria-hidden="true" /> PLATFORM CONTROL</p>
@@ -336,7 +386,7 @@ function AdminRoutes() {
               <span className="admin-generated-time">PROFILE ROWS: {formatCount(overview.registered_profiles)}</span>
             </div>
             <div className="admin-registration-chart" role="img" aria-label="Daily account registrations over the last seven days">
-              {overview.registration_trend.map((item) => {
+              {(overview?.registration_trend || []).map((item) => {
                 const count = Number(item.count)
                 const height = count === 0 ? 0 : Math.max(8, (count / peakRegistrations) * 100)
                 return (
@@ -394,7 +444,7 @@ function AdminRoutes() {
             </section>
           )}
           <p className="admin-metrics-note">Active, inactive, and suspended account counts are not shown because the current database does not yet define those account states.</p>
-        </section>
+        </section>}
       </main>
     </div>
   )

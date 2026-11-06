@@ -5,6 +5,7 @@ import {
   Bell,
   Clock3,
   CornerDownRight,
+  Flag,
   LoaderCircle,
   LogOut,
   MessageCircle,
@@ -18,6 +19,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { getSupabaseClient } from '../lib/supabase.js'
+import ReportDialog from '../components/ReportDialog.jsx'
+import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 
 const postSelection = 'id, author_id, content, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url)'
 
@@ -67,6 +70,7 @@ function MemberPage() {
   const [publishing, setPublishing] = useState(false)
   const [submittingComment, setSubmittingComment] = useState(null)
   const [deletingComment, setDeletingComment] = useState(null)
+  const [reportTarget, setReportTarget] = useState(null)
   const name = user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
   const username = user.user_metadata?.username
 
@@ -263,6 +267,7 @@ function MemberPage() {
         </button>
       </header>
 
+      <AccountRestrictionNotice userId={user.id} />
       <div className="member-feed-layout">
         <aside className="member-profile-card">
           <div className="member-profile-cover" aria-hidden="true" />
@@ -348,6 +353,7 @@ function MemberPage() {
                           <MessageCircle size={14} aria-hidden="true" />
                           <span>{commentsByPost[post.id] ? `${commentsByPost[post.id].length} comments` : 'View comments'}</span>
                         </button>
+                        {post.author_id !== user.id && <button className="member-comments-toggle" type="button" onClick={() => setReportTarget({ reportedUserId: post.author_id, type: 'post', id: post.id })}><Flag size={13} aria-hidden="true" /><span>Report</span></button>}
                       </div>
                       {commentsOpen[post.id] && (
                         <section className="member-comments" aria-label="Comments">
@@ -381,6 +387,7 @@ function MemberPage() {
                                           <p>{comment.content}</p>
                                           <div className="member-comment-actions">
                                             <button type="button" onClick={() => setReplyTarget(replyTarget === comment.id ? null : comment.id)}>Reply</button>
+                                            {comment.author_id !== user.id && <button type="button" onClick={() => setReportTarget({ reportedUserId: comment.author_id, type: 'comment', id: comment.id })}><Flag size={12} aria-hidden="true" /> Report</button>}
                                             {comment.author_id === user.id && (
                                               <button type="button" onClick={() => handleDeleteComment(comment)} disabled={deletingComment === comment.id}>
                                                 <Trash2 size={12} aria-hidden="true" /> {deletingComment === comment.id ? 'Deleting…' : 'Delete'}
@@ -420,6 +427,7 @@ function MemberPage() {
                                                   </button>
                                                 </div>
                                               )}
+                                              {reply.author_id !== user.id && <div className="member-comment-actions"><button type="button" onClick={() => setReportTarget({ reportedUserId: reply.author_id, type: 'comment', id: reply.id })}><Flag size={12} aria-hidden="true" /> Report</button></div>}
                                             </div>
                                           </div>
                                         )
@@ -459,6 +467,7 @@ function MemberPage() {
         <span>QORVEXA <span>·</span> Connect Beyond Limits.</span>
         <span>Posts are visible to signed-in members.</span>
       </footer>
+      {reportTarget && <ReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />}
     </main>
   )
 }

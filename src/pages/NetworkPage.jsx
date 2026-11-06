@@ -6,6 +6,7 @@ import {
   Check,
   CheckCheck,
   Clock3,
+  Flag,
   LoaderCircle,
   LogOut,
   MessageCircle,
@@ -22,6 +23,8 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import BrandMark from '../components/BrandMark.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { getSupabaseClient } from '../lib/supabase.js'
+import ReportDialog from '../components/ReportDialog.jsx'
+import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 
 const profileFields = 'id, username, display_name, bio, avatar_url, last_active_at'
 const requestFields = 'id, sender_id, receiver_id, status, created_at'
@@ -111,6 +114,7 @@ function NetworkPage() {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
   const [typingConversationId, setTypingConversationId] = useState('')
   const [viewingProfile, setViewingProfile] = useState(null)
+  const [reportTarget, setReportTarget] = useState(null)
   const [signingOut, setSigningOut] = useState(false)
   const messagesEndRef = useRef(null)
   const skipNextMessageScrollRef = useRef(false)
@@ -620,6 +624,7 @@ function NetworkPage() {
         </button>
       </header>
 
+      <AccountRestrictionNotice userId={user.id} />
       <section className={`network-content network-content--${activeSection}`}>
         <div className="network-heading">
           <div><p className="eyebrow">YOUR COMMUNITY</p><h1>{pageTitles[activeSection] || 'Your network'}</h1></div>
@@ -847,9 +852,11 @@ function NetworkPage() {
                 : incomingRequests.some((request) => request.sender_id === viewingProfile.id)
                   ? <button className="network-button network-button--primary" type="button" onClick={() => respondToRequest(incomingRequests.find((request) => request.sender_id === viewingProfile.id), true)}><Check size={14} />Accept request</button>
                   : <button className="network-button network-button--primary" type="button" onClick={() => sendFriendRequest(viewingProfile)}><UserPlus size={14} />Add friend</button>}
+            <button className="network-button" type="button" onClick={() => { setReportTarget({ reportedUserId: viewingProfile.id, type: 'user', id: viewingProfile.id }); setViewingProfile(null) }}><Flag size={14} />Report account</button>
           </section>
         </div>
       )}
+      {reportTarget && <ReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />}
     </main>
   )
 }

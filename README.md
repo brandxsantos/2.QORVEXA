@@ -33,6 +33,8 @@ QORVEXA is a social platform in development. The responsive landing page, Supaba
 
    `supabase/migrations/20261107021500_realtime_presence_policy_fix.sql` (apply after the friends/messaging migration if it was already run)
 
+   `supabase/migrations/20261107023000_admin_management.sql` (apply once, after all migrations above; adds staff role support, report intake, user restrictions, content moderation, and admin management RPCs)
+
 5. In Supabase Authentication settings, enable email/password sign-in and email confirmations. Add the local and production `/app` and `/reset-password` URLs to the allowed redirect URLs (for local development, include both `localhost:5173` and `127.0.0.1:5173`).
 
 6. Create an account and verify its email. In Authentication → Users, copy the account UUID, replace `null::uuid` in `supabase/setup/bootstrap_super_admin.sql` with that UUID, then run that script once in the SQL Editor. The bootstrap script writes a security audit entry and cannot be run from the website.
@@ -89,7 +91,7 @@ The friends/messaging migration adds protected friend requests and friendships, 
 
 The initial `/admin/overview` is protected twice: the client requires an authenticated session, and its overview data is returned only by a database `SECURITY DEFINER` function that checks `admin_roles`. Regular clients cannot read or modify `admin_roles`; the initial owner is provisioned only through the trusted SQL Editor bootstrap script. The dashboard metrics migration adds authorized counts from Supabase Auth (total, verified/unverified, registrations today, this week, and this month) and a seven-day registration chart. It intentionally does not invent activity, suspension, or content metrics that the current schema does not support.
 
-The admin foundation is intentionally limited to authorization, owner bootstrap, an immutable-to-client audit table, and the real-data overview. User moderation, messages, reports, analytics, storage, and other admin operations must be added alongside their respective application data tables and separately authorized database functions.
+The admin foundation includes authorization, owner bootstrap, an immutable-to-client audit table, and the real-data overview. The admin-management migration adds report intake, staff review, per-action restrictions for posting, commenting, messaging, and friend requests, and auditable hide/restore moderation. These restrictions do not disable sign-in or read access. Permanent Auth-account deletion is deliberately not included; it requires a separately secured server-side function and an agreed retention policy. The migration cannot verify the live project schema from this workspace, so apply it only after the listed prerequisite migrations have succeeded.
 
 Frontend environment variables are public in the built app: use only the Supabase publishable key and never use a `service_role` key. Enable and test RLS policies for every table before exposing data.
 
