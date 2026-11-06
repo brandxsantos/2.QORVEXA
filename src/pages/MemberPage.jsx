@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   AlertCircle,
   ArrowUp,
+  Bell,
   Clock3,
   CornerDownRight,
   LoaderCircle,
@@ -11,6 +12,7 @@ import {
   ShieldCheck,
   Trash2,
   Users,
+  UserPlus,
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
@@ -248,7 +250,13 @@ function MemberPage() {
       <div className="matrix-grid" aria-hidden="true" />
       <header className="member-header member-feed-header">
         <Link className="brand-link" to="/" aria-label="QORVEXA home"><BrandMark /></Link>
-        <div className="member-header-center"><Rss size={16} aria-hidden="true" /><span>COMMUNITY FEED</span></div>
+        <nav className="network-nav" aria-label="Community navigation">
+          <span className="network-nav-link is-active"><Rss size={15} aria-hidden="true" />Feed</span>
+          <Link to="/app/discover" className="network-nav-link"><UserPlus size={15} aria-hidden="true" />Discover</Link>
+          <Link to="/app/friends" className="network-nav-link"><Users size={15} aria-hidden="true" />Friends</Link>
+          <Link to="/app/notifications" className="network-nav-link"><Bell size={15} aria-hidden="true" />Notifications</Link>
+          <Link to="/app/messages" className="network-nav-link"><MessageCircle size={15} aria-hidden="true" />Messages</Link>
+        </nav>
         <button className="button button--outline member-signout" type="button" onClick={handleSignOut} disabled={signingOut}>
           <LogOut size={15} aria-hidden="true" />
           {signingOut ? 'Signing out…' : 'Sign out'}

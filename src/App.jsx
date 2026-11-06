@@ -22,6 +22,7 @@ function App() {
       <Route path="/forgot-password" element={<AccountAccess />} />
       <Route path="/reset-password" element={<AccountAccess />} />
       <Route path="/app" element={<AccountAccess />} />
+      <Route path="/app/*" element={<AccountAccess />} />
       <Route path="/admin/*" element={<AccountAccess />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

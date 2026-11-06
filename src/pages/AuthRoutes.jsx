@@ -5,8 +5,9 @@ import { useAuth } from '../context/useAuth.js'
 import AdminRoutes from './AdminRoutes.jsx'
 import AuthPage from './AuthPage.jsx'
 import MemberPage from './MemberPage.jsx'
+import NetworkPage from './NetworkPage.jsx'
 
-function ProtectedRoute() {
+function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
 
   if (loading) {
@@ -18,13 +19,13 @@ function ProtectedRoute() {
     )
   }
 
-  return user ? <MemberPage /> : <Navigate to="/login" replace />
+  return user ? children : <Navigate to="/login" replace />
 }
 
 function AuthRoutes() {
   const { pathname } = useLocation()
-  const page = pathname === '/app'
-    ? <ProtectedRoute />
+  const page = pathname.startsWith('/app')
+    ? <ProtectedRoute>{pathname === '/app' ? <MemberPage /> : <NetworkPage />}</ProtectedRoute>
     : pathname.startsWith('/admin')
       ? <AdminRoutes />
     : ['/login', '/signup', '/forgot-password', '/reset-password'].includes(pathname)
