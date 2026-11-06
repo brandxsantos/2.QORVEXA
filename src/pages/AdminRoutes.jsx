@@ -380,6 +380,20 @@ function AdminRoutes() {
             </article>
           </div>
 
+          {adminRole === 'super_admin' && (
+            <section className="admin-role-shortcut" aria-labelledby="admin-role-shortcut-heading">
+              <span className="admin-role-shortcut-icon"><ShieldCheck size={19} aria-hidden="true" /></span>
+              <div>
+                <h2 id="admin-role-shortcut-heading">Administrator access</h2>
+                <p>Manage staff roles and grant administrator access to other registered members.</p>
+              </div>
+              <Link className="admin-button admin-button--secondary" to="/admin/roles">
+                <UserRoundPlus size={15} aria-hidden="true" />
+                Manage admin roles
+              </Link>
+            </section>
+          )}
+
           <section className="admin-registrations-card" aria-labelledby="registration-trend-heading">
             <div className="admin-section-heading">
               <div><h2 id="registration-trend-heading">Registration trend</h2><p>New Supabase Auth accounts per day over the last 7 days.</p></div>

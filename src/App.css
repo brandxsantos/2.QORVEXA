@@ -2831,6 +2831,46 @@
   font-size: 0.65rem;
 }
 
+.admin-role-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.1rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid rgb(0 229 255 / 16%);
+  border-radius: 0.85rem;
+  background: linear-gradient(110deg, rgb(0 229 255 / 5%), transparent 75%), #111827;
+}
+
+.admin-role-shortcut-icon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(0 229 255 / 20%);
+  border-radius: 0.7rem;
+  background: rgb(0 229 255 / 7%);
+  color: #00e5ff;
+}
+
+.admin-role-shortcut > div {
+  flex: 1;
+}
+
+.admin-role-shortcut h2 {
+  margin: 0;
+  color: #e7eef7;
+  font-size: 0.9rem;
+}
+
+.admin-role-shortcut p {
+  margin: 0.3rem 0 0;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
 .admin-registrations-card {
   margin-top: 1.4rem;
   padding: 0.1rem 1.2rem 1rem;
@@ -3191,6 +3231,21 @@
   .admin-stat-card > strong {
     margin-top: 0.55rem;
     font-size: 1.65rem;
+  }
+
+  .admin-role-shortcut {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .admin-role-shortcut > div {
+    min-width: calc(100% - 3.5rem);
+  }
+
+  .admin-role-shortcut > .admin-button {
+    width: 100%;
+    justify-content: center;
   }
 
   .admin-section-heading {
