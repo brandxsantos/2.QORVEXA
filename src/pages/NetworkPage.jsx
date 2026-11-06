@@ -104,6 +104,7 @@ function NetworkPage() {
   const [draft, setDraft] = useState('')
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
+  const [presenceError, setPresenceError] = useState('')
   const [workingId, setWorkingId] = useState('')
   const [sending, setSending] = useState(false)
   const [onlineIds, setOnlineIds] = useState([])
@@ -251,9 +252,9 @@ function NetworkPage() {
       })
       .subscribe((state, channelError) => {
         if (state === 'SUBSCRIBED') {
-          syncPresence().catch((presenceError) => setError(presenceError.message || 'Online status could not be updated.'))
+          syncPresence().then(() => setPresenceError('')).catch((presenceError) => setPresenceError(presenceError.message || 'Online status could not be updated.'))
         } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(state) && channelError) {
-          setError(channelError.message || 'Online presence disconnected.')
+          setPresenceError(channelError.message || 'Online presence disconnected.')
         }
       })
 
@@ -265,7 +266,7 @@ function NetworkPage() {
     async function syncPresence() {
       if (document.visibilityState === 'visible') {
         const trackStatus = await presenceChannel.track({ user_id: user.id, online_at: new Date().toISOString() })
-        if (trackStatus !== 'ok') throw new Error('Online status could not be published.')
+        if (trackStatus !== 'ok') throw new Error(`Online status could not be published (${trackStatus}).`)
         await updateLastActive()
       } else {
         await updateLastActive()
@@ -275,12 +276,12 @@ function NetworkPage() {
     }
 
     function handleVisibilityChange() {
-      syncPresence().catch((presenceError) => setError(presenceError.message || 'Online status could not be updated.'))
+      syncPresence().then(() => setPresenceError('')).catch((presenceError) => setPresenceError(presenceError.message || 'Online status could not be updated.'))
     }
 
     const heartbeat = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
-        updateLastActive().catch((presenceError) => setError(presenceError.message || 'Last active time could not be updated.'))
+        updateLastActive().catch((presenceError) => setPresenceError(presenceError.message || 'Last active time could not be updated.'))
       }
     }, 60_000)
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -628,6 +629,7 @@ function NetworkPage() {
         </div>
 
         {error && <div className="network-error" role="alert"><AlertCircle size={17} aria-hidden="true" /><span>{error}</span><button type="button" onClick={refresh}>Retry</button></div>}
+        {presenceError && <div className="network-presence-warning" role="status"><AlertCircle size={15} aria-hidden="true" /><span>Live online status is temporarily unavailable. Other network features should still work.</span></div>}
 
         {status === 'setup' ? (
           <div className="network-empty network-empty--setup">

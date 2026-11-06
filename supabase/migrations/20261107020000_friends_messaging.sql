@@ -178,7 +178,8 @@ create policy "Members can delete their own messages"
 create policy "Conversation friends can receive typing broadcasts"
   on realtime.messages for select to authenticated
   using (
-    exists (
+    realtime.messages.extension = 'broadcast'
+    and exists (
       select 1
       from public.conversations c
       join public.friendships f
@@ -191,7 +192,8 @@ create policy "Conversation friends can receive typing broadcasts"
 create policy "Conversation friends can send typing broadcasts"
   on realtime.messages for insert to authenticated
   with check (
-    exists (
+    realtime.messages.extension = 'broadcast'
+    and exists (
       select 1
       from public.conversations c
       join public.friendships f
@@ -203,13 +205,16 @@ create policy "Conversation friends can send typing broadcasts"
 
 create policy "Signed-in users can view QORVEXA presence"
   on realtime.messages for select to authenticated
-  using (realtime.topic() = 'qorvexa-online-presence');
+  using (
+    realtime.topic() = 'qorvexa-online-presence'
+    and realtime.messages.extension = 'presence'
+  );
 
-create policy "Users can publish their own QORVEXA presence"
+create policy "Signed-in users can publish QORVEXA presence"
   on realtime.messages for insert to authenticated
   with check (
     realtime.topic() = 'qorvexa-online-presence'
-    and payload ->> 'user_id' = (select auth.uid())::text
+    and realtime.messages.extension = 'presence'
   );
 
 create function public.send_friend_request(target_user_id uuid)
