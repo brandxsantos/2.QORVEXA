@@ -1590,6 +1590,18 @@
   text-decoration: none;
 }
 
+.member-profile-links {
+  display: grid;
+  justify-items: start;
+  gap: 0.55rem;
+  margin-top: 1.1rem;
+}
+
+.member-profile-links .member-home-link {
+  margin-top: 0;
+  line-height: 1.5;
+}
+
 .member-home-link:hover {
   color: #8af4ff;
 }

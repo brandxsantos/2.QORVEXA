@@ -417,9 +417,11 @@ function MemberPage() {
             {username && <p className="member-username">@{username}</p>}
             <p className="member-profile-email">{user.email}</p>
             {memberProfile?.bio && <p className="member-profile-bio">{memberProfile.bio}</p>}
-            <Link to="/app/profile" className="member-home-link">Edit profile</Link>
-            <Link to="/app/bookmarks" className="member-home-link">Saved posts</Link>
-            <Link to="/app/privacy" className="member-home-link">Privacy & blocked accounts</Link>
+            <nav className="member-profile-links" aria-label="Account settings">
+              <Link to="/app/profile" className="member-home-link">Edit profile</Link>
+              <Link to="/app/bookmarks" className="member-home-link">Saved posts</Link>
+              <Link to="/app/privacy" className="member-home-link">Privacy &amp; blocked accounts</Link>
+            </nav>
             <div className="member-profile-divider" />
             <div className="member-profile-status"><ShieldCheck size={16} aria-hidden="true" /><span>Signed in securely</span></div>
             <Link to="/" className="member-home-link">Back to QORVEXA home</Link>
