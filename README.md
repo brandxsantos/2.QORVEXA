@@ -1,0 +1,97 @@
+# QORVEXA
+
+**Connect Beyond Limits.**
+
+QORVEXA is a social platform in development. The responsive landing page, Supabase email authentication, password recovery, protected member route, and initial profile schema are in place. The community feed preview remains illustrative.
+
+## Get started
+
+1. Install [Node.js LTS](https://nodejs.org/) and Git.
+2. From this folder, install dependencies:
+
+   ```sh
+   npm install
+   ```
+
+   In Windows PowerShell, use `npm.cmd` instead if script execution blocks `npm.ps1`.
+
+3. Configure the local Supabase environment. Copy `.env.example` to `.env.local` and add your project URL and publishable key. Vite requires the `VITE_` prefix.
+
+4. Apply migrations **in order** in the Supabase Dashboard’s SQL Editor:
+
+   `supabase/migrations/20261106230000_profiles_auth.sql`
+
+   `supabase/migrations/20261106235900_admin_security.sql`
+
+   `supabase/migrations/20261107003000_admin_dashboard_metrics.sql`
+
+5. In Supabase Authentication settings, enable email/password sign-in and email confirmations. Add the local and production `/app` and `/reset-password` URLs to the allowed redirect URLs (for local development, include both `localhost:5173` and `127.0.0.1:5173`).
+
+6. Create an account and verify its email. In Authentication → Users, copy the account UUID, replace `null::uuid` in `supabase/setup/bootstrap_super_admin.sql` with that UUID, then run that script once in the SQL Editor. The bootstrap script writes a security audit entry and cannot be run from the website.
+
+7. Start the development server:
+
+   ```sh
+   npm run dev
+   ```
+
+8. Check the production build and lint:
+
+   ```sh
+   npm run build
+   npm run lint
+   ```
+
+## Technology blueprint
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | React + Vite |
+| Routing | React Router |
+| Styling | Tailwind CSS |
+| Icons | Lucide React |
+| Language | JavaScript |
+| Backend, authentication, database, storage, and real-time | Supabase + PostgreSQL |
+| Hosting and analytics | Cloudflare Pages + Cloudflare Web Analytics |
+| Source control | Git + GitHub |
+| Access control | Supabase Row Level Security (RLS) |
+
+## Project structure
+
+```text
+src/
+  components/
+    auth/
+    landing/
+  context/
+  lib/
+  pages/
+  App.jsx
+  App.css
+  index.css
+public/
+supabase/
+  migrations/
+  setup/
+```
+
+The authentication routes are `/signup`, `/login`, and `/forgot-password`; `/app` is protected. The profile migration creates a public profile containing only display name, username, bio, and avatar URL, with Row Level Security and self-only updates. Do not put an email address or other private account information in this public table.
+
+The initial `/admin/overview` is protected twice: the client requires an authenticated session, and its overview data is returned only by a database `SECURITY DEFINER` function that checks `admin_roles`. Regular clients cannot read or modify `admin_roles`; the initial owner is provisioned only through the trusted SQL Editor bootstrap script. The dashboard metrics migration adds authorized counts from Supabase Auth (total, verified/unverified, registrations today, this week, and this month) and a seven-day registration chart. It intentionally does not invent activity, suspension, or content metrics that the current schema does not support.
+
+The admin foundation is intentionally limited to authorization, owner bootstrap, an immutable-to-client audit table, and the real-data overview. User moderation, messages, reports, analytics, storage, and other admin operations must be added alongside their respective application data tables and separately authorized database functions.
+
+Frontend environment variables are public in the built app: use only the Supabase publishable key and never use a `service_role` key. Enable and test RLS policies for every table before exposing data.
+
+For Cloudflare Pages, connect the GitHub repository and set the build command to `npm run build` and the output directory to `dist`. Add the two `VITE_SUPABASE_*` variables in the Cloudflare Pages project settings. Cloudflare Web Analytics can be enabled in the Pages dashboard once the site is deployed.
+
+## Development phases
+
+1. Project setup, branding, global styles, responsive landing page.
+2. Authentication and initial user profile schema (in progress).
+3. Feed, posts, likes, comments, and bookmarks.
+4. Follows, search, and notifications.
+5. Messaging and realtime features.
+6. Stories and groups.
+7. Admin authorization foundation (in progress); settings, moderation, and administration follow their data schemas.
+8. Security review, responsive testing, optimization, and deployment.
