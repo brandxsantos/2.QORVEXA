@@ -2,7 +2,7 @@
 
 **Connect Beyond Limits.**
 
-QORVEXA is a social platform in development. The responsive landing page, Supabase email authentication, password recovery, protected member route, and initial profile schema are in place. The community feed preview remains illustrative.
+QORVEXA is a social platform in development. The responsive landing page, Supabase email authentication, password recovery, protected member route, profile schema, and first database-backed text-post feed are in place.
 
 ## Get started
 
@@ -24,6 +24,8 @@ QORVEXA is a social platform in development. The responsive landing page, Supaba
    `supabase/migrations/20261106235900_admin_security.sql`
 
    `supabase/migrations/20261107003000_admin_dashboard_metrics.sql`
+
+   `supabase/migrations/20261107010000_posts_feed.sql`
 
 5. In Supabase Authentication settings, enable email/password sign-in and email confirmations. Add the local and production `/app` and `/reset-password` URLs to the allowed redirect URLs (for local development, include both `localhost:5173` and `127.0.0.1:5173`).
 
@@ -75,7 +77,7 @@ supabase/
   setup/
 ```
 
-The authentication routes are `/signup`, `/login`, and `/forgot-password`; `/app` is protected. The profile migration creates a public profile containing only display name, username, bio, and avatar URL, with Row Level Security and self-only updates. Do not put an email address or other private account information in this public table.
+The authentication routes are `/signup`, `/login`, and `/forgot-password`; `/app` is protected. The profile migration creates a public profile containing only display name, username, bio, and avatar URL, with Row Level Security and self-only updates. Do not put an email address or other private account information in this public table. The first feed migration adds text posts: authenticated members can read posts and insert only posts attributed to their own account. The initial feed shows the newest 50 posts and limits post text to 1,000 characters.
 
 The initial `/admin/overview` is protected twice: the client requires an authenticated session, and its overview data is returned only by a database `SECURITY DEFINER` function that checks `admin_roles`. Regular clients cannot read or modify `admin_roles`; the initial owner is provisioned only through the trusted SQL Editor bootstrap script. The dashboard metrics migration adds authorized counts from Supabase Auth (total, verified/unverified, registrations today, this week, and this month) and a seven-day registration chart. It intentionally does not invent activity, suspension, or content metrics that the current schema does not support.
 
