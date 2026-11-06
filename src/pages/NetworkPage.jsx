@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Bell,
+  Bookmark,
   Check,
   CheckCheck,
   Clock3,
@@ -16,6 +17,7 @@ import {
   ShieldCheck,
   Trash2,
   UserPlus,
+  UserRoundX,
   Users,
   X,
 } from 'lucide-react'
@@ -32,7 +34,7 @@ const messageFields = 'id, conversation_id, sender_id, content, created_at'
 
 function isNetworkSetupError(error) {
   return ['42P01', '42703', 'PGRST200', 'PGRST202', 'PGRST205', '42883'].includes(error.code)
-    || /friend_requests|friendships|conversations|messages|notifications|last_active_at/.test(error.message || '')
+    || /friend_requests|friendships|conversations|messages|notifications|last_active_at|blocked_users/.test(error.message || '')
 }
 
 function formatLastActive(value) {
@@ -98,6 +100,7 @@ function NetworkPage() {
   const [hasMoreDiscoverProfiles, setHasMoreDiscoverProfiles] = useState(false)
   const [requests, setRequests] = useState([])
   const [friendships, setFriendships] = useState([])
+  const [blockedIds, setBlockedIds] = useState(() => new Set())
   const [notifications, setNotifications] = useState([])
   const [conversations, setConversations] = useState([])
   const [messages, setMessages] = useState([])
@@ -128,7 +131,7 @@ function NetworkPage() {
 
   const loadNetwork = useCallback(async () => {
     const client = getSupabaseClient()
-    const [profilesResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult] = await Promise.all([
+    const [profilesResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult] = await Promise.all([
       client.from('profiles').select(profileFields).neq('id', user.id).order('created_at', { ascending: false }).range(0, 199),
       client.from('friend_requests').select(requestFields).or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
       client.from('friendships').select('user_low, user_high, created_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
@@ -136,9 +139,10 @@ function NetworkPage() {
       client.from('conversations').select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('updated_at', { ascending: false }).limit(100),
       client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
       client.rpc('get_conversation_summaries'),
+      client.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
     ])
 
-    for (const result of [profilesResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult]) {
+    for (const result of [profilesResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult]) {
       if (result.error) throw result.error
     }
 
@@ -173,6 +177,7 @@ function NetworkPage() {
 
     setRequests(requestsResult.data || [])
     setFriendships(friendshipsResult.data || [])
+    setBlockedIds(new Set((blocksResult.data || []).map((item) => item.blocked_id)))
     setNotifications(notificationsResult.data || [])
     setUnreadNotificationCount(unreadCountResult.count || 0)
     const acceptedFriendIds = new Set((friendshipsResult.data || []).map((friendship) => (
@@ -392,7 +397,7 @@ function NetworkPage() {
   const activeConversation = conversations.find((conversation) => conversation.id === selectedConversationId)
   const unreadMessages = conversations.reduce((total, conversation) => total + conversation.unreadCount, 0)
   const filteredProfiles = profiles.filter((profile) => {
-    if (friendIds.has(profile.id)) return false
+    if (friendIds.has(profile.id) || blockedIds.has(profile.id)) return false
     const term = query.trim().toLowerCase()
     return !term || `${profile.display_name} ${profile.username} ${profile.bio}`.toLowerCase().includes(term)
   })
@@ -462,6 +467,15 @@ function NetworkPage() {
     return runAction(profile.id, async () => {
       const { error: rpcError } = await getSupabaseClient().rpc('remove_friend', { target_user_id: profile.id })
       if (rpcError) throw rpcError
+    })
+  }
+
+  function blockMember(profile) {
+    if (!window.confirm(`Block ${profileName(profile)}? They will no longer be able to view your profile or posts, send friend requests, or access your conversations. Your friendship will be removed.`)) return
+    return runAction(profile.id, async () => {
+      const { error: rpcError } = await getSupabaseClient().rpc('block_member', { target_user_id: profile.id })
+      if (rpcError) throw rpcError
+      setViewingProfile(null)
     })
   }
 
@@ -618,6 +632,9 @@ function NetworkPage() {
           <Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}
           </Link>
           <Link to="/app/messages" className={`network-nav-link${activeSection === 'messages' ? ' is-active' : ''}`}><MessageSquare size={15} aria-hidden="true" />Messages{unreadMessages > 0 && <span className="network-badge">{unreadMessages}</span>}</Link>
+          <Link to="/app/bookmarks" className="network-nav-link"><Bookmark size={15} aria-hidden="true" />Saved</Link>
+          <Link to="/app/privacy" className="network-nav-link"><ShieldCheck size={15} aria-hidden="true" />Privacy</Link>
+          <Link to="/app/profile" className="network-nav-link"><UserPlus size={15} aria-hidden="true" />Profile</Link>
         </nav>
         <button className="button button--outline member-signout" type="button" onClick={handleSignOut} disabled={signingOut}>
           <LogOut size={15} aria-hidden="true" />{signingOut ? 'Signing out…' : 'Sign out'}
@@ -640,8 +657,9 @@ function NetworkPage() {
           <div className="network-empty network-empty--setup">
             <span><ShieldCheck size={22} aria-hidden="true" /></span>
             <h2>Friends and messaging need one database migration</h2>
-            <p>Run the migration in Supabase SQL Editor after the profiles and posts migrations.</p>
+            <p>Apply the Friends & Messaging migration and the latest Community Features migration in Supabase SQL Editor, in order.</p>
             <code>supabase/migrations/20261107020000_friends_messaging.sql</code>
+            <code>supabase/migrations/20261107030000_community_features.sql</code>
           </div>
         ) : status === 'loading' ? (
           <div className="network-loading" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" />Loading your network…</div>
@@ -731,7 +749,13 @@ function NetworkPage() {
                     <article className={`network-notification${notification.is_read ? '' : ' is-unread'}`} key={notification.id} onClick={() => markNotificationRead(notification)}>
                       <UserIdentity profile={notification.profiles} small onClick={() => setViewingProfile(notification.profiles)} />
                       <div className="network-notification-copy">
-                        <p><strong>{actorName}</strong> {notification.type === 'friend_request' ? 'sent you a friend request.' : 'accepted your friend request.'}</p>
+                        <p><strong>{actorName}</strong> {
+                          notification.type === 'friend_request' ? 'sent you a friend request.'
+                            : notification.type === 'friend_request_accepted' ? 'accepted your friend request.'
+                              : notification.type === 'post_like' ? 'liked your post.'
+                                : notification.type === 'reply' ? 'replied to your comment.'
+                                  : 'commented on your post.'
+                        }</p>
                         <time dateTime={notification.created_at}><Clock3 size={12} />{formatTime(notification.created_at)}</time>
                         {isIncomingPending && <div className="network-row-actions">
                           <button className="network-button network-button--primary" type="button" disabled={workingId === request.id} onClick={(event) => { event.stopPropagation(); respondToRequest(request, true) }}><Check size={14} />Accept</button>
@@ -853,6 +877,7 @@ function NetworkPage() {
                   ? <button className="network-button network-button--primary" type="button" onClick={() => respondToRequest(incomingRequests.find((request) => request.sender_id === viewingProfile.id), true)}><Check size={14} />Accept request</button>
                   : <button className="network-button network-button--primary" type="button" onClick={() => sendFriendRequest(viewingProfile)}><UserPlus size={14} />Add friend</button>}
             <button className="network-button" type="button" onClick={() => { setReportTarget({ reportedUserId: viewingProfile.id, type: 'user', id: viewingProfile.id }); setViewingProfile(null) }}><Flag size={14} />Report account</button>
+            {!blockedIds.has(viewingProfile.id) && <button className="network-button network-button--danger" type="button" disabled={workingId === viewingProfile.id} onClick={() => blockMember(viewingProfile)}><UserRoundX size={14} />Block account</button>}
           </section>
         </div>
       )}

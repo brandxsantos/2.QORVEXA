@@ -6,6 +6,9 @@ import AdminRoutes from './AdminRoutes.jsx'
 import AuthPage from './AuthPage.jsx'
 import MemberPage from './MemberPage.jsx'
 import NetworkPage from './NetworkPage.jsx'
+import ProfileSettingsPage from './ProfileSettingsPage.jsx'
+import BookmarksPage from './BookmarksPage.jsx'
+import PrivacyPage from './PrivacyPage.jsx'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -24,8 +27,17 @@ function ProtectedRoute({ children }) {
 
 function AuthRoutes() {
   const { pathname } = useLocation()
+  const memberPage = pathname === '/app'
+    ? <MemberPage />
+    : pathname === '/app/profile'
+      ? <ProfileSettingsPage />
+      : pathname === '/app/bookmarks'
+        ? <BookmarksPage />
+        : pathname === '/app/privacy'
+          ? <PrivacyPage />
+          : <NetworkPage />
   const page = pathname.startsWith('/app')
-    ? <ProtectedRoute>{pathname === '/app' ? <MemberPage /> : <NetworkPage />}</ProtectedRoute>
+    ? <ProtectedRoute>{memberPage}</ProtectedRoute>
     : pathname.startsWith('/admin')
       ? <AdminRoutes />
     : ['/login', '/signup', '/forgot-password', '/reset-password'].includes(pathname)

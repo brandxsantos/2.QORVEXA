@@ -6,8 +6,10 @@ import {
   Clock3,
   CornerDownRight,
   Flag,
+  ImagePlus,
   LoaderCircle,
   LogOut,
+  Bookmark,
   MessageCircle,
   Rss,
   ShieldCheck,
@@ -22,11 +24,12 @@ import { getSupabaseClient } from '../lib/supabase.js'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 
-const postSelection = 'id, author_id, content, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url)'
+const postSelection = 'id, author_id, content, media_path, media_type, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url)'
+const imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const maxImageBytes = 8 * 1024 * 1024
 
 function isPostsSetupError(error) {
-  return error.code === '42P01'
-    || error.code === 'PGRST205'
+  return ['42P01', '42703', 'PGRST204', 'PGRST205'].includes(error.code)
     || error.message?.includes('public.posts')
 }
 
@@ -58,6 +61,13 @@ function MemberPage() {
   const navigate = useNavigate()
   const [posts, setPosts] = useState([])
   const [draft, setDraft] = useState('')
+  const [mediaFile, setMediaFile] = useState(null)
+  const [mediaPreview, setMediaPreview] = useState('')
+  const [memberProfile, setMemberProfile] = useState(null)
+  const [likeCounts, setLikeCounts] = useState({})
+  const [likedPostIds, setLikedPostIds] = useState(() => new Set())
+  const [bookmarkedPostIds, setBookmarkedPostIds] = useState(() => new Set())
+  const [postActionId, setPostActionId] = useState('')
   const [commentsByPost, setCommentsByPost] = useState({})
   const [commentsOpen, setCommentsOpen] = useState({})
   const [commentsStatus, setCommentsStatus] = useState({})
@@ -71,8 +81,29 @@ function MemberPage() {
   const [submittingComment, setSubmittingComment] = useState(null)
   const [deletingComment, setDeletingComment] = useState(null)
   const [reportTarget, setReportTarget] = useState(null)
-  const name = user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
-  const username = user.user_metadata?.username
+  const name = memberProfile?.display_name || user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
+  const username = memberProfile?.username || user.user_metadata?.username
+
+  useEffect(() => {
+    return () => { if (mediaPreview) URL.revokeObjectURL(mediaPreview) }
+  }, [mediaPreview])
+
+  useEffect(() => {
+    let active = true
+    getSupabaseClient().from('profiles')
+      .select('id, username, display_name, bio, avatar_url')
+      .eq('id', user.id)
+      .single()
+      .then(({ data, error: profileError }) => {
+        if (!active) return
+        if (profileError) {
+          setError(profileError.message || 'Your profile could not be loaded.')
+          return
+        }
+        setMemberProfile(data)
+      })
+    return () => { active = false }
+  }, [user.id])
 
   const loadPosts = useCallback(async () => {
     const { data, error: queryError } = await getSupabaseClient()
@@ -82,8 +113,32 @@ function MemberPage() {
       .limit(50)
 
     if (queryError) throw queryError
-    return data
-  }, [])
+    const postRows = data || []
+    const postIds = postRows.map((post) => post.id)
+    if (postIds.length) {
+      const client = getSupabaseClient()
+      const [likesResult, bookmarksResult] = await Promise.all([
+        client.from('post_likes').select('post_id, user_id').in('post_id', postIds),
+        client.from('post_bookmarks').select('post_id').eq('user_id', user.id).in('post_id', postIds),
+      ])
+      if (likesResult.error) throw likesResult.error
+      if (bookmarksResult.error) throw bookmarksResult.error
+      const counts = {}
+      const likedIds = new Set()
+      for (const like of likesResult.data || []) {
+        counts[like.post_id] = (counts[like.post_id] || 0) + 1
+        if (like.user_id === user.id) likedIds.add(like.post_id)
+      }
+      setLikeCounts(counts)
+      setLikedPostIds(likedIds)
+      setBookmarkedPostIds(new Set((bookmarksResult.data || []).map((bookmark) => bookmark.post_id)))
+    } else {
+      setLikeCounts({})
+      setLikedPostIds(new Set())
+      setBookmarkedPostIds(new Set())
+    }
+    return postRows
+  }, [user.id])
 
   const loadComments = useCallback(async (postId) => {
     setCommentsStatus((current) => ({ ...current, [postId]: 'loading' }))
@@ -91,7 +146,7 @@ function MemberPage() {
     try {
       const { data, error: queryError } = await getSupabaseClient()
         .from('comments')
-        .select('id, post_id, author_id, parent_id, content, created_at, profiles!comments_author_id_fkey(username, display_name)')
+        .select('id, post_id, author_id, parent_id, content, created_at, profiles!comments_author_id_fkey(username, display_name, avatar_url)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true })
         .limit(100)
@@ -111,47 +166,131 @@ function MemberPage() {
   useEffect(() => {
     let active = true
 
-    loadPosts()
-      .then((data) => {
-        if (!active) return
-        setPosts(data)
-        setFeedStatus('ready')
-        setError('')
-      })
-      .catch((loadError) => {
-        if (!active) return
-        setError(loadError.message || 'The feed could not be loaded.')
-        setFeedStatus(isPostsSetupError(loadError) ? 'setup' : 'error')
-      })
+    const timer = window.setTimeout(() => {
+      loadPosts()
+        .then((data) => {
+          if (!active) return
+          setPosts(data)
+          setFeedStatus('ready')
+          setError('')
+        })
+        .catch((loadError) => {
+          if (!active) return
+          setError(loadError.message || 'The feed could not be loaded.')
+          setFeedStatus(isPostsSetupError(loadError) ? 'setup' : 'error')
+        })
+    }, 0)
 
     return () => {
       active = false
+      window.clearTimeout(timer)
     }
   }, [loadPosts])
 
   async function handlePublish(event) {
     event.preventDefault()
     const content = draft.trim()
-    if (!content || publishing) return
+    if ((!content && !mediaFile) || publishing) return
+    if (content.length > 1000) {
+      setError('Post text must be 1,000 characters or fewer.')
+      return
+    }
+    if (mediaFile && (!imageTypes.includes(mediaFile.type) || mediaFile.size > maxImageBytes)) {
+      setError('Choose a JPG, PNG, WebP, or GIF image under 8 MB.')
+      return
+    }
 
     setError('')
     setPublishing(true)
 
+    let uploadedPath = ''
     try {
+      let mediaPath = null
+      let mediaType = null
+      if (mediaFile) {
+        const extension = mediaFile.name.split('.').pop()?.toLowerCase() || 'image'
+        uploadedPath = `${user.id}/posts/${crypto.randomUUID()}.${extension}`
+        const { error: uploadError } = await getSupabaseClient().storage
+          .from('qorvexa-media')
+          .upload(uploadedPath, mediaFile, { contentType: mediaFile.type, upsert: false })
+        if (uploadError) throw uploadError
+        mediaPath = uploadedPath
+        mediaType = 'image'
+      }
       const { data, error: insertError } = await getSupabaseClient()
         .from('posts')
-        .insert({ author_id: user.id, content })
+        .insert({ author_id: user.id, content, media_path: mediaPath, media_type: mediaType })
         .select(postSelection)
         .single()
 
       if (insertError) throw insertError
       setPosts((currentPosts) => [data, ...currentPosts])
       setDraft('')
+      setMediaFile(null)
+      setMediaPreview('')
     } catch (publishError) {
+      if (uploadedPath) {
+        const { error: cleanupError } = await getSupabaseClient().storage
+          .from('qorvexa-media')
+          .remove([uploadedPath])
+        if (cleanupError) {
+          setError(`${publishError.message || 'Your post could not be published.'} The uploaded image could not be cleaned up.`)
+          return
+        }
+      }
       setError(publishError.message || 'Your post could not be published.')
       if (isPostsSetupError(publishError)) setFeedStatus('setup')
     } finally {
       setPublishing(false)
+    }
+  }
+
+  async function toggleLike(post) {
+    if (postActionId) return
+    const isLiked = likedPostIds.has(post.id)
+    setPostActionId(post.id)
+    setError('')
+    try {
+      const query = getSupabaseClient().from('post_likes')
+      const result = isLiked
+        ? await query.delete().eq('post_id', post.id).eq('user_id', user.id)
+        : await query.insert({ post_id: post.id, user_id: user.id })
+      if (result.error) throw result.error
+      setLikedPostIds((current) => {
+        const next = new Set(current)
+        if (isLiked) next.delete(post.id)
+        else next.add(post.id)
+        return next
+      })
+      setLikeCounts((current) => ({ ...current, [post.id]: Math.max(0, (current[post.id] || 0) + (isLiked ? -1 : 1)) }))
+    } catch (likeError) {
+      setError(likeError.message || 'Your like could not be updated.')
+    } finally {
+      setPostActionId('')
+    }
+  }
+
+  async function toggleBookmark(post) {
+    if (postActionId) return
+    const isBookmarked = bookmarkedPostIds.has(post.id)
+    setPostActionId(post.id)
+    setError('')
+    try {
+      const query = getSupabaseClient().from('post_bookmarks')
+      const result = isBookmarked
+        ? await query.delete().eq('post_id', post.id).eq('user_id', user.id)
+        : await query.insert({ post_id: post.id, user_id: user.id })
+      if (result.error) throw result.error
+      setBookmarkedPostIds((current) => {
+        const next = new Set(current)
+        if (isBookmarked) next.delete(post.id)
+        else next.add(post.id)
+        return next
+      })
+    } catch (bookmarkError) {
+      setError(bookmarkError.message || 'Your bookmark could not be updated.')
+    } finally {
+      setPostActionId('')
     }
   }
 
@@ -260,6 +399,7 @@ function MemberPage() {
           <Link to="/app/friends" className="network-nav-link"><Users size={15} aria-hidden="true" />Friends</Link>
           <Link to="/app/notifications" className="network-nav-link"><Bell size={15} aria-hidden="true" />Notifications</Link>
           <Link to="/app/messages" className="network-nav-link"><MessageCircle size={15} aria-hidden="true" />Messages</Link>
+          <Link to="/app/bookmarks" className="network-nav-link"><Bookmark size={15} aria-hidden="true" />Saved</Link>
         </nav>
         <button className="button button--outline member-signout" type="button" onClick={handleSignOut} disabled={signingOut}>
           <LogOut size={15} aria-hidden="true" />
@@ -272,10 +412,14 @@ function MemberPage() {
         <aside className="member-profile-card">
           <div className="member-profile-cover" aria-hidden="true" />
           <div className="member-profile-details">
-            <div className="member-avatar" aria-hidden="true">{getInitials(name)}</div>
+            <div className="member-avatar" aria-hidden="true">{memberProfile?.avatar_url ? <img src={memberProfile.avatar_url} alt="" /> : getInitials(name)}</div>
             <h1>{name}</h1>
             {username && <p className="member-username">@{username}</p>}
             <p className="member-profile-email">{user.email}</p>
+            {memberProfile?.bio && <p className="member-profile-bio">{memberProfile.bio}</p>}
+            <Link to="/app/profile" className="member-home-link">Edit profile</Link>
+            <Link to="/app/bookmarks" className="member-home-link">Saved posts</Link>
+            <Link to="/app/privacy" className="member-home-link">Privacy & blocked accounts</Link>
             <div className="member-profile-divider" />
             <div className="member-profile-status"><ShieldCheck size={16} aria-hidden="true" /><span>Signed in securely</span></div>
             <Link to="/" className="member-home-link">Back to QORVEXA home</Link>
@@ -302,9 +446,25 @@ function MemberPage() {
               rows={4}
               value={draft}
             />
+            <div className="member-media-picker">
+              <label className="member-comments-toggle" htmlFor="post-media-file"><ImagePlus size={15} />Add an image</label>
+              <input
+                id="post-media-file"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={(event) => {
+                  setError('')
+                  const file = event.target.files?.[0] || null
+                  setMediaFile(file)
+                  setMediaPreview(file ? URL.createObjectURL(file) : '')
+                }}
+              />
+              <span>JPG, PNG, WebP, or GIF · up to 8 MB</span>
+            </div>
+            {mediaPreview && <div className="member-media-preview"><img src={mediaPreview} alt="Selected post image preview" /><button type="button" onClick={() => { setMediaFile(null); setMediaPreview('') }}>Remove image</button></div>}
             <div className="member-composer-footer">
               <span>{draft.length}/1000</span>
-              <button className="member-publish-button" type="submit" disabled={!draft.trim() || publishing}>
+              <button className="member-publish-button" type="submit" disabled={(!draft.trim() && !mediaFile) || publishing}>
                 {publishing ? <LoaderCircle size={16} className="spinner" aria-hidden="true" /> : <ArrowUp size={16} aria-hidden="true" />}
                 {publishing ? 'Publishing…' : 'Publish post'}
               </button>
@@ -317,10 +477,10 @@ function MemberPage() {
               <div>
                 <strong>{feedStatus === 'setup' ? 'Feed setup required' : 'Something went wrong'}</strong>
                 <span>{feedStatus === 'setup'
-                  ? 'Apply the posts migration in Supabase SQL Editor, then refresh this page.'
+                  ? 'Apply the community features migration in Supabase SQL Editor, then refresh this page.'
                   : error}</span>
                 {feedStatus === 'setup'
-                  ? <code>supabase/migrations/20261107010000_posts_feed.sql</code>
+                  ? <code>supabase/migrations/20261107030000_community_features.sql</code>
                   : <button type="button" onClick={handleRefresh}>Try again</button>}
               </div>
             </div>
@@ -339,16 +499,26 @@ function MemberPage() {
               {posts.map((post) => {
                 const author = post.profiles
                 const authorName = author?.display_name || author?.username || 'QORVEXA member'
+                const postImageUrl = post.media_path
+                  ? getSupabaseClient().storage.from('qorvexa-media').getPublicUrl(post.media_path).data.publicUrl
+                  : ''
                 return (
                   <article className="member-post" key={post.id}>
-                    <div className="member-post-avatar" aria-hidden="true">{getInitials(authorName)}</div>
+                    <div className="member-post-avatar" aria-hidden="true">{author?.avatar_url ? <img src={author.avatar_url} alt="" /> : getInitials(authorName)}</div>
                     <div className="member-post-body">
                       <div className="member-post-meta">
                         <div><strong>{authorName}</strong>{author?.username && <span>@{author.username}</span>}</div>
                         <time dateTime={post.created_at}><Clock3 size={13} aria-hidden="true" />{formatPostDate(post.created_at)}</time>
                       </div>
-                      <p className="member-post-content">{post.content}</p>
+                      {post.content && <p className="member-post-content">{post.content}</p>}
+                      {postImageUrl && <img className="member-post-media" src={postImageUrl} alt="Image attached to post" loading="lazy" />}
                       <div className="member-post-footer">
+                        <button className={`member-comments-toggle${likedPostIds.has(post.id) ? ' is-active' : ''}`} type="button" onClick={() => toggleLike(post)} disabled={postActionId === post.id} aria-pressed={likedPostIds.has(post.id)}>
+                          <span aria-hidden="true">{likedPostIds.has(post.id) ? '♥' : '♡'}</span><span>{likeCounts[post.id] || 0} likes</span>
+                        </button>
+                        <button className={`member-comments-toggle${bookmarkedPostIds.has(post.id) ? ' is-active' : ''}`} type="button" onClick={() => toggleBookmark(post)} disabled={postActionId === post.id} aria-pressed={bookmarkedPostIds.has(post.id)}>
+                          <Bookmark size={14} aria-hidden="true" /><span>{bookmarkedPostIds.has(post.id) ? 'Saved' : 'Save'}</span>
+                        </button>
                         <button className="member-comments-toggle" type="button" onClick={() => toggleComments(post.id)} aria-expanded={Boolean(commentsOpen[post.id])}>
                           <MessageCircle size={14} aria-hidden="true" />
                           <span>{commentsByPost[post.id] ? `${commentsByPost[post.id].length} comments` : 'View comments'}</span>
@@ -381,7 +551,7 @@ function MemberPage() {
                                   return (
                                     <div className="member-comment-thread" key={comment.id}>
                                       <div className="member-comment">
-                                        <div className="member-comment-avatar" aria-hidden="true">{getInitials(commentName)}</div>
+                                        <div className="member-comment-avatar" aria-hidden="true">{commentAuthor?.avatar_url ? <img src={commentAuthor.avatar_url} alt="" /> : getInitials(commentName)}</div>
                                         <div className="member-comment-body">
                                           <div className="member-comment-meta"><strong>{commentName}</strong>{commentAuthor?.username && <span>@{commentAuthor.username}</span>}<time dateTime={comment.created_at}>{formatPostDate(comment.created_at)}</time></div>
                                           <p>{comment.content}</p>
@@ -416,7 +586,7 @@ function MemberPage() {
                                         return (
                                           <div className="member-comment member-comment--reply" key={reply.id}>
                                             <CornerDownRight size={14} aria-hidden="true" />
-                                            <div className="member-comment-avatar" aria-hidden="true">{getInitials(replyName)}</div>
+                                            <div className="member-comment-avatar" aria-hidden="true">{replyAuthor?.avatar_url ? <img src={replyAuthor.avatar_url} alt="" /> : getInitials(replyName)}</div>
                                             <div className="member-comment-body">
                                               <div className="member-comment-meta"><strong>{replyName}</strong>{replyAuthor?.username && <span>@{replyAuthor.username}</span>}<time dateTime={reply.created_at}>{formatPostDate(reply.created_at)}</time></div>
                                               <p>{reply.content}</p>
