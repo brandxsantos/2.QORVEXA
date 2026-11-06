@@ -3,11 +3,13 @@ import {
   AlertCircle,
   ArrowUp,
   Clock3,
+  CornerDownRight,
   LoaderCircle,
   LogOut,
   MessageCircle,
   Rss,
   ShieldCheck,
+  Trash2,
   Users,
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -21,6 +23,13 @@ function isPostsSetupError(error) {
   return error.code === '42P01'
     || error.code === 'PGRST205'
     || error.message?.includes('public.posts')
+}
+
+function isCommentsSetupError(error) {
+  return error.code === '42P01'
+    || error.code === 'PGRST200'
+    || error.code === 'PGRST205'
+    || error.message?.includes('public.comments')
 }
 
 function getInitials(name) {
@@ -44,10 +53,18 @@ function MemberPage() {
   const navigate = useNavigate()
   const [posts, setPosts] = useState([])
   const [draft, setDraft] = useState('')
+  const [commentsByPost, setCommentsByPost] = useState({})
+  const [commentsOpen, setCommentsOpen] = useState({})
+  const [commentsStatus, setCommentsStatus] = useState({})
+  const [commentDrafts, setCommentDrafts] = useState({})
+  const [replyDrafts, setReplyDrafts] = useState({})
+  const [replyTarget, setReplyTarget] = useState(null)
   const [feedStatus, setFeedStatus] = useState('loading')
   const [error, setError] = useState('')
   const [signingOut, setSigningOut] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [submittingComment, setSubmittingComment] = useState(null)
+  const [deletingComment, setDeletingComment] = useState(null)
   const name = user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
   const username = user.user_metadata?.username
 
@@ -60,6 +77,29 @@ function MemberPage() {
 
     if (queryError) throw queryError
     return data
+  }, [])
+
+  const loadComments = useCallback(async (postId) => {
+    setCommentsStatus((current) => ({ ...current, [postId]: 'loading' }))
+
+    try {
+      const { data, error: queryError } = await getSupabaseClient()
+        .from('comments')
+        .select('id, post_id, author_id, parent_id, content, created_at, profiles!comments_author_id_fkey(username, display_name)')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true })
+        .limit(100)
+
+      if (queryError) throw queryError
+      setCommentsByPost((current) => ({ ...current, [postId]: data }))
+      setCommentsStatus((current) => ({ ...current, [postId]: 'ready' }))
+    } catch (loadError) {
+      setCommentsStatus((current) => ({
+        ...current,
+        [postId]: isCommentsSetupError(loadError) ? 'setup' : 'error',
+      }))
+      setError(loadError.message || 'Comments could not be loaded.')
+    }
   }, [])
 
   useEffect(() => {
@@ -119,6 +159,71 @@ function MemberPage() {
     } catch (loadError) {
       setError(loadError.message || 'The feed could not be refreshed.')
       setFeedStatus(isPostsSetupError(loadError) ? 'setup' : 'error')
+    }
+  }
+
+  async function toggleComments(postId) {
+    const opening = !commentsOpen[postId]
+    setCommentsOpen((current) => ({ ...current, [postId]: opening }))
+    if (opening && commentsStatus[postId] !== 'ready') await loadComments(postId)
+  }
+
+  async function handleCommentSubmit(event, postId, parentId = null) {
+    event.preventDefault()
+    const draftKey = parentId || postId
+    const draftValue = parentId ? replyDrafts[draftKey] : commentDrafts[draftKey]
+    const content = (draftValue || '').trim()
+    const requestKey = `${postId}:${parentId || 'root'}`
+    if (!content || submittingComment) return
+
+    setError('')
+    setSubmittingComment(requestKey)
+
+    try {
+      const { error: insertError } = await getSupabaseClient()
+        .from('comments')
+        .insert({
+          post_id: postId,
+          author_id: user.id,
+          parent_id: parentId,
+          content,
+        })
+
+      if (insertError) throw insertError
+      if (parentId) {
+        setReplyDrafts((current) => ({ ...current, [draftKey]: '' }))
+        setReplyTarget(null)
+      } else {
+        setCommentDrafts((current) => ({ ...current, [draftKey]: '' }))
+      }
+      await loadComments(postId)
+    } catch (submitError) {
+      setError(submitError.message || 'Your comment could not be published.')
+      if (isCommentsSetupError(submitError)) {
+        setCommentsStatus((current) => ({ ...current, [postId]: 'setup' }))
+      }
+    } finally {
+      setSubmittingComment(null)
+    }
+  }
+
+  async function handleDeleteComment(comment) {
+    if (!window.confirm('Delete this comment? Replies to it will also be deleted.')) return
+    setDeletingComment(comment.id)
+    setError('')
+
+    try {
+      const { error: deleteError } = await getSupabaseClient()
+        .from('comments')
+        .delete()
+        .eq('id', comment.id)
+
+      if (deleteError) throw deleteError
+      await loadComments(comment.post_id)
+    } catch (deleteError) {
+      setError(deleteError.message || 'The comment could not be deleted.')
+    } finally {
+      setDeletingComment(null)
     }
   }
 
@@ -230,7 +335,109 @@ function MemberPage() {
                         <time dateTime={post.created_at}><Clock3 size={13} aria-hidden="true" />{formatPostDate(post.created_at)}</time>
                       </div>
                       <p className="member-post-content">{post.content}</p>
-                      <div className="member-post-footer"><MessageCircle size={14} aria-hidden="true" /><span>Comments aren’t available yet</span></div>
+                      <div className="member-post-footer">
+                        <button className="member-comments-toggle" type="button" onClick={() => toggleComments(post.id)} aria-expanded={Boolean(commentsOpen[post.id])}>
+                          <MessageCircle size={14} aria-hidden="true" />
+                          <span>{commentsByPost[post.id] ? `${commentsByPost[post.id].length} comments` : 'View comments'}</span>
+                        </button>
+                      </div>
+                      {commentsOpen[post.id] && (
+                        <section className="member-comments" aria-label="Comments">
+                          {commentsStatus[post.id] === 'loading' ? (
+                            <div className="member-comments-state" role="status"><LoaderCircle size={15} className="spinner" aria-hidden="true" /> Loading comments…</div>
+                          ) : commentsStatus[post.id] === 'setup' ? (
+                            <div className="member-comments-error" role="alert">
+                              <strong>Comments need one database migration.</strong>
+                              <span>Run this script once in the Supabase SQL Editor:</span>
+                              <code>supabase/migrations/20261107011500_comments.sql</code>
+                            </div>
+                          ) : commentsStatus[post.id] === 'error' ? (
+                            <div className="member-comments-error" role="alert">
+                              <span>{error || 'Comments could not be loaded.'}</span>
+                              <button type="button" onClick={() => loadComments(post.id)}>Try again</button>
+                            </div>
+                          ) : (
+                            <>
+                              {(commentsByPost[post.id] || [])
+                                .filter((comment) => !comment.parent_id)
+                                .map((comment) => {
+                                  const commentAuthor = comment.profiles
+                                  const commentName = commentAuthor?.display_name || commentAuthor?.username || 'QORVEXA member'
+                                  const replies = commentsByPost[post.id].filter((reply) => reply.parent_id === comment.id)
+                                  return (
+                                    <div className="member-comment-thread" key={comment.id}>
+                                      <div className="member-comment">
+                                        <div className="member-comment-avatar" aria-hidden="true">{getInitials(commentName)}</div>
+                                        <div className="member-comment-body">
+                                          <div className="member-comment-meta"><strong>{commentName}</strong>{commentAuthor?.username && <span>@{commentAuthor.username}</span>}<time dateTime={comment.created_at}>{formatPostDate(comment.created_at)}</time></div>
+                                          <p>{comment.content}</p>
+                                          <div className="member-comment-actions">
+                                            <button type="button" onClick={() => setReplyTarget(replyTarget === comment.id ? null : comment.id)}>Reply</button>
+                                            {comment.author_id === user.id && (
+                                              <button type="button" onClick={() => handleDeleteComment(comment)} disabled={deletingComment === comment.id}>
+                                                <Trash2 size={12} aria-hidden="true" /> {deletingComment === comment.id ? 'Deleting…' : 'Delete'}
+                                              </button>
+                                            )}
+                                          </div>
+                                          {replyTarget === comment.id && (
+                                            <form className="member-inline-comment-form" onSubmit={(event) => handleCommentSubmit(event, post.id, comment.id)}>
+                                              <input
+                                                aria-label={`Reply to ${commentName}`}
+                                                maxLength={1000}
+                                                onChange={(event) => setReplyDrafts((current) => ({ ...current, [comment.id]: event.target.value }))}
+                                                placeholder={`Reply to ${commentName}…`}
+                                                value={replyDrafts[comment.id] || ''}
+                                              />
+                                              <button type="submit" disabled={!replyDrafts[comment.id]?.trim() || Boolean(submittingComment)}>
+                                                {submittingComment === `${post.id}:${comment.id}` ? 'Sending…' : 'Reply'}
+                                              </button>
+                                            </form>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {replies.map((reply) => {
+                                        const replyAuthor = reply.profiles
+                                        const replyName = replyAuthor?.display_name || replyAuthor?.username || 'QORVEXA member'
+                                        return (
+                                          <div className="member-comment member-comment--reply" key={reply.id}>
+                                            <CornerDownRight size={14} aria-hidden="true" />
+                                            <div className="member-comment-avatar" aria-hidden="true">{getInitials(replyName)}</div>
+                                            <div className="member-comment-body">
+                                              <div className="member-comment-meta"><strong>{replyName}</strong>{replyAuthor?.username && <span>@{replyAuthor.username}</span>}<time dateTime={reply.created_at}>{formatPostDate(reply.created_at)}</time></div>
+                                              <p>{reply.content}</p>
+                                              {reply.author_id === user.id && (
+                                                <div className="member-comment-actions">
+                                                  <button type="button" onClick={() => handleDeleteComment(reply)} disabled={deletingComment === reply.id}>
+                                                    <Trash2 size={12} aria-hidden="true" /> {deletingComment === reply.id ? 'Deleting…' : 'Delete'}
+                                                  </button>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  )
+                                })}
+                              <form className="member-inline-comment-form" onSubmit={(event) => handleCommentSubmit(event, post.id)}>
+                                <input
+                                  aria-label="Write a comment"
+                                  maxLength={1000}
+                                  onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))}
+                                  placeholder="Write a comment…"
+                                  value={commentDrafts[post.id] || ''}
+                                />
+                                <button type="submit" disabled={!commentDrafts[post.id]?.trim() || Boolean(submittingComment)}>
+                                  {submittingComment === `${post.id}:root` ? 'Sending…' : 'Comment'}
+                                </button>
+                              </form>
+                              {(commentsByPost[post.id] || []).length === 0 && (
+                                <p className="member-comments-empty">No comments yet. Start the conversation.</p>
+                              )}
+                            </>
+                          )}
+                        </section>
+                      )}
                     </div>
                   </article>
                 )
