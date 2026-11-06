@@ -10,6 +10,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   UserRound,
+  UserRoundPlus,
   UserRoundX,
 } from 'lucide-react'
 import { getSupabaseClient } from '../lib/supabase.js'
@@ -36,6 +37,10 @@ function AdminManagementPage({ section, role, userId }) {
   const [reports, setReports] = useState([])
   const [logs, setLogs] = useState([])
   const [roles, setRoles] = useState([])
+  const [roleCandidates, setRoleCandidates] = useState([])
+  const [roleCandidateSearch, setRoleCandidateSearch] = useState('')
+  const [roleCandidateLoading, setRoleCandidateLoading] = useState(false)
+  const [newStaffRole, setNewStaffRole] = useState('admin')
   const [content, setContent] = useState([])
   const [contentType, setContentType] = useState('post')
   const [search, setSearch] = useState('')
@@ -217,6 +222,51 @@ function AdminManagementPage({ section, role, userId }) {
     }
   }
 
+  async function searchRoleCandidates(event) {
+    event.preventDefault()
+    setRoleCandidateLoading(true)
+    setError('')
+    setNotice('')
+    setRoleCandidates([])
+    try {
+      const { data, error: rpcError } = await getSupabaseClient().rpc('admin_search_role_candidates', {
+        search_term: roleCandidateSearch.trim(),
+      })
+      if (rpcError) throw rpcError
+      setRoleCandidates(data || [])
+      if (!data?.length) setNotice('No eligible verified members matched that search.')
+    } catch (searchError) {
+      const missingFunction = searchError.code === 'PGRST202' || searchError.code === '42883'
+      setError(missingFunction
+        ? 'Apply supabase/migrations/20261107025000_admin_role_candidates.sql in the Supabase SQL Editor, then search again.'
+        : rpcMessage(searchError))
+    } finally {
+      setRoleCandidateLoading(false)
+    }
+  }
+
+  async function grantRole(candidate) {
+    const memberName = candidate.display_name || candidate.username || candidate.email || candidate.user_id
+    if (!window.confirm(`Grant the ${newStaffRole.replace('_', ' ')} role to ${memberName}?`)) return
+    setWorking(candidate.user_id)
+    setError('')
+    setNotice('')
+    try {
+      const { error: rpcError } = await getSupabaseClient().rpc('admin_set_role', {
+        target_user_id: candidate.user_id,
+        new_role: newStaffRole,
+      })
+      if (rpcError) throw rpcError
+      setNotice(`${newStaffRole.replace('_', ' ')} access granted to ${memberName}.`)
+      setRoleCandidates((current) => current.filter((item) => item.user_id !== candidate.user_id))
+      await loadPage()
+    } catch (grantError) {
+      setError(rpcMessage(grantError))
+    } finally {
+      setWorking('')
+    }
+  }
+
   async function moderateContent(item) {
     const hide = !item.is_hidden
     const reason = window.prompt(`${hide ? 'Reason for hiding' : 'Reason for restoring'} this ${contentType}:`)
@@ -366,6 +416,53 @@ function AdminManagementPage({ section, role, userId }) {
 
           {section === 'roles' && (
             <div className="admin-management-list">
+              {role === 'super_admin' && <form className="admin-role-search" onSubmit={searchRoleCandidates}>
+                <div>
+                  <h2>Add staff access</h2>
+                  <p>Search verified members by name, username, or email. Only you, as super admin, can grant these roles.</p>
+                </div>
+                <label className="admin-role-search-field">
+                  <Search size={16} aria-hidden="true" />
+                  <input
+                    value={roleCandidateSearch}
+                    onChange={(event) => setRoleCandidateSearch(event.target.value)}
+                    minLength={2}
+                    maxLength={120}
+                    placeholder="Search members (2+ characters)"
+                    aria-label="Search verified members"
+                    required
+                  />
+                </label>
+                <label className="admin-role-select">
+                  <span>Role to grant</span>
+                  <select value={newStaffRole} onChange={(event) => setNewStaffRole(event.target.value)}>
+                    <option value="admin">Admin</option>
+                    <option value="moderator">Moderator</option>
+                    <option value="support">Support (read only)</option>
+                  </select>
+                </label>
+                <button className="admin-button admin-button--secondary" type="submit" disabled={roleCandidateLoading || roleCandidateSearch.trim().length < 2}>
+                  {roleCandidateLoading ? <LoaderCircle size={15} className="spinner" /> : <Search size={15} />}
+                  {roleCandidateLoading ? 'Searching…' : 'Find member'}
+                </button>
+              </form>}
+              {role === 'super_admin' && roleCandidates.map((candidate) => (
+                <article className="admin-management-card" key={candidate.user_id}>
+                  <div className="admin-management-card-main">
+                    <span className="admin-management-avatar">{(candidate.display_name || candidate.email || '?').slice(0, 1).toUpperCase()}</span>
+                    <div className="admin-management-user">
+                      <strong>{candidate.display_name || candidate.username || 'QORVEXA member'}</strong>
+                      <span>@{candidate.username || 'no-username'} · {candidate.email}</span>
+                      <small>{candidate.user_id}</small>
+                    </div>
+                  </div>
+                  <div className="admin-management-card-actions">
+                    <button className="admin-button admin-button--primary" type="button" disabled={Boolean(working)} onClick={() => grantRole(candidate)}>
+                      <UserRoundPlus size={14} />{working === candidate.user_id ? 'Granting…' : `Grant ${newStaffRole.replace('_', ' ')}`}
+                    </button>
+                  </div>
+                </article>
+              ))}
               {roles.map((target) => (
                 <article className="admin-management-card" key={target.user_id}>
                   <div className="admin-management-card-main"><span className="admin-management-avatar"><ShieldCheck size={18} /></span><div className="admin-management-user"><strong>{target.display_name || target.username || target.user_id}</strong><span>@{target.username || 'no-username'} · {target.role.replace('_', ' ')}</span><small>{target.user_id}</small></div></div>

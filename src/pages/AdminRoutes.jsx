@@ -159,7 +159,9 @@ function AdminRoutes() {
   if (adminRole === 'support' && ['overview', 'moderation', 'audit', 'roles'].includes(section)) {
     return <Navigate to="/admin/reports" replace />
   }
-  if (adminRole === 'moderator' && section === 'roles') return <Navigate to="/admin/users" replace />
+  if (status === 'ready' && adminRole !== 'super_admin' && section === 'roles') {
+    return <Navigate to="/admin/users" replace />
+  }
 
   if (status === 'ready' && !['super_admin', 'admin'].includes(adminRole) && section === 'overview') {
     return <Navigate to={adminRole === 'support' ? '/admin/reports' : '/admin/users'} replace />

@@ -35,6 +35,8 @@ QORVEXA is a social platform in development. The responsive landing page, Supaba
 
    `supabase/migrations/20261107023000_admin_management.sql` (apply once, after all migrations above; adds staff role support, report intake, user restrictions, content moderation, and admin management RPCs)
 
+   `supabase/migrations/20261107025000_admin_role_candidates.sql` (apply once after the admin management migration; enables super admins to search verified members and grant staff roles from the dashboard)
+
 5. In Supabase Authentication settings, enable email/password sign-in and email confirmations. Add the local and production `/app` and `/reset-password` URLs to the allowed redirect URLs (for local development, include both `localhost:5173` and `127.0.0.1:5173`).
 
 6. Create an account and verify its email. In Authentication → Users, copy the account UUID, replace `null::uuid` in `supabase/setup/bootstrap_super_admin.sql` with that UUID, then run that script once in the SQL Editor. The bootstrap script writes a security audit entry and cannot be run from the website.
