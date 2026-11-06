@@ -27,7 +27,7 @@ import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 
-const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility'
+const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility, online_status_visibility'
 const requestFields = 'id, sender_id, receiver_id, status, created_at'
 const messageFields = 'id, conversation_id, sender_id, content, created_at'
 
@@ -117,6 +117,18 @@ function NetworkPage() {
   const selectedConversationId = searchParams.get('conversation')
   const currentUserName = user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
   const currentUsername = user.user_metadata?.username
+  const presenceTargetIds = useMemo(() => [...new Set([
+    user.id,
+    ...friendships
+      .map((friendship) => friendship.user_low === user.id ? friendship.user_high : friendship.user_low)
+      .filter((id) => profiles.some((profile) => profile.id === id && profile.online_status_visibility !== 'nobody')),
+    ...requests
+      .filter((request) => request.status === 'pending')
+      .map((request) => request.sender_id === user.id ? request.receiver_id : request.sender_id)
+      .filter((id) => profiles.some((profile) => profile.id === id
+        && profile.profile_visibility === 'public'
+        && profile.online_status_visibility === 'everyone')),
+  ])].sort().join(','), [friendships, profiles, requests, user.id])
 
   const loadNetwork = useCallback(async () => {
     const client = getSupabaseClient()
@@ -241,40 +253,61 @@ function NetworkPage() {
 
   useEffect(() => {
     const client = getSupabaseClient()
-    const presenceChannel = client.channel('qorvexa-online-presence', {
-      config: { presence: { key: user.id }, private: true },
-    })
-    presenceChannel
-      .on('presence', { event: 'sync' }, () => {
-        setOnlineIds(Object.keys(presenceChannel.presenceState()).filter((id) => id !== user.id))
-      })
-      .subscribe((state, channelError) => {
-        if (state === 'SUBSCRIBED') {
-          syncPresence().then(() => setPresenceError('')).catch((presenceError) => setPresenceError(presenceError.message || 'Online status could not be updated.'))
-        } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(state) && channelError) {
-          setPresenceError(channelError.message || 'Online presence disconnected.')
-        }
-      })
+    const presenceChannels = new Map()
+    let active = true
 
     async function updateLastActive() {
       const { error: updateError } = await client.rpc('touch_last_active')
       if (updateError) throw updateError
     }
 
-    async function syncPresence() {
+    function syncOnlineIds() {
+      if (!active) return
+      setOnlineIds([...presenceChannels.entries()]
+        .filter(([id, channel]) => id !== user.id && Object.keys(channel.presenceState()).length > 0)
+        .map(([id]) => id))
+    }
+
+    async function syncOwnPresence(channel) {
       if (document.visibilityState === 'visible') {
-        const trackStatus = await presenceChannel.track({ user_id: user.id, online_at: new Date().toISOString() })
+        const trackStatus = await channel.track({ user_id: user.id, online_at: new Date().toISOString() })
         if (trackStatus !== 'ok') throw new Error(`Online status could not be published (${trackStatus}).`)
         await updateLastActive()
       } else {
         await updateLastActive()
-        const untrackStatus = await presenceChannel.untrack()
+        const untrackStatus = await channel.untrack()
         if (untrackStatus !== 'ok') throw new Error('Online status could not be cleared.')
       }
     }
 
+    for (const targetId of presenceTargetIds.split(',')) {
+      if (!targetId) continue
+      const channel = client.channel(`qorvexa-online-presence:${targetId}`, {
+        config: { presence: { key: targetId }, private: true },
+      })
+      presenceChannels.set(targetId, channel)
+      channel
+        .on('presence', { event: 'sync' }, syncOnlineIds)
+        .subscribe((state, channelError) => {
+          if (!active) return
+          if (state === 'SUBSCRIBED') {
+            if (targetId === user.id) {
+              syncOwnPresence(channel)
+                .then(() => setPresenceError(''))
+                .catch((presenceError) => setPresenceError(presenceError.message || 'Online status could not be updated.'))
+            }
+          } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(state)) {
+            setPresenceError(channelError?.message || 'Online presence disconnected.')
+          }
+        })
+    }
+
     function handleVisibilityChange() {
-      syncPresence().then(() => setPresenceError('')).catch((presenceError) => setPresenceError(presenceError.message || 'Online status could not be updated.'))
+      const ownChannel = presenceChannels.get(user.id)
+      if (!ownChannel) return
+      syncOwnPresence(ownChannel)
+        .then(() => setPresenceError(''))
+        .catch((presenceError) => setPresenceError(presenceError.message || 'Online status could not be updated.'))
     }
 
     const heartbeat = window.setInterval(() => {
@@ -285,13 +318,14 @@ function NetworkPage() {
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
+      active = false
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
       if (typingSendTimeoutRef.current) clearTimeout(typingSendTimeoutRef.current)
       window.clearInterval(heartbeat)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      client.removeChannel(presenceChannel)
+      for (const channel of presenceChannels.values()) client.removeChannel(channel)
     }
-  }, [user.id])
+  }, [presenceTargetIds, user.id])
 
   useEffect(() => {
     if (!selectedConversationId || activeSection !== 'messages') return undefined

@@ -197,8 +197,12 @@ function PublicProfilePage() {
 
   useEffect(() => {
     if (!user || !profile?.id) return undefined
+    const canListen = user.id === profile.id
+      || profile.online_status_visibility === 'everyone'
+      || (profile.online_status_visibility === 'friends' && friendship.accepted)
+    if (!canListen) return undefined
     let active = true
-    const channel = getSupabaseClient().channel('qorvexa-online-presence', {
+    const channel = getSupabaseClient().channel(`qorvexa-online-presence:${profile.id}`, {
       config: { presence: { key: user.id }, private: true },
     })
       .on('presence', { event: 'sync' }, () => {
@@ -209,7 +213,7 @@ function PublicProfilePage() {
       active = false
       getSupabaseClient().removeChannel(channel)
     }
-  }, [profile?.id, user])
+  }, [friendship.accepted, profile?.id, profile?.online_status_visibility, user])
 
   async function loadMorePosts() {
     if (!profile || loadingMorePosts) return
