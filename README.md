@@ -68,7 +68,7 @@ QORVEXA is a social platform in development. The responsive landing page, Supaba
 | Icons | Lucide React |
 | Language | JavaScript |
 | Backend, authentication, database, storage, and real-time | Supabase + PostgreSQL |
-| Hosting and analytics | Cloudflare Pages + Cloudflare Web Analytics |
+| Hosting and analytics | Cloudflare Workers static assets + Cloudflare Web Analytics |
 | Source control | Git + GitHub |
 | Access control | Supabase Row Level Security (RLS) |
 
@@ -105,7 +105,7 @@ The admin foundation includes authorization, owner bootstrap, an immutable-to-cl
 
 Frontend environment variables are public in the built app: use only the Supabase publishable key and never use a `service_role` key. Enable and test RLS policies for every table before exposing data.
 
-For Cloudflare Pages, connect the GitHub repository and set the build command to `npm run build` and the output directory to `dist`. Add the two `VITE_SUPABASE_*` variables in the Cloudflare Pages project settings. Cloudflare Web Analytics can be enabled in the Pages dashboard once the site is deployed.
+For the Cloudflare Workers static-assets deployment, connect the GitHub repository, use `npm run build` as the build command, `npx wrangler deploy` as the deploy command, and `dist` as the output directory. Set the two `VITE_SUPABASE_*` variables in the Worker build settings. Wrangler configures single-page-app routing for the static assets; do not add a catch-all `public/_redirects` rule, which Workers rejects as an infinite redirect loop. Cloudflare Web Analytics can be enabled from the dashboard after deployment.
 
 ## Development phases
 
