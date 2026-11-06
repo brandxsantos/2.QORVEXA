@@ -21,10 +21,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { getSupabaseClient } from '../lib/supabase.js'
+import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 
-const postSelection = 'id, author_id, content, media_path, media_type, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url)'
+const postSelection = 'id, author_id, content, media_path, media_type, post_visibility, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url)'
 const imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const maxImageBytes = 8 * 1024 * 1024
 
@@ -61,6 +62,7 @@ function MemberPage() {
   const navigate = useNavigate()
   const [posts, setPosts] = useState([])
   const [draft, setDraft] = useState('')
+  const [postVisibility, setPostVisibility] = useState('public')
   const [mediaFile, setMediaFile] = useState(null)
   const [mediaPreview, setMediaPreview] = useState('')
   const [memberProfile, setMemberProfile] = useState(null)
@@ -117,18 +119,16 @@ function MemberPage() {
     const postIds = postRows.map((post) => post.id)
     if (postIds.length) {
       const client = getSupabaseClient()
-      const [likesResult, bookmarksResult] = await Promise.all([
-        client.from('post_likes').select('post_id, user_id').in('post_id', postIds),
+      const [likesResult, likedResult, bookmarksResult] = await Promise.all([
+        client.rpc('get_visible_post_like_counts', { target_post_ids: postIds }),
+        client.from('post_likes').select('post_id').eq('user_id', user.id).in('post_id', postIds),
         client.from('post_bookmarks').select('post_id').eq('user_id', user.id).in('post_id', postIds),
       ])
       if (likesResult.error) throw likesResult.error
+      if (likedResult.error) throw likedResult.error
       if (bookmarksResult.error) throw bookmarksResult.error
-      const counts = {}
-      const likedIds = new Set()
-      for (const like of likesResult.data || []) {
-        counts[like.post_id] = (counts[like.post_id] || 0) + 1
-        if (like.user_id === user.id) likedIds.add(like.post_id)
-      }
+      const counts = Object.fromEntries((likesResult.data || []).map((like) => [like.post_id, Number(like.like_count)]))
+      const likedIds = new Set((likedResult.data || []).map((like) => like.post_id))
       setLikeCounts(counts)
       setLikedPostIds(likedIds)
       setBookmarkedPostIds(new Set((bookmarksResult.data || []).map((bookmark) => bookmark.post_id)))
@@ -219,13 +219,14 @@ function MemberPage() {
       }
       const { data, error: insertError } = await getSupabaseClient()
         .from('posts')
-        .insert({ author_id: user.id, content, media_path: mediaPath, media_type: mediaType })
+        .insert({ author_id: user.id, content, media_path: mediaPath, media_type: mediaType, post_visibility: postVisibility })
         .select(postSelection)
         .single()
 
       if (insertError) throw insertError
       setPosts((currentPosts) => [data, ...currentPosts])
       setDraft('')
+      setPostVisibility('public')
       setMediaFile(null)
       setMediaPreview('')
     } catch (publishError) {
@@ -412,8 +413,10 @@ function MemberPage() {
         <aside className="member-profile-card">
           <div className="member-profile-cover" aria-hidden="true" />
           <div className="member-profile-details">
-            <div className="member-avatar" aria-hidden="true">{memberProfile?.avatar_url ? <img src={memberProfile.avatar_url} alt="" /> : getInitials(name)}</div>
-            <h1>{name}</h1>
+            <Link to={`/profile/${encodeURIComponent(username || '')}`} className="member-avatar" aria-label={`View ${name}'s profile`}>
+              {memberProfile?.avatar_url ? <ProtectedMediaImage path={memberProfile.avatar_url} alt="" /> : getInitials(name)}
+            </Link>
+            <h1><Link to={`/profile/${encodeURIComponent(username || '')}`}>{name}</Link></h1>
             {username && <p className="member-username">@{username}</p>}
             <p className="member-profile-email">{user.email}</p>
             {memberProfile?.bio && <p className="member-profile-bio">{memberProfile.bio}</p>}
@@ -448,6 +451,13 @@ function MemberPage() {
               rows={4}
               value={draft}
             />
+            <label className="member-post-visibility">Post audience
+              <select value={postVisibility} onChange={(event) => setPostVisibility(event.target.value)}>
+                <option value="public">Public</option>
+                <option value="friends">Friends</option>
+                <option value="only_me">Only me</option>
+              </select>
+            </label>
             <div className="member-media-picker">
               <label className="member-comments-toggle" htmlFor="post-media-file"><ImagePlus size={15} />Add an image</label>
               <input
@@ -482,7 +492,7 @@ function MemberPage() {
                   ? 'Apply the community features migration in Supabase SQL Editor, then refresh this page.'
                   : error}</span>
                 {feedStatus === 'setup'
-                  ? <code>supabase/migrations/20261107030000_community_features.sql</code>
+                  ? <><code>supabase/migrations/20261107030000_community_features.sql</code><code>supabase/migrations/20261107032000_public_profiles.sql</code></>
                   : <button type="button" onClick={handleRefresh}>Try again</button>}
               </div>
             </div>
@@ -501,19 +511,27 @@ function MemberPage() {
               {posts.map((post) => {
                 const author = post.profiles
                 const authorName = author?.display_name || author?.username || 'QORVEXA member'
-                const postImageUrl = post.media_path
-                  ? getSupabaseClient().storage.from('qorvexa-media').getPublicUrl(post.media_path).data.publicUrl
-                  : ''
+                const authorProfile = author?.username ? `/profile/${encodeURIComponent(author.username)}` : ''
                 return (
                   <article className="member-post" key={post.id}>
-                    <div className="member-post-avatar" aria-hidden="true">{author?.avatar_url ? <img src={author.avatar_url} alt="" /> : getInitials(authorName)}</div>
+                    {authorProfile
+                      ? <Link to={authorProfile} className="member-post-avatar" aria-label={`View ${authorName}'s profile`}>
+                        {author?.avatar_url ? <ProtectedMediaImage path={author.avatar_url} alt="" /> : getInitials(authorName)}
+                      </Link>
+                      : <div className="member-post-avatar" aria-hidden="true">{getInitials(authorName)}</div>}
                     <div className="member-post-body">
                       <div className="member-post-meta">
-                        <div><strong>{authorName}</strong>{author?.username && <span>@{author.username}</span>}</div>
-                        <time dateTime={post.created_at}><Clock3 size={13} aria-hidden="true" />{formatPostDate(post.created_at)}</time>
+                        <div>
+                          {authorProfile ? <Link to={authorProfile}><strong>{authorName}</strong></Link> : <strong>{authorName}</strong>}
+                          {author?.username && <Link to={authorProfile} className="member-post-username">@{author.username}</Link>}
+                        </div>
+                        <Link className="member-post-permalink" to={`/profile/${encodeURIComponent(author?.username || username || '')}?post=${post.id}`} aria-label={`Open post from ${formatPostDate(post.created_at)}`}>
+                          <Clock3 size={13} aria-hidden="true" />{formatPostDate(post.created_at)}
+                        </Link>
                       </div>
+                      {post.author_id === user.id && <span className="public-post-audience"><ShieldCheck size={12} />{post.post_visibility === 'only_me' ? 'Only me' : post.post_visibility === 'friends' ? 'Friends' : 'Public'}</span>}
                       {post.content && <p className="member-post-content">{post.content}</p>}
-                      {postImageUrl && <img className="member-post-media" src={postImageUrl} alt="Image attached to post" loading="lazy" />}
+                      {post.media_path && <Link to={`/profile/${encodeURIComponent(author?.username || username || '')}?post=${post.id}`} className="member-post-media-link"><ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to post" loading="lazy" /></Link>}
                       <div className="member-post-footer">
                         <button className={`member-comments-toggle${likedPostIds.has(post.id) ? ' is-active' : ''}`} type="button" onClick={() => toggleLike(post)} disabled={postActionId === post.id} aria-pressed={likedPostIds.has(post.id)}>
                           <span aria-hidden="true">{likedPostIds.has(post.id) ? '♥' : '♡'}</span><span>{likeCounts[post.id] || 0} likes</span>
@@ -525,6 +543,7 @@ function MemberPage() {
                           <MessageCircle size={14} aria-hidden="true" />
                           <span>{commentsByPost[post.id] ? `${commentsByPost[post.id].length} comments` : 'View comments'}</span>
                         </button>
+                        <Link className="member-comments-toggle" to={`/profile/${encodeURIComponent(author?.username || username || '')}?post=${post.id}`}>Open post</Link>
                         {post.author_id !== user.id && <button className="member-comments-toggle" type="button" onClick={() => setReportTarget({ reportedUserId: post.author_id, type: 'post', id: post.id })}><Flag size={13} aria-hidden="true" /><span>Report</span></button>}
                       </div>
                       {commentsOpen[post.id] && (
@@ -553,9 +572,17 @@ function MemberPage() {
                                   return (
                                     <div className="member-comment-thread" key={comment.id}>
                                       <div className="member-comment">
-                                        <div className="member-comment-avatar" aria-hidden="true">{commentAuthor?.avatar_url ? <img src={commentAuthor.avatar_url} alt="" /> : getInitials(commentName)}</div>
+                                        {commentAuthor?.username
+                                          ? <Link to={`/profile/${encodeURIComponent(commentAuthor.username)}`} className="member-comment-avatar" aria-label={`View ${commentName}'s profile`}>
+                                            {commentAuthor?.avatar_url ? <ProtectedMediaImage path={commentAuthor.avatar_url} alt="" /> : getInitials(commentName)}
+                                          </Link>
+                                          : <div className="member-comment-avatar" aria-hidden="true">{getInitials(commentName)}</div>}
                                         <div className="member-comment-body">
-                                          <div className="member-comment-meta"><strong>{commentName}</strong>{commentAuthor?.username && <span>@{commentAuthor.username}</span>}<time dateTime={comment.created_at}>{formatPostDate(comment.created_at)}</time></div>
+                                        <div className="member-comment-meta">
+                                          {commentAuthor?.username ? <Link to={`/profile/${encodeURIComponent(commentAuthor.username)}`}><strong>{commentName}</strong></Link> : <strong>{commentName}</strong>}
+                                          {commentAuthor?.username && <Link to={`/profile/${encodeURIComponent(commentAuthor.username)}`}>@{commentAuthor.username}</Link>}
+                                          <time dateTime={comment.created_at}>{formatPostDate(comment.created_at)}</time>
+                                        </div>
                                           <p>{comment.content}</p>
                                           <div className="member-comment-actions">
                                             <button type="button" onClick={() => setReplyTarget(replyTarget === comment.id ? null : comment.id)}>Reply</button>
@@ -588,9 +615,17 @@ function MemberPage() {
                                         return (
                                           <div className="member-comment member-comment--reply" key={reply.id}>
                                             <CornerDownRight size={14} aria-hidden="true" />
-                                            <div className="member-comment-avatar" aria-hidden="true">{replyAuthor?.avatar_url ? <img src={replyAuthor.avatar_url} alt="" /> : getInitials(replyName)}</div>
+                                            {replyAuthor?.username
+                                              ? <Link to={`/profile/${encodeURIComponent(replyAuthor.username)}`} className="member-comment-avatar" aria-label={`View ${replyName}'s profile`}>
+                                                {replyAuthor?.avatar_url ? <ProtectedMediaImage path={replyAuthor.avatar_url} alt="" /> : getInitials(replyName)}
+                                              </Link>
+                                              : <div className="member-comment-avatar" aria-hidden="true">{getInitials(replyName)}</div>}
                                             <div className="member-comment-body">
-                                              <div className="member-comment-meta"><strong>{replyName}</strong>{replyAuthor?.username && <span>@{replyAuthor.username}</span>}<time dateTime={reply.created_at}>{formatPostDate(reply.created_at)}</time></div>
+                                              <div className="member-comment-meta">
+                                                {replyAuthor?.username ? <Link to={`/profile/${encodeURIComponent(replyAuthor.username)}`}><strong>{replyName}</strong></Link> : <strong>{replyName}</strong>}
+                                                {replyAuthor?.username && <Link to={`/profile/${encodeURIComponent(replyAuthor.username)}`}>@{replyAuthor.username}</Link>}
+                                                <time dateTime={reply.created_at}>{formatPostDate(reply.created_at)}</time>
+                                              </div>
                                               <p>{reply.content}</p>
                                               {reply.author_id === user.id && (
                                                 <div className="member-comment-actions">

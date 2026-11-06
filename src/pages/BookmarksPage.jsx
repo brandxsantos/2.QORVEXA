@@ -3,6 +3,7 @@ import { Bookmark, Clock3, LoaderCircle, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/useAuth.js'
 import { getSupabaseClient } from '../lib/supabase.js'
+import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import BrandMark from '../components/BrandMark.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 
@@ -59,8 +60,6 @@ function BookmarksPage() {
     }
   }
 
-  const client = getSupabaseClient()
-
   return (
     <main className="member-page member-feed-page settings-page">
       <div className="ambient ambient--one" aria-hidden="true" />
@@ -86,21 +85,19 @@ function BookmarksPage() {
             : <div className="bookmark-list">{bookmarks.map(({ post_id: postId, posts: post }) => {
               const author = post.profiles
               const authorName = author?.display_name || author?.username || 'QORVEXA member'
-              const mediaUrl = post.media_path
-                ? client.storage.from('qorvexa-media').getPublicUrl(post.media_path).data.publicUrl
-                : ''
+              const profilePath = author?.username ? `/profile/${encodeURIComponent(author.username)}` : '/app'
               return (
                 <article className="member-post bookmark-post" key={postId}>
-                  <div className="member-post-avatar">
-                    {author?.avatar_url ? <img src={author.avatar_url} alt="" /> : authorName.slice(0, 1).toUpperCase()}
-                  </div>
+                  <Link className="member-post-avatar" to={profilePath} aria-label={`View ${authorName}'s profile`}>
+                    {author?.avatar_url ? <ProtectedMediaImage path={author.avatar_url} alt="" /> : authorName.slice(0, 1).toUpperCase()}
+                  </Link>
                   <div className="member-post-body">
                     <div className="member-post-meta">
-                      <div><strong>{authorName}</strong>{author?.username && <span>@{author.username}</span>}</div>
+                      <div><Link to={profilePath}><strong>{authorName}</strong></Link>{author?.username && <Link className="member-post-username" to={profilePath}>@{author.username}</Link>}</div>
                       <time dateTime={post.created_at}><Clock3 size={13} />{postDate(post.created_at)}</time>
                     </div>
                     {post.content && <p className="member-post-content">{post.content}</p>}
-                    {mediaUrl && <img className="member-post-media" src={mediaUrl} alt="Image attached to saved post" loading="lazy" />}
+                    {post.media_path && <ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to saved post" loading="lazy" />}
                     <div className="member-post-footer">
                       <Link className="member-comments-toggle" to="/app"><Bookmark size={14} />Saved post</Link>
                       <button className="member-comments-toggle" type="button" disabled={workingId === postId} onClick={() => removeBookmark(postId)}>

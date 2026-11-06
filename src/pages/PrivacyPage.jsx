@@ -3,6 +3,7 @@ import { AlertCircle, LoaderCircle, Shield, UserRoundX } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/useAuth.js'
 import { getSupabaseClient } from '../lib/supabase.js'
+import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import BrandMark from '../components/BrandMark.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 
@@ -79,7 +80,7 @@ function PrivacyPage() {
                 <article className="privacy-member-row" key={member.user_id}>
                   <div className="privacy-member-identity">
                     {member.avatar_url
-                      ? <img src={member.avatar_url} alt="" />
+                      ? <ProtectedMediaImage path={member.avatar_url} alt="" />
                       : <span aria-hidden="true">{(member.display_name || member.username || '?').slice(0, 1).toUpperCase()}</span>}
                     <div><strong>{member.display_name || member.username || 'QORVEXA member'}</strong><small>@{member.username || 'no-username'}</small></div>
                   </div>

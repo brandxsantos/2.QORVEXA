@@ -21,6 +21,7 @@ function App() {
       <Route path="/signup" element={<AccountAccess />} />
       <Route path="/forgot-password" element={<AccountAccess />} />
       <Route path="/reset-password" element={<AccountAccess />} />
+      <Route path="/profile/:username" element={<AccountAccess />} />
       <Route path="/app" element={<AccountAccess />} />
       <Route path="/app/*" element={<AccountAccess />} />
       <Route path="/admin/*" element={<AccountAccess />} />

@@ -7,7 +7,6 @@ import {
   Check,
   CheckCheck,
   Clock3,
-  Flag,
   LoaderCircle,
   LogOut,
   MessageCircle,
@@ -17,7 +16,6 @@ import {
   ShieldCheck,
   Trash2,
   UserPlus,
-  UserRoundX,
   Users,
   X,
 } from 'lucide-react'
@@ -25,25 +23,17 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import BrandMark from '../components/BrandMark.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { getSupabaseClient } from '../lib/supabase.js'
+import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 
-const profileFields = 'id, username, display_name, bio, avatar_url, last_active_at'
+const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility'
 const requestFields = 'id, sender_id, receiver_id, status, created_at'
 const messageFields = 'id, conversation_id, sender_id, content, created_at'
 
 function isNetworkSetupError(error) {
   return ['42P01', '42703', 'PGRST200', 'PGRST202', 'PGRST205', '42883'].includes(error.code)
     || /friend_requests|friendships|conversations|messages|notifications|last_active_at|blocked_users/.test(error.message || '')
-}
-
-function formatLastActive(value) {
-  if (!value) return 'Last active time unavailable'
-  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000))
-  if (seconds < 60) return 'Last active just now'
-  if (seconds < 3600) return `Last active ${Math.floor(seconds / 60)}m ago`
-  if (seconds < 86400) return `Last active ${Math.floor(seconds / 3600)}h ago`
-  return `Last active ${Math.floor(seconds / 86400)}d ago`
 }
 
 function initials(name = '') {
@@ -67,25 +57,25 @@ function conversationPeerReadAt(conversation, userId) {
     : conversation.user_low_last_read_at
 }
 
-function UserIdentity({ profile, online = false, small = false, onClick }) {
+function UserIdentity({ profile, online = false, small = false }) {
   const name = profileName(profile)
   const identity = (
     <>
       {profile?.avatar_url
-        ? <img className="network-avatar" src={profile.avatar_url} alt="" />
+        ? <ProtectedMediaImage className="network-avatar" path={profile.avatar_url} alt="" />
         : <span className="network-avatar network-avatar--initials" aria-hidden="true">{initials(name)}</span>}
       <span className="network-identity-copy">
         <strong>{name}</strong>
         {profile?.username && <small>@{profile.username}</small>}
-        {!online && profile?.last_active_at && <small className="network-last-active">{formatLastActive(profile.last_active_at)}</small>}
       </span>
       {online && <i className="network-online-dot" title="Online" aria-label="Online" />}
     </>
   )
+  if (!profile?.username) return <div className={`network-identity${small ? ' network-identity--small' : ''}`}>{identity}</div>
   return (
-    onClick
-      ? <button className={`network-identity network-identity-button${small ? ' network-identity--small' : ''}`} type="button" onClick={onClick} aria-label={`View ${name}'s profile`}>{identity}</button>
-      : <div className={`network-identity${small ? ' network-identity--small' : ''}`}>{identity}</div>
+    <Link className={`network-identity network-identity-button${small ? ' network-identity--small' : ''}`} to={`/profile/${encodeURIComponent(profile.username)}`} aria-label={`View ${name}'s profile`}>
+      {identity}
+    </Link>
   )
 }
 
@@ -116,7 +106,6 @@ function NetworkPage() {
   const [onlineIds, setOnlineIds] = useState([])
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
   const [typingConversationId, setTypingConversationId] = useState('')
-  const [viewingProfile, setViewingProfile] = useState(null)
   const [reportTarget, setReportTarget] = useState(null)
   const [signingOut, setSigningOut] = useState(false)
   const messagesEndRef = useRef(null)
@@ -404,8 +393,7 @@ function NetworkPage() {
   const filteredFriends = friendships
     .map((friendship) => profileById[friendship.user_low === user.id ? friendship.user_high : friendship.user_low])
     .filter((profile) => profile && (!query.trim() || `${profile.display_name} ${profile.username}`.toLowerCase().includes(query.trim().toLowerCase())))
-    .sort((first, second) => Number(onlineIds.includes(second.id)) - Number(onlineIds.includes(first.id))
-      || new Date(second.last_active_at || 0) - new Date(first.last_active_at || 0))
+    .sort((first, second) => Number(onlineIds.includes(second.id)) - Number(onlineIds.includes(first.id)))
 
   async function loadMorePeople() {
     try {
@@ -467,15 +455,6 @@ function NetworkPage() {
     return runAction(profile.id, async () => {
       const { error: rpcError } = await getSupabaseClient().rpc('remove_friend', { target_user_id: profile.id })
       if (rpcError) throw rpcError
-    })
-  }
-
-  function blockMember(profile) {
-    if (!window.confirm(`Block ${profileName(profile)}? They will no longer be able to view your profile or posts, send friend requests, or access your conversations. Your friendship will be removed.`)) return
-    return runAction(profile.id, async () => {
-      const { error: rpcError } = await getSupabaseClient().rpc('block_member', { target_user_id: profile.id })
-      if (rpcError) throw rpcError
-      setViewingProfile(null)
     })
   }
 
@@ -657,9 +636,10 @@ function NetworkPage() {
           <div className="network-empty network-empty--setup">
             <span><ShieldCheck size={22} aria-hidden="true" /></span>
             <h2>Friends and messaging need one database migration</h2>
-            <p>Apply the Friends & Messaging migration and the latest Community Features migration in Supabase SQL Editor, in order.</p>
+            <p>Apply the Friends & Messaging, Community Features, and Public Profiles migrations in Supabase SQL Editor, in order.</p>
             <code>supabase/migrations/20261107020000_friends_messaging.sql</code>
             <code>supabase/migrations/20261107030000_community_features.sql</code>
+            <code>supabase/migrations/20261107032000_public_profiles.sql</code>
           </div>
         ) : status === 'loading' ? (
           <div className="network-loading" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" />Loading your network…</div>
@@ -672,7 +652,7 @@ function NetworkPage() {
                   const incoming = incomingRequests.find((request) => request.sender_id === profile.id)
                   return (
                     <article className="network-user-card" key={profile.id}>
-                      <UserIdentity profile={profile} online={onlineIds.includes(profile.id)} onClick={() => setViewingProfile(profile)} />
+                      <UserIdentity profile={profile} online={onlineIds.includes(profile.id)} />
                       {profile.bio && <p className="network-user-bio">{profile.bio}</p>}
                       <div className="network-card-actions">
                         {incoming ? (
@@ -702,7 +682,7 @@ function NetworkPage() {
                     const profile = profileById[request.sender_id]
                     return (
                       <div className="network-person-row" key={request.id}>
-                        <UserIdentity profile={profile} online={onlineIds.includes(request.sender_id)} onClick={() => setViewingProfile(profile)} />
+                        <UserIdentity profile={profile} online={onlineIds.includes(request.sender_id)} />
                         <div className="network-row-actions">
                           <button className="network-icon-action network-icon-action--accept" aria-label="Accept friend request" type="button" disabled={workingId === request.id} onClick={() => respondToRequest(request, true)}><Check size={17} /></button>
                           <button className="network-icon-action" aria-label="Decline friend request" type="button" disabled={workingId === request.id} onClick={() => respondToRequest(request, false)}><X size={17} /></button>
@@ -715,7 +695,7 @@ function NetworkPage() {
                       <div className="network-panel-heading network-panel-heading--sub"><h2>Sent requests</h2></div>
                       {requests.filter((request) => request.sender_id === user.id && request.status === 'pending').map((request) => (
                         <div className="network-person-row" key={request.id}>
-                          <UserIdentity profile={profileById[request.receiver_id]} onClick={() => setViewingProfile(profileById[request.receiver_id])} />
+                          <UserIdentity profile={profileById[request.receiver_id]} />
                           <button className="network-button" type="button" disabled={workingId === request.id} onClick={() => cancelRequest(request)}>Cancel</button>
                         </div>
                       ))}
@@ -726,7 +706,7 @@ function NetworkPage() {
                   <div className="network-panel-heading"><h2>Your friends</h2><span>{filteredFriends.length}</span></div>
                   {filteredFriends.length ? filteredFriends.map((profile) => (
                     <div className="network-person-row" key={profile.id}>
-                      <UserIdentity profile={profile} online={onlineIds.includes(profile.id)} onClick={() => setViewingProfile(profile)} />
+                      <UserIdentity profile={profile} online={onlineIds.includes(profile.id)} />
                       <div className="network-row-actions">
                         <button className="network-button network-button--primary" type="button" disabled={workingId === profile.id} onClick={() => openConversation(profile)}><MessageCircle size={14} />Message</button>
                         <button className="network-icon-action" aria-label={`Remove ${profileName(profile)} from friends`} type="button" onClick={() => removeFriend(profile)}><X size={17} /></button>
@@ -747,9 +727,9 @@ function NetworkPage() {
                   const actorName = profileName(notification.profiles)
                   return (
                     <article className={`network-notification${notification.is_read ? '' : ' is-unread'}`} key={notification.id} onClick={() => markNotificationRead(notification)}>
-                      <UserIdentity profile={notification.profiles} small onClick={() => setViewingProfile(notification.profiles)} />
+                      <UserIdentity profile={notification.profiles} small />
                       <div className="network-notification-copy">
-                        <p><strong>{actorName}</strong> {
+                        <p><Link className="network-notification-actor" to={notification.profiles?.username ? `/profile/${encodeURIComponent(notification.profiles.username)}` : '/app'}><strong>{actorName}</strong></Link> {
                           notification.type === 'friend_request' ? 'sent you a friend request.'
                             : notification.type === 'friend_request_accepted' ? 'accepted your friend request.'
                               : notification.type === 'post_like' ? 'liked your post.'
@@ -775,17 +755,16 @@ function NetworkPage() {
                   <div className="network-conversation-heading"><h2>Messages</h2><span>{conversations.length}</span></div>
                   <label className="network-search network-search--conversation"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations…" /></label>
                   {conversations.filter((conversation) => profileName(conversation.peer).toLowerCase().includes(query.trim().toLowerCase()) || conversation.peer?.username?.toLowerCase().includes(query.trim().toLowerCase())).map((conversation) => (
-                    <Link
+                    <div
                       className={`network-conversation-row${conversation.id === selectedConversationId ? ' is-selected' : ''}`}
                       key={conversation.id}
-                      to={`/app/messages?conversation=${conversation.id}`}
                     >
-                      <UserIdentity profile={conversation.peer} online={onlineIds.includes(conversation.peerId)} small onClick={() => setViewingProfile(conversation.peer)} />
-                      <div className="network-conversation-summary">
+                      <UserIdentity profile={conversation.peer} online={onlineIds.includes(conversation.peerId)} small />
+                      <Link className="network-conversation-summary" to={`/app/messages?conversation=${conversation.id}`}>
                         <span>{conversation.lastMessage?.content || 'Start a conversation'}</span>
                         {conversation.unreadCount > 0 && <b>{conversation.unreadCount}</b>}
-                      </div>
-                    </Link>
+                      </Link>
+                    </div>
                   ))}
                   {!conversations.length && <div className="network-inline-empty"><MessageCircle size={20} /><p>Message an accepted friend to start a conversation.</p></div>}
                 </aside>
@@ -795,7 +774,7 @@ function NetworkPage() {
                     <>
                       <header className="network-chat-header">
                         <Link className="network-chat-back" to="/app/messages" aria-label="Back to conversations"><ArrowLeft size={17} /></Link>
-                        <UserIdentity profile={activeConversation.peer} online={onlineIds.includes(activeConversation.peerId)} small onClick={() => setViewingProfile(activeConversation.peer)} />
+                        <UserIdentity profile={activeConversation.peer} online={onlineIds.includes(activeConversation.peerId)} small />
                         <span className="network-chat-status">{onlineIds.includes(activeConversation.peerId) ? 'Online' : 'Offline'}</span>
                       </header>
                       <div className="network-message-list">
@@ -819,7 +798,7 @@ function NetworkPage() {
                             </div>
                           </article>
                         ))}
-                        {typingConversationId === selectedConversationId && <div className="network-typing">{profileName(activeConversation.peer)} is typing…</div>}
+                        {typingConversationId === selectedConversationId && <div className="network-typing"><Link to={`/profile/${encodeURIComponent(activeConversation.peer?.username || '')}`}>{profileName(activeConversation.peer)}</Link> is typing…</div>}
                         <div ref={messagesEndRef} />
                         {!messages.length && <div className="network-chat-empty">Say hello and start the conversation.</div>}
                       </div>
@@ -861,26 +840,6 @@ function NetworkPage() {
         <span>QORVEXA <span>·</span> Connect Beyond Limits.</span>
         <span>Signed in as {currentUsername ? `@${currentUsername}` : currentUserName}</span>
       </footer>
-      {viewingProfile && (
-        <div className="network-profile-overlay" onClick={() => setViewingProfile(null)} role="presentation">
-          <section className="network-profile-dialog" role="dialog" aria-modal="true" aria-labelledby="network-profile-name" onClick={(event) => event.stopPropagation()}>
-            <button className="network-profile-close" type="button" onClick={() => setViewingProfile(null)} aria-label="Close profile"><X size={18} /></button>
-            <UserIdentity profile={viewingProfile} online={onlineIds.includes(viewingProfile.id)} />
-            <h2 id="network-profile-name">{profileName(viewingProfile)}</h2>
-            {viewingProfile.username && <p className="network-profile-username">@{viewingProfile.username}</p>}
-            <p className="network-profile-bio">{viewingProfile.bio || 'No bio added yet.'}</p>
-            {friendIds.has(viewingProfile.id)
-              ? <button className="network-button network-button--primary" type="button" onClick={() => { openConversation(viewingProfile); setViewingProfile(null) }}><MessageCircle size={14} />Message</button>
-              : outgoingByUser.has(viewingProfile.id)
-                ? <button className="network-button" type="button" onClick={() => cancelRequest(outgoingByUser.get(viewingProfile.id))}>Request sent · Cancel</button>
-                : incomingRequests.some((request) => request.sender_id === viewingProfile.id)
-                  ? <button className="network-button network-button--primary" type="button" onClick={() => respondToRequest(incomingRequests.find((request) => request.sender_id === viewingProfile.id), true)}><Check size={14} />Accept request</button>
-                  : <button className="network-button network-button--primary" type="button" onClick={() => sendFriendRequest(viewingProfile)}><UserPlus size={14} />Add friend</button>}
-            <button className="network-button" type="button" onClick={() => { setReportTarget({ reportedUserId: viewingProfile.id, type: 'user', id: viewingProfile.id }); setViewingProfile(null) }}><Flag size={14} />Report account</button>
-            {!blockedIds.has(viewingProfile.id) && <button className="network-button network-button--danger" type="button" disabled={workingId === viewingProfile.id} onClick={() => blockMember(viewingProfile)}><UserRoundX size={14} />Block account</button>}
-          </section>
-        </div>
-      )}
       {reportTarget && <ReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />}
     </main>
   )
