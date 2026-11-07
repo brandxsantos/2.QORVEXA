@@ -86,7 +86,22 @@ function PublicProfilePage() {
   const [unreadMessageCount, setUnreadMessageCount] = useState(0)
   const [notificationToast, setNotificationToast] = useState('')
   const [reportTarget, setReportTarget] = useState(null)
+  const [signingOut, setSigningOut] = useState(false)
   const profileLoadIdRef = useRef(0)
+  async function handleSignOut() {
+  setError('')
+  setSigningOut(true)
+
+  try {
+    const { error: signOutError } = await getSupabaseClient().auth.signOut()
+    if (signOutError) throw signOutError
+    navigate('/', { replace: true })
+  } catch (signOutError) {
+    setError(signOutError.message || 'We could not sign you out. Please try again.')
+  } finally {
+    setSigningOut(false)
+  }
+}
 
   const loadUnreadCounts = useCallback(async () => {
     if (!user) return
