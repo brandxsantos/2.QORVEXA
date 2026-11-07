@@ -413,9 +413,8 @@ function MemberPage() {
           <Link to="/app/friends" className="network-nav-link"><Users size={15} aria-hidden="true" />Friends</Link>
           <Link to="/app/notifications" className="network-nav-link"><Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}</Link>
           <Link to="/app/messages" className="network-nav-link"><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessageCount > 0 && <span className="network-badge">{unreadMessageCount}</span>}</Link>
-      
-         <AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
-          {username && <Link to={`/profile/${encodeURIComponent(username)}`} className="network-nav-link"><Users size={15} aria-hidden="true" />Profile</Link>}
+      {username && <Link to={`/profile/${encodeURIComponent(username)}`} className="network-nav-link"><Users size={15} aria-hidden="true" />Profile</Link>}
+<AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
         </nav>
    
       </header>

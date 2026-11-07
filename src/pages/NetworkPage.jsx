@@ -796,8 +796,8 @@ function NetworkPage() {
           </Link>
           <Link to="/app/messages" className={`network-nav-link${activeSection === 'messages' ? ' is-active' : ''}`}><MessageSquare size={15} aria-hidden="true" />Messages{unreadMessages > 0 && <span className="network-badge">{unreadMessages}</span>}</Link>
       
-    <AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
-          {ownUsername && <Link to={`/profile/${encodeURIComponent(ownUsername)}`} className="network-nav-link"><UserRound size={15} aria-hidden="true" />My profile</Link>}
+   {ownUsername && <Link to={`/profile/${encodeURIComponent(ownUsername)}`} className="network-nav-link"><UserRound size={15} aria-hidden="true" />My profile</Link>}
+<AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
         </nav>
  
       </header>
