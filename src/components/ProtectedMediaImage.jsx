@@ -14,10 +14,16 @@ function getObjectPath(value) {
   }
 }
 
-function ProtectedMediaImage({ path, alt = '', className, loading }) {
+function ProtectedMediaImage({ path, alt = '', className, loading, fallback }) {
   const [resolved, setResolved] = useState({ path: '', src: '', unavailable: false })
   const objectPath = getObjectPath(path)
   const externalSource = path?.startsWith('http') && !objectPath ? path : ''
+  const placeholder = fallback || 'Image unavailable'
+  const fallbackClass = [
+    'protected-media-fallback',
+    fallback && 'protected-media-fallback--avatar',
+    className,
+  ].filter(Boolean).join(' ')
 
   useEffect(() => {
     let active = true
@@ -43,11 +49,21 @@ function ProtectedMediaImage({ path, alt = '', className, loading }) {
   }, [objectPath, path])
 
   if (!objectPath) {
-    return externalSource ? <img src={externalSource} alt={alt} className={className} loading={loading} /> : null
+    if (!externalSource) return null
+    if (resolved.path === path && resolved.unavailable) {
+      return <span className={fallbackClass} role="img" aria-label={`${alt || placeholder} unavailable`}>{placeholder}</span>
+    }
+    return <img
+      src={externalSource}
+      alt={alt}
+      className={className}
+      loading={loading}
+      onError={() => setResolved({ path, src: '', unavailable: true })}
+    />
   }
   if (resolved.path !== path || !resolved.src) {
     return resolved.path === path && resolved.unavailable
-      ? <span className="protected-media-unavailable" role="img" aria-label={`${alt || 'Image'} unavailable`}>Image unavailable</span>
+      ? <span className={fallbackClass} role="img" aria-label={`${alt || placeholder} unavailable`}>{placeholder}</span>
       : null
   }
   return <img

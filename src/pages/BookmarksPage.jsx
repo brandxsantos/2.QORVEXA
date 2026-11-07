@@ -89,7 +89,7 @@ function BookmarksPage() {
               return (
                 <article className="member-post bookmark-post" key={postId}>
                   <Link className="member-post-avatar" to={profilePath} aria-label={`View ${authorName}'s profile`}>
-                    {author?.avatar_url ? <ProtectedMediaImage path={author.avatar_url} alt="" /> : authorName.slice(0, 1).toUpperCase()}
+                    {author?.avatar_url ? <ProtectedMediaImage path={author.avatar_url} alt="" fallback={authorName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()} /> : authorName.slice(0, 1).toUpperCase()}
                   </Link>
                   <div className="member-post-body">
                     <div className="member-post-meta">

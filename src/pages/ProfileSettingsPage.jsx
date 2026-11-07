@@ -219,7 +219,7 @@ function ProfileSettingsPage() {
                 {avatarFile
                   ? <img src={avatarPreview} alt="Selected avatar preview" />
                   : profile.avatar_url
-                    ? <ProtectedMediaImage path={profile.avatar_url} alt="Current profile avatar" />
+                    ? <ProtectedMediaImage path={profile.avatar_url} alt="Current profile avatar" fallback={(profile.display_name || profile.username || '?').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()} />
                     : <UserRound size={25} aria-hidden="true" />}
               </span>
               <span><strong>Profile picture</strong><small>JPG, PNG, WebP, or GIF · up to 8 MB</small></span>

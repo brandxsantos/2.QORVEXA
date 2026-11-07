@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Trash2,
   UserPlus,
+  UserRound,
   Users,
   X,
 } from 'lucide-react'
@@ -24,12 +25,23 @@ import BrandMark from '../components/BrandMark.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
+import NotificationToast from '../components/NotificationToast.jsx'
+import notificationToastText from '../lib/notificationToastText.js'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 
 const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility, online_status_visibility'
 const requestFields = 'id, sender_id, receiver_id, status, created_at'
 const messageFields = 'id, conversation_id, sender_id, content, created_at'
+const notificationFields = 'id, user_id, actor_id, type, reference_id, post_id, conversation_id, preview, is_read, created_at, profiles!notifications_actor_id_fkey(username, display_name, avatar_url)'
+const notificationFilters = [
+  ['all', 'All notifications'],
+  ['friend_request', 'Friend requests'],
+  ['message', 'Messages'],
+  ['post_like', 'Reactions'],
+  ['comment', 'Comments & replies'],
+  ['other', 'Other activity'],
+]
 
 function isNetworkSetupError(error) {
   return ['42P01', '42703', 'PGRST200', 'PGRST202', 'PGRST205', '42883'].includes(error.code)
@@ -62,7 +74,7 @@ function UserIdentity({ profile, online = false, small = false }) {
   const identity = (
     <>
       {profile?.avatar_url
-        ? <ProtectedMediaImage className="network-avatar" path={profile.avatar_url} alt="" />
+        ? <ProtectedMediaImage className="network-avatar" path={profile.avatar_url} alt="" fallback={initials(name)} />
         : <span className="network-avatar network-avatar--initials" aria-hidden="true">{initials(name)}</span>}
       <span className="network-identity-copy">
         <strong>{name}</strong>
@@ -90,8 +102,10 @@ function NetworkPage() {
   const [hasMoreDiscoverProfiles, setHasMoreDiscoverProfiles] = useState(false)
   const [requests, setRequests] = useState([])
   const [friendships, setFriendships] = useState([])
+  const [ownUsername, setOwnUsername] = useState(user.user_metadata?.username || '')
   const [blockedIds, setBlockedIds] = useState(() => new Set())
   const [notifications, setNotifications] = useState([])
+  const [notificationFilter, setNotificationFilter] = useState('all')
   const [conversations, setConversations] = useState([])
   const [messages, setMessages] = useState([])
   const [hasMoreMessages, setHasMoreMessages] = useState(false)
@@ -105,6 +119,7 @@ function NetworkPage() {
   const [sending, setSending] = useState(false)
   const [onlineIds, setOnlineIds] = useState([])
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
+  const [notificationToast, setNotificationToast] = useState('')
   const [typingConversationId, setTypingConversationId] = useState('')
   const [reportTarget, setReportTarget] = useState(null)
   const [signingOut, setSigningOut] = useState(false)
@@ -117,6 +132,12 @@ function NetworkPage() {
   const selectedConversationId = searchParams.get('conversation')
   const currentUserName = user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
   const currentUsername = user.user_metadata?.username
+  useEffect(() => {
+    if (!notificationToast) return undefined
+    const timer = window.setTimeout(() => setNotificationToast(''), 4500)
+    return () => window.clearTimeout(timer)
+  }, [notificationToast])
+
   const presenceTargetIds = useMemo(() => [...new Set([
     user.id,
     ...friendships
@@ -132,18 +153,19 @@ function NetworkPage() {
 
   const loadNetwork = useCallback(async () => {
     const client = getSupabaseClient()
-    const [profilesResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult] = await Promise.all([
+    const [profilesResult, ownProfileResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult] = await Promise.all([
       client.from('profiles').select(profileFields).neq('id', user.id).order('created_at', { ascending: false }).range(0, 199),
+      client.from('profiles').select('username').eq('id', user.id).maybeSingle(),
       client.from('friend_requests').select(requestFields).or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
       client.from('friendships').select('user_low, user_high, created_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
-      client.from('notifications').select('id, user_id, actor_id, type, reference_id, is_read, created_at, profiles!notifications_actor_id_fkey(username, display_name, avatar_url)').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
+      client.from('notifications').select(notificationFields).eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
       client.from('conversations').select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('updated_at', { ascending: false }).limit(100),
       client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
       client.rpc('get_conversation_summaries'),
       client.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
     ])
 
-    for (const result of [profilesResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult]) {
+    for (const result of [profilesResult, ownProfileResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult]) {
       if (result.error) throw result.error
     }
 
@@ -173,6 +195,7 @@ function NetworkPage() {
     }
 
     setProfiles(Object.values(profileById))
+    setOwnUsername(ownProfileResult.data?.username || '')
     setDiscoveryLoadedCount(profilesResult.data?.length || 0)
     setHasMoreDiscoverProfiles((profilesResult.data?.length || 0) === 200)
 
@@ -223,11 +246,19 @@ function NetworkPage() {
     if (queryError) throw queryError
     setMessages((data || []).reverse())
     setHasMoreMessages((data || []).length === 100)
+    const { error: notificationReadError } = await getSupabaseClient()
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', user.id)
+      .eq('type', 'message')
+      .eq('conversation_id', conversationId)
+      .eq('is_read', false)
+    if (notificationReadError) throw notificationReadError
     const { error: readError } = await getSupabaseClient().rpc('mark_conversation_read', {
       target_conversation_id: conversationId,
     })
     if (readError) throw readError
-  }, [])
+  }, [user.id])
 
   const handleMessageLoadError = useCallback((loadError) => {
     setError(loadError.message || 'Messages could not be loaded.')
@@ -362,7 +393,11 @@ function NetworkPage() {
           typingTimeoutRef.current = setTimeout(() => setTypingConversationId(''), 2500)
         }
       })
-      .subscribe()
+      .subscribe((channelStatus) => {
+        if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
+          setError('The live conversation connection was interrupted. Reconnecting…')
+        }
+      })
     chatChannelRef.current = channel
 
     return () => {
@@ -388,10 +423,35 @@ function NetworkPage() {
         schema: 'public',
         table: 'notifications',
         filter: `user_id=eq.${user.id}`,
-      }, () => loadNetwork().catch((loadError) => setError(loadError.message)))
-      .subscribe()
+      }, (payload) => {
+        const notification = payload.new
+        const isCurrentConversationMessage = notification?.type === 'message'
+          && activeSection === 'messages'
+          && notification.conversation_id === selectedConversationId
+        if (payload.eventType === 'INSERT' && notification?.actor_id !== user.id && !isCurrentConversationMessage) {
+          setNotificationToast(notificationToastText(notification?.type))
+        }
+        const update = isCurrentConversationMessage
+          ? client.from('notifications')
+            .update({ is_read: true })
+            .eq('id', notification.id)
+            .eq('user_id', user.id)
+            .eq('is_read', false)
+          : Promise.resolve({ error: null })
+        update
+          .then(({ error: updateError }) => {
+            if (updateError) throw updateError
+            return loadNetwork()
+          })
+          .catch((loadError) => setError(loadError.message || 'Notifications could not be updated.'))
+      })
+      .subscribe((channelStatus) => {
+        if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
+          setError('Live notifications are temporarily unavailable. Reconnecting…')
+        }
+      })
     return () => { client.removeChannel(channel) }
-  }, [loadNetwork, user.id])
+  }, [activeSection, loadNetwork, selectedConversationId, user.id])
 
   useEffect(() => {
     const client = getSupabaseClient()
@@ -405,7 +465,11 @@ function NetworkPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
         loadNetwork().catch((loadError) => setError(loadError.message))
       })
-      .subscribe()
+      .subscribe((channelStatus) => {
+        if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
+          setError('Live network updates are temporarily unavailable. Reconnecting…')
+        }
+      })
     return () => { client.removeChannel(channel) }
   }, [loadNetwork, user.id])
 
@@ -419,6 +483,13 @@ function NetworkPage() {
   const profileById = useMemo(() => Object.fromEntries(profiles.map((profile) => [profile.id, profile])), [profiles])
   const activeConversation = conversations.find((conversation) => conversation.id === selectedConversationId)
   const unreadMessages = conversations.reduce((total, conversation) => total + conversation.unreadCount, 0)
+  const filteredNotifications = notifications.filter((notification) => {
+    if (notificationFilter === 'all') return true
+    if (notificationFilter === 'friend_request') return ['friend_request', 'friend_request_accepted'].includes(notification.type)
+    if (notificationFilter === 'other') return !['friend_request', 'friend_request_accepted', 'message', 'post_like', 'comment', 'reply'].includes(notification.type)
+    if (notificationFilter === 'comment') return ['comment', 'reply'].includes(notification.type)
+    return notification.type === notificationFilter
+  })
   const filteredProfiles = profiles.filter((profile) => {
     if (friendIds.has(profile.id) || blockedIds.has(profile.id)) return false
     const term = query.trim().toLowerCase()
@@ -520,6 +591,71 @@ function NetworkPage() {
       setError(updateError.message)
       loadNetwork().catch((loadError) => setError(loadError.message))
     }
+  }
+
+  async function markAllNotificationsRead() {
+    if (!unreadNotificationCount) return
+    setNotifications((current) => current.map((item) => ({ ...item, is_read: true })))
+    setUnreadNotificationCount(0)
+    const { error: updateError } = await getSupabaseClient()
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', user.id)
+      .eq('is_read', false)
+    if (updateError) {
+      setError(updateError.message)
+      loadNetwork().catch((loadError) => setError(loadError.message))
+    }
+  }
+
+  async function openNotification(notification) {
+    await markNotificationRead(notification)
+    if (notification.type === 'message' && notification.conversation_id) {
+      navigate(`/app/messages?conversation=${notification.conversation_id}`)
+      return
+    }
+
+    let postId = notification.post_id
+    if (!postId && notification.type === 'post_like') postId = notification.reference_id
+    if (!postId && ['comment', 'reply'].includes(notification.type)) {
+      const { data, error: commentError } = await getSupabaseClient()
+        .from('comments')
+        .select('post_id')
+        .eq('id', notification.reference_id)
+        .maybeSingle()
+      if (commentError) {
+        setError(commentError.message)
+        return
+      }
+      postId = data?.post_id
+    }
+    if (postId) {
+      const { data: post, error: postError } = await getSupabaseClient()
+        .from('posts')
+        .select('author_id')
+        .eq('id', postId)
+        .maybeSingle()
+      if (postError) {
+        setError(postError.message)
+        return
+      }
+      if (post?.author_id) {
+        const { data: author, error: profileError } = await getSupabaseClient()
+          .from('profiles')
+          .select('username')
+          .eq('id', post.author_id)
+          .maybeSingle()
+        if (profileError) {
+          setError(profileError.message)
+          return
+        }
+        if (author?.username) {
+          navigate(`/profile/${encodeURIComponent(author.username)}?post=${postId}`)
+          return
+        }
+      }
+    }
+    navigate('/app/friends')
   }
 
   async function handleSendMessage(event) {
@@ -635,6 +771,7 @@ function NetworkPage() {
     <main className="member-page member-feed-page network-page">
       <div className="ambient ambient--one" aria-hidden="true" />
       <div className="matrix-grid" aria-hidden="true" />
+      <NotificationToast message={notificationToast} onDismiss={() => setNotificationToast('')} />
       <header className="member-header member-feed-header">
         <Link className="brand-link" to="/app" aria-label="QORVEXA feed"><BrandMark /></Link>
         <nav className="network-nav" aria-label="Community navigation">
@@ -646,8 +783,7 @@ function NetworkPage() {
           </Link>
           <Link to="/app/messages" className={`network-nav-link${activeSection === 'messages' ? ' is-active' : ''}`}><MessageSquare size={15} aria-hidden="true" />Messages{unreadMessages > 0 && <span className="network-badge">{unreadMessages}</span>}</Link>
           <Link to="/app/bookmarks" className="network-nav-link"><Bookmark size={15} aria-hidden="true" />Saved</Link>
-          <Link to="/app/privacy" className="network-nav-link"><ShieldCheck size={15} aria-hidden="true" />Privacy</Link>
-          <Link to="/app/profile" className="network-nav-link"><UserPlus size={15} aria-hidden="true" />Profile</Link>
+          {ownUsername && <Link to={`/profile/${encodeURIComponent(ownUsername)}`} className="network-nav-link"><UserRound size={15} aria-hidden="true" />My profile</Link>}
         </nav>
         <button className="button button--outline member-signout" type="button" onClick={handleSignOut} disabled={signingOut}>
           <LogOut size={15} aria-hidden="true" />{signingOut ? 'Signing out…' : 'Sign out'}
@@ -670,10 +806,12 @@ function NetworkPage() {
           <div className="network-empty network-empty--setup">
             <span><ShieldCheck size={22} aria-hidden="true" /></span>
             <h2>Friends and messaging need one database migration</h2>
-            <p>Apply the Friends & Messaging, Community Features, and Public Profiles migrations in Supabase SQL Editor, in order.</p>
+            <p>Apply the Friends &amp; Messaging, Community Features, Public Profiles, Presence Privacy Fix, and Realtime Social Notifications migrations in Supabase SQL Editor, in order.</p>
             <code>supabase/migrations/20261107020000_friends_messaging.sql</code>
             <code>supabase/migrations/20261107030000_community_features.sql</code>
             <code>supabase/migrations/20261107032000_public_profiles.sql</code>
+            <code>supabase/migrations/20261107035000_presence_privacy_fix.sql</code>
+            <code>supabase/migrations/20261107040000_realtime_social_notifications.sql</code>
           </div>
         ) : status === 'loading' ? (
           <div className="network-loading" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" />Loading your network…</div>
@@ -753,33 +891,64 @@ function NetworkPage() {
 
             {activeSection === 'notifications' && (
               <section className="network-panel network-notification-list">
-                {notifications.length ? notifications.map((notification) => {
+                <div className="network-notification-toolbar">
+                  <div className="network-notification-filters" role="group" aria-label="Filter notifications">
+                    {notificationFilters.map(([filter, label]) => (
+                      <button
+                        key={filter}
+                        className={`network-button${notificationFilter === filter ? ' network-button--primary' : ''}`}
+                        type="button"
+                        aria-pressed={notificationFilter === filter}
+                        onClick={() => setNotificationFilter(filter)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="network-button" type="button" onClick={markAllNotificationsRead} disabled={!unreadNotificationCount}>
+                    <CheckCheck size={14} />Mark all as read
+                  </button>
+                </div>
+                {filteredNotifications.length ? filteredNotifications.map((notification) => {
                   const request = requests.find((item) => item.id === notification.reference_id)
                   const isIncomingPending = notification.type === 'friend_request'
                     && request?.status === 'pending'
                     && request.receiver_id === user.id
                   const actorName = profileName(notification.profiles)
+                  const notificationText = notification.type === 'friend_request' ? 'sent you a friend request.'
+                    : notification.type === 'friend_request_accepted' ? 'accepted your friend request.'
+                      : notification.type === 'message' ? 'sent you a message.'
+                        : notification.type === 'post_like' ? 'liked your post.'
+                          : notification.type === 'reply' ? 'replied to your comment.'
+                            : 'commented on your post.'
                   return (
-                    <article className={`network-notification${notification.is_read ? '' : ' is-unread'}`} key={notification.id} onClick={() => markNotificationRead(notification)}>
+                    <article
+                      className={`network-notification${notification.is_read ? '' : ' is-unread'}`}
+                      key={notification.id}
+                      onClick={() => openNotification(notification)}
+                      onKeyDown={(event) => {
+                        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+                          event.preventDefault()
+                          openNotification(notification)
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
                       <UserIdentity profile={notification.profiles} small />
                       <div className="network-notification-copy">
-                        <p><Link className="network-notification-actor" to={notification.profiles?.username ? `/profile/${encodeURIComponent(notification.profiles.username)}` : '/app'}><strong>{actorName}</strong></Link> {
-                          notification.type === 'friend_request' ? 'sent you a friend request.'
-                            : notification.type === 'friend_request_accepted' ? 'accepted your friend request.'
-                              : notification.type === 'post_like' ? 'liked your post.'
-                                : notification.type === 'reply' ? 'replied to your comment.'
-                                  : 'commented on your post.'
-                        }</p>
+                        <p><Link className="network-notification-actor" to={notification.profiles?.username ? `/profile/${encodeURIComponent(notification.profiles.username)}` : '/app'} onClick={(event) => event.stopPropagation()}><strong>{actorName}</strong></Link> {notificationText}</p>
+                        {notification.preview && <small className="network-notification-preview">{notification.preview}</small>}
                         <time dateTime={notification.created_at}><Clock3 size={12} />{formatTime(notification.created_at)}</time>
                         {isIncomingPending && <div className="network-row-actions">
-                          <button className="network-button network-button--primary" type="button" disabled={workingId === request.id} onClick={(event) => { event.stopPropagation(); respondToRequest(request, true) }}><Check size={14} />Accept</button>
-                          <button className="network-button" type="button" disabled={workingId === request.id} onClick={(event) => { event.stopPropagation(); respondToRequest(request, false) }}>Decline</button>
+                          <button className="network-button network-button--primary" type="button" disabled={workingId === request.id} onClick={(event) => { event.stopPropagation(); markNotificationRead(notification); respondToRequest(request, true) }}><Check size={14} />Accept</button>
+                          <button className="network-button" type="button" disabled={workingId === request.id} onClick={(event) => { event.stopPropagation(); markNotificationRead(notification); respondToRequest(request, false) }}>Decline</button>
                         </div>}
                       </div>
                       {!notification.is_read && <span className="network-unread-dot" aria-label="Unread" />}
                     </article>
                   )
-                }) : <div className="network-empty"><Bell size={21} /><h2>You’re all caught up</h2><p>Friend request updates will appear here.</p></div>}
+                }) : <div className="network-empty"><Bell size={21} /><h2>{notifications.length ? 'No matching notifications' : 'You’re all caught up'}</h2><p>{notifications.length ? 'Choose another category to see more activity.' : 'Friend requests, messages, reactions, and comments will appear here.'}</p></div>}
               </section>
             )}
 

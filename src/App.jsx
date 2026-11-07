@@ -1,6 +1,8 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import LandingPage from './pages/LandingPage.jsx'
+import { AuthProvider } from './context/AuthContext.jsx'
+import { useAuth } from './context/useAuth.js'
 import './App.css'
 
 const AuthRoutes = lazy(() => import('./pages/AuthRoutes.jsx'))
@@ -13,10 +15,20 @@ function AccountAccess() {
   )
 }
 
+function HomeRoute() {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return <div className="auth-loading" role="status">Checking your session…</div>
+  }
+
+  return user ? <Navigate to="/app" replace /> : <LandingPage />
+}
+
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<AuthProvider><HomeRoute /></AuthProvider>} />
       <Route path="/login" element={<AccountAccess />} />
       <Route path="/signup" element={<AccountAccess />} />
       <Route path="/forgot-password" element={<AccountAccess />} />

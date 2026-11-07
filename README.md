@@ -41,7 +41,7 @@ QORVEXA is a social platform in development. The responsive landing page, Supaba
 
    `supabase/migrations/20261107032000_public_profiles.sql` (apply once after Community Features; adds public username profiles, profile/post/friend-list privacy, protected media, and profile fields)
 
-   `supabase/migrations/20261107035000_presence_privacy_fix.sql` (apply once after Public Profiles; authorizes per-member Realtime presence channels according to online-status visibility, friendship, and blocking)
+   `supabase/migrations/20261107040000_realtime_social_notifications.sql` (apply once after Presence Privacy Fix; adds realtime feed tables, persisted private-message notifications, and post/comment notification details)
 
 5. In Supabase Authentication settings, enable email/password sign-in and email confirmations. Add the local and production `/app` and `/reset-password` URLs to the allowed redirect URLs (for local development, include both `localhost:5173` and `127.0.0.1:5173`).
 
@@ -100,6 +100,7 @@ The authentication routes are `/signup`, `/login`, and `/forgot-password`; `/app
 The friends/messaging migration adds protected friend requests and friendships, in-app notifications, direct conversations and messages, and database functions for relationship changes and exact unread-message summaries. Network pages are `/app/discover`, `/app/friends`, `/app/notifications`, and `/app/messages`. Online presence and typing use authorized Supabase Realtime channels; last-active times are updated while the app is visible and when it is hidden, so abrupt disconnects may leave a timestamp up to one heartbeat interval old. Discovery is paged in batches of 200 profiles. Users must remain accepted friends to access their conversation and messages.
 
 The community features migration adds reactions, private bookmarks, verified image storage, and user blocking. Blocking removes a friendship and pending requests, hides profiles and public content between the two accounts, and prevents new friend requests and messaging. Review and manage blocked users at `/app/privacy`. Like, comment, and reply notifications are added to the existing friend-request notifications.
+The Realtime Social Notifications migration publishes posts, likes, and comments for live feed refreshes and creates an in-app notification for each received message without storing or exposing its contents. The notifications page supports category filtering, mark-all-read, comment previews, and links to the related post or conversation. The same post composer is used on the feed and the owner’s profile.
 
 The initial `/admin/overview` is protected twice: the client requires an authenticated session, and its overview data is returned only by a database `SECURITY DEFINER` function that checks `admin_roles`. Regular clients cannot read or modify `admin_roles`; the initial owner is provisioned only through the trusted SQL Editor bootstrap script. The dashboard metrics migration adds authorized counts from Supabase Auth (total, verified/unverified, registrations today, this week, and this month) and a seven-day registration chart. It intentionally does not invent activity, suspension, or content metrics that the current schema does not support.
 

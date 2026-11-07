@@ -9,6 +9,7 @@ import {
   Camera,
   Check,
   Clock3,
+  Bell,
   Flag,
   Globe,
   GraduationCap,
@@ -26,6 +27,9 @@ import {
 import { useAuth } from '../context/useAuth.js'
 import { getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
+import NotificationToast from '../components/NotificationToast.jsx'
+import notificationToastText from '../lib/notificationToastText.js'
+import PostComposer from '../components/PostComposer.jsx'
 import BrandMark from '../components/BrandMark.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 
@@ -76,7 +80,23 @@ function PublicProfilePage() {
   const [commentsOpen, setCommentsOpen] = useState(() => new Set())
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [online, setOnline] = useState(false)
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0)
+  const [notificationToast, setNotificationToast] = useState('')
   const [reportTarget, setReportTarget] = useState(null)
+
+  const loadUnreadCounts = useCallback(async () => {
+    if (!user) return
+    const client = getSupabaseClient()
+    const [notificationsResult, conversationsResult] = await Promise.all([
+      client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
+      client.rpc('get_conversation_summaries'),
+    ])
+    if (notificationsResult.error) throw notificationsResult.error
+    if (conversationsResult.error) throw conversationsResult.error
+    setUnreadNotificationCount(notificationsResult.count || 0)
+    setUnreadMessageCount((conversationsResult.data || []).reduce((total, item) => total + Number(item.unread_count || 0), 0))
+  }, [user])
 
   const loadProfile = useCallback(async () => {
     setLoading(true)
@@ -194,6 +214,44 @@ function PublicProfilePage() {
     const timer = window.setTimeout(() => { void loadProfile() }, 0)
     return () => window.clearTimeout(timer)
   }, [loadProfile])
+
+  useEffect(() => {
+    if (!notificationToast) return undefined
+    const timer = window.setTimeout(() => setNotificationToast(''), 4500)
+    return () => window.clearTimeout(timer)
+  }, [notificationToast])
+
+  useEffect(() => {
+    if (!user) return undefined
+    let active = true
+    const client = getSupabaseClient()
+    const timer = window.setTimeout(() => {
+      loadUnreadCounts().catch((loadError) => { if (active) setError(loadError.message || 'Unread counts could not be loaded.') })
+    }, 0)
+    const channel = client.channel(`profile-live-badges-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload) => {
+        if (payload.eventType === 'INSERT' && payload.new?.actor_id !== user.id) {
+          setNotificationToast(notificationToastText(payload.new?.type))
+        }
+        loadUnreadCounts().catch((loadError) => { if (active) setError(loadError.message || 'Notification counts could not be updated.') })
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+        loadUnreadCounts().catch((loadError) => { if (active) setError(loadError.message || 'Message counts could not be updated.') })
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+        loadUnreadCounts().catch((loadError) => { if (active) setError(loadError.message || 'Message counts could not be updated.') })
+      })
+      .subscribe((channelStatus) => {
+        if (active && (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT')) {
+          setError('Live notification counts are temporarily unavailable. Reconnecting…')
+        }
+      })
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+      client.removeChannel(channel)
+    }
+  }, [loadUnreadCounts, user])
 
   useEffect(() => {
     if (!user || !profile?.id) return undefined
@@ -441,10 +499,17 @@ function PublicProfilePage() {
     <main className="member-page public-profile-page">
       <div className="ambient ambient--one" aria-hidden="true" />
       <div className="matrix-grid" aria-hidden="true" />
+      {user && <NotificationToast message={notificationToast} onDismiss={() => setNotificationToast('')} />}
       <header className="member-header member-feed-header">
         <Link className="brand-link" to={user ? '/app' : '/'} aria-label="QORVEXA home"><BrandMark /></Link>
         <nav className="network-nav" aria-label="Community navigation">
-          {user ? <><Link className="network-nav-link" to="/app">Feed</Link><Link className="network-nav-link" to="/app/friends">Friends</Link><Link className="network-nav-link" to="/app/messages">Messages</Link></> : <><Link className="network-nav-link" to="/login">Sign in</Link><Link className="network-nav-link" to="/signup">Join QORVEXA</Link></>}
+          {user ? <>
+            <Link className="network-nav-link" to="/app">Feed</Link>
+            <Link className="network-nav-link" to="/app/discover">Discover</Link>
+            <Link className="network-nav-link" to="/app/friends">Friends</Link>
+            <Link className="network-nav-link" to="/app/notifications"><Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}</Link>
+            <Link className="network-nav-link" to="/app/messages"><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessageCount > 0 && <span className="network-badge">{unreadMessageCount}</span>}</Link>
+          </> : <><Link className="network-nav-link" to="/login">Sign in</Link><Link className="network-nav-link" to="/signup">Join QORVEXA</Link></>}
         </nav>
       </header>
 
@@ -468,7 +533,7 @@ function PublicProfilePage() {
               <div className="public-profile-summary">
                 <div className="public-profile-avatar">
                   {profile.avatar_url
-                    ? <ProtectedMediaImage path={profile.avatar_url} alt={`${profile.display_name}'s profile picture`} />
+                      ? <ProtectedMediaImage path={profile.avatar_url} alt={`${profile.display_name}'s profile picture`} fallback={profileInitials(profile)} />
                     : <span>{profileInitials(profile)}</span>}
                 </div>
                 <div className="public-profile-heading">
@@ -510,6 +575,20 @@ function PublicProfilePage() {
             {error && <div className="settings-message settings-message--error public-profile-message" role="alert"><AlertCircle size={16} />{error}</div>}
             {notice && <p className="settings-message settings-message--success public-profile-message" role="status">{notice}</p>}
 
+            {isOwner && (
+              <PostComposer
+                userId={user.id}
+                idPrefix="profile-post"
+                onPublished={(post) => {
+                  setPosts((current) => [post, ...current.filter((item) => item.id !== post.id)])
+                  setPostCount((count) => count + 1)
+                  setLoadedPostCount((count) => count + 1)
+                  if (selectedPostId) navigate(`/profile/${encodeURIComponent(profile.username)}`, { replace: true })
+                }}
+                onError={setError}
+              />
+            )}
+
             {activeTab === 'posts' && (
               <section className="public-profile-content" aria-label="Profile posts">
                 {selectedPostId && <Link className="public-profile-back" to={`/profile/${encodeURIComponent(profile.username)}`}><ArrowLeft size={14} />All posts</Link>}
@@ -518,7 +597,7 @@ function PublicProfilePage() {
                   : visiblePosts.map((post) => (
                     <article className={`member-post public-profile-post${selectedPostId ? ' is-detail' : ''}`} key={post.id}>
                       <div className="member-post-avatar">
-                        {profile.avatar_url ? <ProtectedMediaImage path={profile.avatar_url} alt="" /> : profileInitials(profile)}
+                        {profile.avatar_url ? <ProtectedMediaImage path={profile.avatar_url} alt="" fallback={profileInitials(profile)} /> : profileInitials(profile)}
                       </div>
                       <div className="member-post-body">
                         <div className="member-post-meta">
@@ -547,7 +626,7 @@ function PublicProfilePage() {
                             return <div className="public-profile-comment-thread" key={comment.id}>
                               <div className="public-profile-comment">
                                 {commentUrl
-                                  ? <Link to={commentUrl} className="public-profile-comment-avatar">{commentAuthor?.avatar_url ? <ProtectedMediaImage path={commentAuthor.avatar_url} alt="" /> : profileInitials(commentAuthor)}</Link>
+                                  ? <Link to={commentUrl} className="public-profile-comment-avatar">{commentAuthor?.avatar_url ? <ProtectedMediaImage path={commentAuthor.avatar_url} alt="" fallback={profileInitials(commentAuthor)} /> : profileInitials(commentAuthor)}</Link>
                                   : <span className="public-profile-comment-avatar">{profileInitials({ display_name: commentName })}</span>}
                                 <div><p>{commentUrl ? <Link to={commentUrl}><strong>{commentName}</strong></Link> : <strong>{commentName}</strong>} {comment.content}</p>
                                   {user && !(isPublicPreview && isProfileOwner) && <button type="button" onClick={() => setReplyTarget(replyTarget === comment.id ? '' : comment.id)}>Reply</button>}
@@ -563,7 +642,7 @@ function PublicProfilePage() {
                                 const replyUrl = replyAuthor?.username ? `/profile/${encodeURIComponent(replyAuthor.username)}` : ''
                                 return <div className="public-profile-comment public-profile-comment--reply" key={reply.id}>
                                   {replyUrl
-                                    ? <Link to={replyUrl} className="public-profile-comment-avatar">{replyAuthor?.avatar_url ? <ProtectedMediaImage path={replyAuthor.avatar_url} alt="" /> : profileInitials(replyAuthor)}</Link>
+                                    ? <Link to={replyUrl} className="public-profile-comment-avatar">{replyAuthor?.avatar_url ? <ProtectedMediaImage path={replyAuthor.avatar_url} alt="" fallback={profileInitials(replyAuthor)} /> : profileInitials(replyAuthor)}</Link>
                                     : <span className="public-profile-comment-avatar">{profileInitials({ display_name: replyName })}</span>}
                                   <p>{replyUrl ? <Link to={replyUrl}><strong>{replyName}</strong></Link> : <strong>{replyName}</strong>} {reply.content}</p>
                                 </div>
@@ -610,7 +689,7 @@ function PublicProfilePage() {
                       <label className="public-profile-friend-search"><Users size={15} /><input value={friendSearch} onChange={(event) => setFriendSearch(event.target.value)} placeholder="Search friends…" aria-label="Search friends" /></label>
                       <div className="public-profile-friends-grid">{friends.filter((friend) => `${friend.display_name} ${friend.username}`.toLowerCase().includes(friendSearch.trim().toLowerCase())).map((friend) => (
                       <Link className="public-profile-friend-card" to={`/profile/${encodeURIComponent(friend.username)}`} key={friend.id}>
-                        <span className="public-profile-friend-avatar">{friend.avatar_url ? <ProtectedMediaImage path={friend.avatar_url} alt="" /> : profileInitials(friend)}</span>
+                        <span className="public-profile-friend-avatar">{friend.avatar_url ? <ProtectedMediaImage path={friend.avatar_url} alt="" fallback={profileInitials(friend)} /> : profileInitials(friend)}</span>
                         <span><strong>{friend.display_name}</strong><small>@{friend.username}</small></span>
                       </Link>
                       ))}</div>

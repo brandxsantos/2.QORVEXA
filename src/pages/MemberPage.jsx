@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
-  ArrowUp,
   Bell,
   Clock3,
   CornerDownRight,
   Flag,
-  ImagePlus,
   LoaderCircle,
   LogOut,
   Bookmark,
@@ -22,12 +20,13 @@ import BrandMark from '../components/BrandMark.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
+import NotificationToast from '../components/NotificationToast.jsx'
+import notificationToastText from '../lib/notificationToastText.js'
+import PostComposer from '../components/PostComposer.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 
 const postSelection = 'id, author_id, content, media_path, media_type, post_visibility, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url)'
-const imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-const maxImageBytes = 8 * 1024 * 1024
 
 function isPostsSetupError(error) {
   return ['42P01', '42703', 'PGRST204', 'PGRST205'].includes(error.code)
@@ -61,17 +60,17 @@ function MemberPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [posts, setPosts] = useState([])
-  const [draft, setDraft] = useState('')
-  const [postVisibility, setPostVisibility] = useState('public')
-  const [mediaFile, setMediaFile] = useState(null)
-  const [mediaPreview, setMediaPreview] = useState('')
   const [memberProfile, setMemberProfile] = useState(null)
   const [likeCounts, setLikeCounts] = useState({})
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0)
+  const [notificationToast, setNotificationToast] = useState('')
   const [likedPostIds, setLikedPostIds] = useState(() => new Set())
   const [bookmarkedPostIds, setBookmarkedPostIds] = useState(() => new Set())
   const [postActionId, setPostActionId] = useState('')
   const [commentsByPost, setCommentsByPost] = useState({})
   const [commentsOpen, setCommentsOpen] = useState({})
+  const commentsOpenRef = useRef(commentsOpen)
   const [commentsStatus, setCommentsStatus] = useState({})
   const [commentDrafts, setCommentDrafts] = useState({})
   const [replyDrafts, setReplyDrafts] = useState({})
@@ -79,16 +78,19 @@ function MemberPage() {
   const [feedStatus, setFeedStatus] = useState('loading')
   const [error, setError] = useState('')
   const [signingOut, setSigningOut] = useState(false)
-  const [publishing, setPublishing] = useState(false)
   const [submittingComment, setSubmittingComment] = useState(null)
   const [deletingComment, setDeletingComment] = useState(null)
   const [reportTarget, setReportTarget] = useState(null)
   const name = memberProfile?.display_name || user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
   const username = memberProfile?.username || user.user_metadata?.username
 
+  useEffect(() => { commentsOpenRef.current = commentsOpen }, [commentsOpen])
+
   useEffect(() => {
-    return () => { if (mediaPreview) URL.revokeObjectURL(mediaPreview) }
-  }, [mediaPreview])
+    if (!notificationToast) return undefined
+    const timer = window.setTimeout(() => setNotificationToast(''), 4500)
+    return () => window.clearTimeout(timer)
+  }, [notificationToast])
 
   useEffect(() => {
     let active = true
@@ -140,6 +142,18 @@ function MemberPage() {
     return postRows
   }, [user.id])
 
+  const loadMemberBadges = useCallback(async () => {
+    const client = getSupabaseClient()
+    const [notificationsResult, conversationsResult] = await Promise.all([
+      client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
+      client.rpc('get_conversation_summaries'),
+    ])
+    if (notificationsResult.error) throw notificationsResult.error
+    if (conversationsResult.error) throw conversationsResult.error
+    setUnreadNotificationCount(notificationsResult.count || 0)
+    setUnreadMessageCount((conversationsResult.data || []).reduce((total, item) => total + Number(item.unread_count || 0), 0))
+  }, [user.id])
+
   const loadComments = useCallback(async (postId) => {
     setCommentsStatus((current) => ({ ...current, [postId]: 'loading' }))
 
@@ -187,64 +201,61 @@ function MemberPage() {
     }
   }, [loadPosts])
 
-  async function handlePublish(event) {
-    event.preventDefault()
-    const content = draft.trim()
-    if ((!content && !mediaFile) || publishing) return
-    if (content.length > 1000) {
-      setError('Post text must be 1,000 characters or fewer.')
-      return
-    }
-    if (mediaFile && (!imageTypes.includes(mediaFile.type) || mediaFile.size > maxImageBytes)) {
-      setError('Choose a JPG, PNG, WebP, or GIF image under 8 MB.')
-      return
-    }
-
-    setError('')
-    setPublishing(true)
-
-    let uploadedPath = ''
-    try {
-      let mediaPath = null
-      let mediaType = null
-      if (mediaFile) {
-        const extension = mediaFile.name.split('.').pop()?.toLowerCase() || 'image'
-        uploadedPath = `${user.id}/posts/${crypto.randomUUID()}.${extension}`
-        const { error: uploadError } = await getSupabaseClient().storage
-          .from('qorvexa-media')
-          .upload(uploadedPath, mediaFile, { contentType: mediaFile.type, upsert: false })
-        if (uploadError) throw uploadError
-        mediaPath = uploadedPath
-        mediaType = 'image'
-      }
-      const { data, error: insertError } = await getSupabaseClient()
-        .from('posts')
-        .insert({ author_id: user.id, content, media_path: mediaPath, media_type: mediaType, post_visibility: postVisibility })
-        .select(postSelection)
-        .single()
-
-      if (insertError) throw insertError
-      setPosts((currentPosts) => [data, ...currentPosts])
-      setDraft('')
-      setPostVisibility('public')
-      setMediaFile(null)
-      setMediaPreview('')
-    } catch (publishError) {
-      if (uploadedPath) {
-        const { error: cleanupError } = await getSupabaseClient().storage
-          .from('qorvexa-media')
-          .remove([uploadedPath])
-        if (cleanupError) {
-          setError(`${publishError.message || 'Your post could not be published.'} The uploaded image could not be cleaned up.`)
-          return
+  useEffect(() => {
+    let active = true
+    const client = getSupabaseClient()
+    let refreshTimer
+    const badgeLoadTimer = window.setTimeout(() => {
+      loadMemberBadges().catch((loadError) => { if (active) setError(loadError.message || 'Unread counts could not be loaded.') })
+    }, 0)
+    const channel = client.channel(`member-feed-updates-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
+        window.clearTimeout(refreshTimer)
+        refreshTimer = window.setTimeout(() => {
+          loadPosts()
+            .then((data) => { if (active) setPosts(data) })
+            .catch((loadError) => { if (active) setError(loadError.message || 'The feed could not be updated.') })
+        }, 80)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_likes' }, () => {
+        window.clearTimeout(refreshTimer)
+        refreshTimer = window.setTimeout(() => {
+          loadPosts()
+            .then((data) => { if (active) setPosts(data) })
+            .catch((loadError) => { if (active) setError(loadError.message || 'Reaction updates could not be loaded.') })
+        }, 80)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, (payload) => {
+        const postId = payload.new?.post_id || payload.old?.post_id
+        if (postId && commentsOpenRef.current[postId]) {
+          loadComments(postId).catch((loadError) => { if (active) setError(loadError.message) })
         }
-      }
-      setError(publishError.message || 'Your post could not be published.')
-      if (isPostsSetupError(publishError)) setFeedStatus('setup')
-    } finally {
-      setPublishing(false)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload) => {
+        if (payload.eventType === 'INSERT' && payload.new?.actor_id !== user.id) {
+          setNotificationToast(notificationToastText(payload.new?.type))
+        }
+        loadMemberBadges().catch((loadError) => { if (active) setError(loadError.message || 'Notification counts could not be updated.') })
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+        loadMemberBadges().catch((loadError) => { if (active) setError(loadError.message || 'Message counts could not be updated.') })
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+        loadMemberBadges().catch((loadError) => { if (active) setError(loadError.message || 'Message counts could not be updated.') })
+      })
+      .subscribe((channelStatus) => {
+        if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
+          setError('Live feed updates are temporarily unavailable. Reconnecting…')
+        }
+      })
+
+    return () => {
+      active = false
+      window.clearTimeout(refreshTimer)
+      window.clearTimeout(badgeLoadTimer)
+      client.removeChannel(channel)
     }
-  }
+  }, [loadComments, loadMemberBadges, loadPosts, user.id])
 
   async function toggleLike(post) {
     if (postActionId) return
@@ -392,15 +403,17 @@ function MemberPage() {
     <main className="member-page member-feed-page">
       <div className="ambient ambient--one" aria-hidden="true" />
       <div className="matrix-grid" aria-hidden="true" />
+      <NotificationToast message={notificationToast} onDismiss={() => setNotificationToast('')} />
       <header className="member-header member-feed-header">
-        <Link className="brand-link" to="/" aria-label="QORVEXA home"><BrandMark /></Link>
+        <Link className="brand-link" to="/app" aria-label="QORVEXA feed"><BrandMark /></Link>
         <nav className="network-nav" aria-label="Community navigation">
           <span className="network-nav-link is-active"><Rss size={15} aria-hidden="true" />Feed</span>
           <Link to="/app/discover" className="network-nav-link"><UserPlus size={15} aria-hidden="true" />Discover</Link>
           <Link to="/app/friends" className="network-nav-link"><Users size={15} aria-hidden="true" />Friends</Link>
-          <Link to="/app/notifications" className="network-nav-link"><Bell size={15} aria-hidden="true" />Notifications</Link>
-          <Link to="/app/messages" className="network-nav-link"><MessageCircle size={15} aria-hidden="true" />Messages</Link>
+          <Link to="/app/notifications" className="network-nav-link"><Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}</Link>
+          <Link to="/app/messages" className="network-nav-link"><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessageCount > 0 && <span className="network-badge">{unreadMessageCount}</span>}</Link>
           <Link to="/app/bookmarks" className="network-nav-link"><Bookmark size={15} aria-hidden="true" />Saved</Link>
+          {username && <Link to={`/profile/${encodeURIComponent(username)}`} className="network-nav-link"><Users size={15} aria-hidden="true" />Profile</Link>}
         </nav>
         <button className="button button--outline member-signout" type="button" onClick={handleSignOut} disabled={signingOut}>
           <LogOut size={15} aria-hidden="true" />
@@ -414,7 +427,7 @@ function MemberPage() {
           <div className="member-profile-cover" aria-hidden="true" />
           <div className="member-profile-details">
             <Link to={`/profile/${encodeURIComponent(username || '')}`} className="member-avatar" aria-label={`View ${name}'s profile`}>
-              {memberProfile?.avatar_url ? <ProtectedMediaImage path={memberProfile.avatar_url} alt="" /> : getInitials(name)}
+              {memberProfile?.avatar_url ? <ProtectedMediaImage path={memberProfile.avatar_url} alt="" fallback={getInitials(name)} /> : getInitials(name)}
             </Link>
             <h1><Link to={`/profile/${encodeURIComponent(username || '')}`}>{name}</Link></h1>
             {username && <p className="member-username">@{username}</p>}
@@ -427,7 +440,7 @@ function MemberPage() {
             </nav>
             <div className="member-profile-divider" />
             <div className="member-profile-status"><ShieldCheck size={16} aria-hidden="true" /><span>Signed in securely</span></div>
-            <Link to="/" className="member-home-link">Back to QORVEXA home</Link>
+            <Link to="/app" className="member-home-link">Back to QORVEXA feed</Link>
           </div>
         </aside>
 
@@ -441,47 +454,15 @@ function MemberPage() {
             <span className="member-feed-live"><i /> MEMBERS</span>
           </div>
 
-          <form className="member-composer" onSubmit={handlePublish}>
-            <label className="member-composer-label" htmlFor="post-content">What’s on your mind?</label>
-            <textarea
-              id="post-content"
-              maxLength={1000}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Share an idea, a moment, or something you’re working on…"
-              rows={4}
-              value={draft}
-            />
-            <label className="member-post-visibility">Post audience
-              <select value={postVisibility} onChange={(event) => setPostVisibility(event.target.value)}>
-                <option value="public">Public</option>
-                <option value="friends">Friends</option>
-                <option value="only_me">Only me</option>
-              </select>
-            </label>
-            <div className="member-media-picker">
-              <label className="member-comments-toggle" htmlFor="post-media-file"><ImagePlus size={15} />Add an image</label>
-              <input
-                id="post-media-file"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                onChange={(event) => {
-                  setError('')
-                  const file = event.target.files?.[0] || null
-                  setMediaFile(file)
-                  setMediaPreview(file ? URL.createObjectURL(file) : '')
-                }}
-              />
-              <span>JPG, PNG, WebP, or GIF · up to 8 MB</span>
-            </div>
-            {mediaPreview && <div className="member-media-preview"><img src={mediaPreview} alt="Selected post image preview" /><button type="button" onClick={() => { setMediaFile(null); setMediaPreview('') }}>Remove image</button></div>}
-            <div className="member-composer-footer">
-              <span>{draft.length}/1000</span>
-              <button className="member-publish-button" type="submit" disabled={(!draft.trim() && !mediaFile) || publishing}>
-                {publishing ? <LoaderCircle size={16} className="spinner" aria-hidden="true" /> : <ArrowUp size={16} aria-hidden="true" />}
-                {publishing ? 'Publishing…' : 'Publish post'}
-              </button>
-            </div>
-          </form>
+          <PostComposer
+            userId={user.id}
+            idPrefix="feed-post"
+            onPublished={(post) => setPosts((currentPosts) => [post, ...currentPosts])}
+            onError={(message, publishError) => {
+              setError(message)
+              if (publishError && isPostsSetupError(publishError)) setFeedStatus('setup')
+            }}
+          />
 
           {error && (
             <div className="member-feed-error" role="alert">
@@ -516,7 +497,7 @@ function MemberPage() {
                   <article className="member-post" key={post.id}>
                     {authorProfile
                       ? <Link to={authorProfile} className="member-post-avatar" aria-label={`View ${authorName}'s profile`}>
-                        {author?.avatar_url ? <ProtectedMediaImage path={author.avatar_url} alt="" /> : getInitials(authorName)}
+                        {author?.avatar_url ? <ProtectedMediaImage path={author.avatar_url} alt="" fallback={getInitials(authorName)} /> : getInitials(authorName)}
                       </Link>
                       : <div className="member-post-avatar" aria-hidden="true">{getInitials(authorName)}</div>}
                     <div className="member-post-body">
@@ -574,7 +555,7 @@ function MemberPage() {
                                       <div className="member-comment">
                                         {commentAuthor?.username
                                           ? <Link to={`/profile/${encodeURIComponent(commentAuthor.username)}`} className="member-comment-avatar" aria-label={`View ${commentName}'s profile`}>
-                                            {commentAuthor?.avatar_url ? <ProtectedMediaImage path={commentAuthor.avatar_url} alt="" /> : getInitials(commentName)}
+                                            {commentAuthor?.avatar_url ? <ProtectedMediaImage path={commentAuthor.avatar_url} alt="" fallback={getInitials(commentName)} /> : getInitials(commentName)}
                                           </Link>
                                           : <div className="member-comment-avatar" aria-hidden="true">{getInitials(commentName)}</div>}
                                         <div className="member-comment-body">
@@ -617,7 +598,7 @@ function MemberPage() {
                                             <CornerDownRight size={14} aria-hidden="true" />
                                             {replyAuthor?.username
                                               ? <Link to={`/profile/${encodeURIComponent(replyAuthor.username)}`} className="member-comment-avatar" aria-label={`View ${replyName}'s profile`}>
-                                                {replyAuthor?.avatar_url ? <ProtectedMediaImage path={replyAuthor.avatar_url} alt="" /> : getInitials(replyName)}
+                                                {replyAuthor?.avatar_url ? <ProtectedMediaImage path={replyAuthor.avatar_url} alt="" fallback={getInitials(replyName)} /> : getInitials(replyName)}
                                               </Link>
                                               : <div className="member-comment-avatar" aria-hidden="true">{getInitials(replyName)}</div>}
                                             <div className="member-comment-body">

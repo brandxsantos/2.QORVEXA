@@ -80,7 +80,7 @@ function PrivacyPage() {
                 <article className="privacy-member-row" key={member.user_id}>
                   <div className="privacy-member-identity">
                     {member.avatar_url
-                      ? <ProtectedMediaImage path={member.avatar_url} alt="" />
+                      ? <ProtectedMediaImage path={member.avatar_url} alt="" fallback={(member.display_name || member.username || '?').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()} />
                       : <span aria-hidden="true">{(member.display_name || member.username || '?').slice(0, 1).toUpperCase()}</span>}
                     <div><strong>{member.display_name || member.username || 'QORVEXA member'}</strong><small>@{member.username || 'no-username'}</small></div>
                   </div>
