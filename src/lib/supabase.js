@@ -39,11 +39,15 @@ export async function authorizeRealtimeSession(client = getSupabaseClient()) {
   const claims = JSON.parse(atob(accessToken.split('.')[1]))
 
   console.log('[QORVEXA JWT Debug]', {
-    role: claims.role,
-    sub: claims.sub,
-    aud: claims.aud,
-    expiresAt: claims.exp,
-  })
+  role: claims.role,
+  sub: claims.sub,
+  aud: claims.aud,
+  expiresAt: claims.exp,
+})
+
+console.log('JWT ROLE:', claims.role)
+console.log('JWT SUBJECT:', claims.sub)
+console.log('JWT AUDIENCE:', claims.aud)
 }
 
   if (!accessToken) {
