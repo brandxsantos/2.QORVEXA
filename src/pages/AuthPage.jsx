@@ -274,7 +274,10 @@ function AuthPage() {
             {isSignup && (
               <label className="terms-field">
                 <input type="checkbox" name="terms" required />
-                <span>I agree to the <Link to="/#terms">Terms</Link> and <Link to="/#privacy">Privacy Policy</Link>.</span>
+               <span>
+  I agree to the <Link to="/terms">Terms of Service</Link> and{' '}
+  <Link to="/#privacy">Privacy Policy</Link>.
+</span>
               </label>
             )}
           </>

@@ -204,12 +204,12 @@ function LandingPage() {
         <nav className="footer-nav" aria-label="Footer navigation">
           <a href="#features">About</a>
           <a href="#privacy">Privacy</a>
-          <a href="#terms">Terms</a>
+        <Link to="/terms">Terms</Link>
           <a href="#contact">Contact</a>
         </nav>
         <div className="footer-disclosures">
           <p id="privacy"><strong>Privacy:</strong> Your email is private; only profile details intended for public display are exposed.</p>
-          <p id="terms"><strong>Terms:</strong> Features shown in the community preview are illustrative, not live.</p>
+         
           <p id="contact"><strong>Contact:</strong> Contact details will be published before early access opens.</p>
         </div>
         <p className="copyright">© 2026 QORVEXA. Built for the curious.</p>

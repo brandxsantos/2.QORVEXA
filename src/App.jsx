@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import LandingPage from './pages/LandingPage.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { useAuth } from './context/useAuth.js'
+import TermsPage from './pages/TermsPage.jsx'
 import './App.css'
 
 const AuthRoutes = lazy(() => import('./pages/AuthRoutes.jsx'))
@@ -29,6 +30,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<AuthProvider><HomeRoute /></AuthProvider>} />
+      <Route path="/terms" element={<TermsPage />} />
       <Route path="/login" element={<AccountAccess />} />
       <Route path="/signup" element={<AccountAccess />} />
       <Route path="/forgot-password" element={<AccountAccess />} />

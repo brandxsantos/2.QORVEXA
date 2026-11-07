@@ -6203,3 +6203,221 @@
     min-height: 0;
   }
 }
+/* QORVEXA Terms of Service */
+
+.terms-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  isolation: isolate;
+  background: #171d2b;
+  color: #fff;
+}
+
+.terms-header {
+  width: min(100% - 3.5rem, 76rem);
+  min-height: 5.5rem;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+}
+
+.terms-back-link,
+.terms-top-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #aebdce;
+  text-decoration: none;
+  font-size: 0.88rem;
+  transition: color 160ms ease;
+}
+
+.terms-back-link:hover,
+.terms-top-link:hover {
+  color: #00e5ff;
+}
+
+.terms-document {
+  width: min(100% - 3rem, 54rem);
+  margin: 4rem auto 5rem;
+}
+
+.terms-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #00e5ff;
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+}
+
+.terms-document h1 {
+  margin: 1rem 0 0.75rem;
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+}
+
+.terms-intro {
+  max-width: 43rem;
+  color: #b5c2d2;
+  font-size: 1.08rem;
+  line-height: 1.8;
+}
+
+.terms-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-top: 1.5rem;
+  color: #8294a9;
+  font-size: 0.82rem;
+}
+
+.terms-notice,
+.terms-acceptance {
+  margin-top: 2rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid rgb(0 229 255 / 20%);
+  border-radius: 0.85rem;
+  background: rgb(0 229 255 / 5%);
+  color: #d5e5ef;
+  line-height: 1.75;
+}
+
+.terms-toc {
+  margin-top: 2.5rem;
+  padding: 1.5rem;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 3%);
+}
+
+.terms-toc h2 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+}
+
+.terms-toc > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 1.5rem;
+}
+
+.terms-toc a {
+  color: #aebdce;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.terms-toc a:hover {
+  color: #00e5ff;
+}
+
+.terms-content {
+  margin-top: 3rem;
+}
+
+.terms-section {
+  padding: 1.7rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+  scroll-margin-top: 2rem;
+}
+
+.terms-section h2 {
+  margin: 0 0 1rem;
+  color: #fff;
+  font-size: 1.2rem;
+  line-height: 1.5;
+}
+
+.terms-section p,
+.terms-section li {
+  color: #b5c2d2;
+  font-size: 0.94rem;
+  line-height: 1.85;
+}
+
+.terms-section p {
+  margin: 0 0 0.9rem;
+}
+
+.terms-section ul {
+  display: grid;
+  gap: 0.45rem;
+  padding-left: 1.35rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.terms-section li::marker {
+  color: #00e5ff;
+}
+
+.terms-contact-details {
+  margin-top: 1.2rem;
+  padding: 1.2rem;
+  border-radius: 0.8rem;
+  background: rgb(255 255 255 / 4%);
+}
+
+.terms-contact-details p {
+  overflow-wrap: anywhere;
+}
+
+.terms-contact-details strong {
+  color: #fff;
+}
+
+.terms-bottom-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-top: 2rem;
+}
+
+.terms-footer {
+  width: min(100% - 3.5rem, 76rem);
+  min-height: 5rem;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid rgb(255 255 255 / 7%);
+  color: #8294a9;
+  font-size: 0.8rem;
+}
+
+.terms-footer a {
+  color: #00e5ff;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .terms-header,
+  .terms-footer {
+    width: calc(100% - 2rem);
+  }
+
+  .terms-document {
+    width: calc(100% - 2rem);
+    margin: 2.5rem auto 3rem;
+  }
+
+  .terms-toc > div {
+    grid-template-columns: 1fr;
+  }
+
+  .terms-footer {
+    padding: 1rem 0;
+    flex-wrap: wrap;
+  }
+}
