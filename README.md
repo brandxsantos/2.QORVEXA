@@ -41,6 +41,8 @@ QORVEXA is a social platform in development. The responsive landing page, Supaba
 
    `supabase/migrations/20261107032000_public_profiles.sql` (apply once after Community Features; adds public username profiles, profile/post/friend-list privacy, protected media, and profile fields)
 
+   `supabase/migrations/20261107035000_presence_privacy_fix.sql` (apply once after Public Profiles; authorizes per-member presence channels according to profile privacy)
+
    `supabase/migrations/20261107040000_realtime_social_notifications.sql` (apply once after Presence Privacy Fix; adds realtime feed tables, persisted private-message notifications, and post/comment notification details)
 
    `supabase/migrations/20261108000500_availability_presence.sql` (apply once after Realtime Social Notifications; adds persistent Online/Busy/Offline availability)

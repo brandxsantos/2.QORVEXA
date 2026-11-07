@@ -34,6 +34,7 @@ import BrandMark from '../components/BrandMark.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 
 const postFields = 'id, author_id, content, media_path, media_type, post_visibility, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url)'
+const availabilityEvent = 'qorvexa:availability-change'
 
 function formatDate(value) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value))
@@ -262,6 +263,29 @@ function PublicProfilePage() {
 
   useEffect(() => {
     if (!user || !profile?.id) return undefined
+    if (user.id === profile.id) {
+      let active = true
+      const client = getSupabaseClient()
+      const handleAvailabilityChange = (event) => {
+        if (['online', 'busy', 'offline'].includes(event.detail?.availability)) {
+          setAvailability(event.detail.availability)
+        }
+      }
+      client.rpc('get_own_profile_settings')
+        .then(({ data, error: settingsError }) => {
+          if (settingsError) throw settingsError
+          if (active) setAvailability(data?.[0]?.availability_status || 'online')
+        })
+        .catch((settingsError) => {
+          if (active) setError(settingsError.message || 'Your availability could not be loaded.')
+        })
+      window.addEventListener(availabilityEvent, handleAvailabilityChange)
+      return () => {
+        active = false
+        window.removeEventListener(availabilityEvent, handleAvailabilityChange)
+      }
+    }
+
     const canListen = user.id === profile.id
       || profile.online_status_visibility === 'everyone'
       || (profile.online_status_visibility === 'friends' && friendship.accepted)
