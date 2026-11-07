@@ -16,17 +16,7 @@ function PresenceTracker() {
     let subscribed = false
     let availability = null
 
-    const client = getSupabaseClient()
-
-    const channel = client.channel(
-      `qorvexa-online-presence:${user.id}`,
-      {
-        config: {
-          presence: { key: user.id },
-          private: true,
-        },
-      },
-    )
+ const client = getSupabaseClient()
 
     function reportPresenceError(error, fallback) {
       const message = error?.message || fallback
@@ -100,11 +90,22 @@ function PresenceTracker() {
       )
     }
 
-    authorizeRealtimeSession(client)
-      .then(() => {
-        if (!active) return
+   authorizeRealtimeSession(client)
+  .then(() => {
+    if (!active) return
 
-        channel.subscribe((status, error) => {
+    // Create the private channel only after Realtime auth is set.
+    channel = client.channel(
+      `qorvexa-online-presence:${user.id}`,
+      {
+        config: {
+          presence: { key: user.id },
+          private: true,
+        },
+      },
+    )
+
+    channel.subscribe((status, error) => {
           console.log('[QORVEXA Presence Debug] Channel subscription:', {
             status,
             topic: `qorvexa-online-presence:${user.id}`,
@@ -212,7 +213,9 @@ function PresenceTracker() {
       )
 
       window.clearInterval(heartbeat)
-      client.removeChannel(channel)
+   if (channel) {
+  client.removeChannel(channel)
+}
     }
   }, [user])
 
