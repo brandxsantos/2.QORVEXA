@@ -23,6 +23,14 @@ function ProfileSettingsPage() {
   const [website, setWebsite] = useState('')
   const [education, setEducation] = useState('')
   const [workplace, setWorkplace] = useState('')
+  const [gender, setGender] = useState('')
+const [genderCustom, setGenderCustom] = useState('')
+const [birthdate, setBirthdate] = useState('')
+const [phoneNumber, setPhoneNumber] = useState('')
+
+const [genderVisibility, setGenderVisibility] = useState('only_me')
+const [birthdateVisibility, setBirthdateVisibility] = useState('only_me')
+const [phoneVisibility, setPhoneVisibility] = useState('only_me')
   const [profileVisibility, setProfileVisibility] = useState('public')
   const [friendsVisibility, setFriendsVisibility] = useState('everyone')
   const [onlineStatusVisibility, setOnlineStatusVisibility] = useState('friends')
@@ -65,6 +73,30 @@ function ProfileSettingsPage() {
         setWebsite(data.website || '')
         setEducation(data.education || '')
         setWorkplace(data.workplace || '')
+        const standardGenders = [
+  'Male',
+  'Female',
+  'Non-binary',
+  'Prefer not to say',
+]
+
+if (standardGenders.includes(data.gender)) {
+  setGender(data.gender)
+  setGenderCustom('')
+} else if (data.gender) {
+  setGender('self_describe')
+  setGenderCustom(data.gender)
+} else {
+  setGender('')
+  setGenderCustom('')
+}
+
+setBirthdate(data.birthdate || '')
+setPhoneNumber(data.phone_number || '')
+
+setGenderVisibility(data.gender_visibility || 'only_me')
+setBirthdateVisibility(data.birthdate_visibility || 'only_me')
+setPhoneVisibility(data.phone_visibility || 'only_me')
         setProfileVisibility(data.profile_visibility || 'public')
         setFriendsVisibility(data.friends_visibility || 'everyone')
         setOnlineStatusVisibility(data.online_status_visibility || 'friends')
@@ -90,6 +122,41 @@ function ProfileSettingsPage() {
     const cleanUsername = username.trim().toLowerCase()
     const cleanBio = bio.trim()
     const cleanWebsite = website.trim()
+    const cleanGender = gender === 'self_describe'
+  ? genderCustom.trim()
+  : gender
+
+const cleanBirthdate = birthdate || null
+const cleanPhoneNumber = phoneNumber.trim() || null
+
+if (gender === 'self_describe' && !cleanGender) {
+  setError('Please describe your gender or choose another option.')
+  return
+}
+
+if (cleanGender.length > 50) {
+  setError('Gender must not exceed 50 characters.')
+  return
+}
+
+if (cleanBirthdate) {
+  const today = new Date()
+  const todayString = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-')
+
+  if (cleanBirthdate > todayString) {
+    setError('Birthdate cannot be in the future.')
+    return
+  }
+}
+
+if (cleanPhoneNumber && !/^[+]?[\d\s().-]{7,32}$/.test(cleanPhoneNumber)) {
+  setError('Please enter a valid phone number.')
+  return
+}
     setError('')
     setNotice('')
     if (cleanName.length < 2 || cleanName.length > 60) {
@@ -151,6 +218,12 @@ function ProfileSettingsPage() {
           website_visibility: websiteVisibility,
           education_visibility: educationVisibility,
           workplace_visibility: workplaceVisibility,
+          gender: cleanGender || null,
+gender_visibility: genderVisibility,
+birthdate: cleanBirthdate,
+birthdate_visibility: birthdateVisibility,
+phone_number: cleanPhoneNumber,
+phone_visibility: phoneVisibility,
         })
         .eq('id', user.id)
       if (updateError) throw updateError
@@ -167,6 +240,30 @@ function ProfileSettingsPage() {
       setWebsite(data.website)
       setEducation(data.education)
       setWorkplace(data.workplace)
+      const standardGenders = [
+  'Male',
+  'Female',
+  'Non-binary',
+  'Prefer not to say',
+]
+
+if (standardGenders.includes(data.gender)) {
+  setGender(data.gender)
+  setGenderCustom('')
+} else if (data.gender) {
+  setGender('self_describe')
+  setGenderCustom(data.gender)
+} else {
+  setGender('')
+  setGenderCustom('')
+}
+
+setBirthdate(data.birthdate || '')
+setPhoneNumber(data.phone_number || '')
+
+setGenderVisibility(data.gender_visibility || 'only_me')
+setBirthdateVisibility(data.birthdate_visibility || 'only_me')
+setPhoneVisibility(data.phone_visibility || 'only_me')
       setProfileVisibility(data.profile_visibility)
       setFriendsVisibility(data.friends_visibility)
       setOnlineStatusVisibility(data.online_status_visibility)
@@ -260,6 +357,78 @@ function ProfileSettingsPage() {
             <label>Display name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={60} required /></label>
             <label>Username<input value={username} onChange={(event) => setUsername(event.target.value.toLowerCase())} minLength={3} maxLength={24} pattern="[a-z0-9_]{3,24}" required /><small>3–24 lowercase letters, numbers, or underscores.</small></label>
             <label>Bio<textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={280} rows={4} placeholder="A little about you…" /><small>{bio.length}/280</small></label>
+            <label>
+  Gender
+  <select value={gender} onChange={(event) => setGender(event.target.value)}>
+    <option value="">Prefer not to specify</option>
+    <option value="Male">Male</option>
+    <option value="Female">Female</option>
+    <option value="Non-binary">Non-binary</option>
+    <option value="self_describe">Self-describe</option>
+    <option value="Prefer not to say">Prefer not to say</option>
+  </select>
+</label>
+
+{gender === 'self_describe' && (
+  <label>
+    Describe your gender
+    <input
+      value={genderCustom}
+      onChange={(event) => setGenderCustom(event.target.value)}
+      maxLength={50}
+      placeholder="Your description"
+    />
+  </label>
+)}
+
+<label>
+  Gender visibility
+  <select value={genderVisibility} onChange={(event) => setGenderVisibility(event.target.value)}>
+    <option value="public">Everyone</option>
+    <option value="friends">Friends only</option>
+    <option value="only_me">Only me</option>
+  </select>
+</label>
+
+<label>
+  Birthdate
+  <input
+    type="date"
+    value={birthdate}
+    max={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)}
+    onChange={(event) => setBirthdate(event.target.value)}
+  />
+</label>
+
+<label>
+  Birthdate visibility
+  <select value={birthdateVisibility} onChange={(event) => setBirthdateVisibility(event.target.value)}>
+    <option value="public">Everyone</option>
+    <option value="friends">Friends only</option>
+    <option value="only_me">Only me</option>
+  </select>
+</label>
+
+<label>
+  Phone number
+  <input
+    type="tel"
+    value={phoneNumber}
+    onChange={(event) => setPhoneNumber(event.target.value)}
+    maxLength={32}
+    autoComplete="tel"
+    placeholder="+63 912 345 6789"
+  />
+</label>
+
+<label>
+  Phone number visibility
+  <select value={phoneVisibility} onChange={(event) => setPhoneVisibility(event.target.value)}>
+    <option value="public">Everyone</option>
+    <option value="friends">Friends only</option>
+    <option value="only_me">Only me</option>
+  </select>
+</label>
             <label>Location<input value={location} onChange={(event) => setLocation(event.target.value)} maxLength={100} /></label>
             <label>Location visibility<select value={locationVisibility} onChange={(event) => setLocationVisibility(event.target.value)}><option value="public">Everyone</option><option value="friends">Friends only</option><option value="only_me">Only me</option></select></label>
             <label>Website<input type="url" value={website} onChange={(event) => setWebsite(event.target.value)} maxLength={200} placeholder="https://example.com" /></label>

@@ -219,7 +219,49 @@ if (data.session) {
               </div>
               <small>3–24 letters, numbers, or underscores.</small>
             </label>
+                        <label className="form-field">
+              <span>Gender <small>(Optional)</small></span>
+              <select name="gender" defaultValue="">
+                <option value="">Prefer not to specify</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Non-binary">Non-binary</option>
+                <option value="self_describe">Self-describe</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+            </label>
+
+            <label className="form-field">
+              <span>Self-description <small>(If applicable)</small></span>
+              <input
+                type="text"
+                name="genderCustom"
+                placeholder="Describe your gender"
+                maxLength={50}
+              />
+            </label>
+
+            <label className="form-field">
+              <span>Birthdate <small>(Optional)</small></span>
+              <input
+                type="date"
+                name="birthdate"
+                max={new Date().toLocaleDateString('en-CA')}
+              />
+            </label>
+
+            <label className="form-field">
+              <span>Phone number <small>(Optional)</small></span>
+              <input
+                type="tel"
+                name="phoneNumber"
+                placeholder="+63 912 345 6789"
+                autoComplete="tel"
+                maxLength={32}
+              />
+            </label>
           </>
+          
         )}
 
         {!isRecovery && (
