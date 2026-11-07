@@ -69,7 +69,7 @@ function BookmarksPage() {
         <Link className="brand-link" to="/app" aria-label="QORVEXA feed"><BrandMark /></Link>
         <nav className="network-nav" aria-label="Community navigation">
           <Link className="network-nav-link" to="/app">Feed</Link>
-          <Link className="network-nav-link is-active" to="/app/bookmarks"><Bookmark size={15} />Saved</Link>
+         
           <AccountMenu />
         </nav>
       </header>
