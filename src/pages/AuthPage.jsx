@@ -133,13 +133,20 @@ function AuthPage() {
           },
         })
 
-        if (signUpError) throw signUpError
+    if (signUpError) throw signUpError
 
-        if (data.session) {
-          navigate('/app', { replace: true })
-        } else {
-          setNotice('Check your email for a verification link to finish creating your account.')
-        }
+// Detect an email that is already registered in Supabase.
+if (data.user && data.user.identities?.length === 0) {
+  throw new Error(
+    'This email address is already associated with a QORVEXA account. Please log in or use another email address.',
+  )
+}
+
+if (data.session) {
+  navigate('/app', { replace: true })
+} else {
+  setNotice('Check your email for a verification link to finish creating your account.')
+}
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
