@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAuth } from '../context/useAuth.js'
-import { getSupabaseClient } from '../lib/supabase.js'
+import { authorizeRealtimeSession, getSupabaseClient } from '../lib/supabase.js'
 
 const availabilityEvent = 'qorvexa:availability-change'
 const presenceStatusEvent = 'qorvexa:presence-status'
@@ -61,16 +61,23 @@ function PresenceTracker() {
       syncPresence().catch((error) => reportPresenceError(error, 'Availability could not be updated.'))
     }
 
-    channel.subscribe((status, error) => {
-      if (!active) return
-      subscribed = status === 'SUBSCRIBED'
-      if (subscribed) {
-        clearPresenceError()
-        syncPresence().catch((presenceError) => reportPresenceError(presenceError, 'Availability could not be updated.'))
-      } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
-        reportPresenceError(error, 'Live availability disconnected.')
-      }
-    })
+    authorizeRealtimeSession(client)
+      .then(() => {
+        if (!active) return
+        channel.subscribe((status, error) => {
+          if (!active) return
+          subscribed = status === 'SUBSCRIBED'
+          if (subscribed) {
+            clearPresenceError()
+            syncPresence().catch((presenceError) => reportPresenceError(presenceError, 'Availability could not be updated.'))
+          } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
+            reportPresenceError(error, 'Live availability disconnected.')
+          }
+        })
+      })
+      .catch((error) => {
+        if (active) reportPresenceError(error, 'Live availability could not be authorized.')
+      })
 
     client.rpc('get_own_profile_settings')
       .then(({ data, error }) => {

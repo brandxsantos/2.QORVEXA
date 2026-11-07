@@ -25,7 +25,7 @@ import {
   X,
 } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
-import { getSupabaseClient } from '../lib/supabase.js'
+import { authorizeRealtimeSession, getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import NotificationToast from '../components/NotificationToast.jsx'
 import notificationToastText from '../lib/notificationToastText.js'
@@ -291,7 +291,8 @@ function PublicProfilePage() {
       || (profile.online_status_visibility === 'friends' && friendship.accepted)
     if (!canListen) return undefined
     let active = true
-    const channel = getSupabaseClient().channel(`qorvexa-online-presence:${profile.id}`, {
+    const client = getSupabaseClient()
+    const channel = client.channel(`qorvexa-online-presence:${profile.id}`, {
       config: { presence: { key: user.id }, private: true },
     })
       .on('presence', { event: 'sync' }, () => {
@@ -300,10 +301,16 @@ function PublicProfilePage() {
           .find((entry) => entry.user_id === profile.id)
         setAvailability(['online', 'busy'].includes(presence?.availability) ? presence.availability : presence ? 'online' : 'offline')
       })
-      .subscribe()
+    authorizeRealtimeSession(client)
+      .then(() => {
+        if (active) channel.subscribe()
+      })
+      .catch((presenceError) => {
+        if (active) console.error('Profile presence authorization failed.', presenceError)
+      })
     return () => {
       active = false
-      getSupabaseClient().removeChannel(channel)
+      client.removeChannel(channel)
     }
   }, [friendship.accepted, profile?.id, profile?.online_status_visibility, user])
 

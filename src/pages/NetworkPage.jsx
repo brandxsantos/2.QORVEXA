@@ -23,7 +23,7 @@ import {
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
 import { useAuth } from '../context/useAuth.js'
-import { getSupabaseClient } from '../lib/supabase.js'
+import { authorizeRealtimeSession, getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import NotificationToast from '../components/NotificationToast.jsx'
 import notificationToastText from '../lib/notificationToastText.js'
@@ -321,17 +321,30 @@ function NetworkPage() {
       presenceChannels.set(targetId, channel)
       channel
         .on('presence', { event: 'sync' }, syncAvailability)
-        .subscribe((state, channelError) => {
-          if (!active) return
-          if (state === 'SUBSCRIBED') {
-            setPresenceError('')
-            syncAvailability()
-          } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(state)) {
-            console.error('Online presence channel failed.', channelError)
-            setPresenceError(channelError?.message || 'Online presence disconnected.')
-          }
-        })
     }
+
+    authorizeRealtimeSession(client)
+      .then(() => {
+        if (!active) return
+        for (const channel of presenceChannels.values()) {
+          channel.subscribe((state, channelError) => {
+            if (!active) return
+            if (state === 'SUBSCRIBED') {
+              setPresenceError('')
+              syncAvailability()
+            } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(state)) {
+              console.error('Online presence channel failed.', channelError)
+              setPresenceError(channelError?.message || 'Online presence disconnected.')
+            }
+          })
+        }
+      })
+      .catch((channelError) => {
+        if (active) {
+          console.error('Online presence authorization failed.', channelError)
+          setPresenceError(channelError?.message || 'Online presence could not be authorized.')
+        }
+      })
 
     function handleVisibilityChange() {
       syncAvailability()

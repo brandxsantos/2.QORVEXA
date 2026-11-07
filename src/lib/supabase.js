@@ -24,3 +24,13 @@ export function getSupabaseClient() {
 
   return supabase
 }
+
+export async function authorizeRealtimeSession(client = getSupabaseClient()) {
+  const { data, error } = await client.auth.getSession()
+  if (error) throw error
+
+  const accessToken = data.session?.access_token
+  if (!accessToken) throw new Error('A signed-in session is required for Realtime presence.')
+
+  await client.realtime.setAuth(accessToken)
+}
