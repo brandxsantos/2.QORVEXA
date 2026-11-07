@@ -1,7 +1,10 @@
 
 import { useEffect } from 'react'
 import { useAuth } from '../context/useAuth.js'
-import { authorizeRealtimeSession, getSupabaseClient } from '../lib/supabase.js'
+import {
+  authorizeRealtimeSession,
+  getSupabaseClient,
+} from '../lib/supabase.js'
 
 const availabilityEvent = 'qorvexa:availability-change'
 const presenceStatusEvent = 'qorvexa:presence-status'
@@ -15,11 +18,13 @@ function PresenceTracker() {
     let active = true
     let subscribed = false
     let availability = null
+    let channel = null
 
- const client = getSupabaseClient()
+    const client = getSupabaseClient()
 
     function reportPresenceError(error, fallback) {
       const message = error?.message || fallback
+
       console.error('[QORVEXA Presence Error]', error || fallback)
 
       window.dispatchEvent(
@@ -38,7 +43,7 @@ function PresenceTracker() {
     }
 
     async function syncPresence() {
-      if (!active || !subscribed || !availability) return
+      if (!active || !subscribed || !channel || !availability) return
 
       if (
         document.visibilityState === 'visible' &&
@@ -71,65 +76,63 @@ function PresenceTracker() {
         }
       }
 
-      clearPresenceError()
+      if (active) clearPresenceError()
     }
 
     function handleAvailabilityChange(event) {
-      if (['online', 'offline', 'busy'].includes(event.detail?.availability)) {
-        availability = event.detail.availability
+      const nextAvailability = event.detail?.availability
 
-        syncPresence().catch((error) =>
-          reportPresenceError(error, 'Availability could not be updated.'),
-        )
+      if (['online', 'offline', 'busy'].includes(nextAvailability)) {
+        availability = nextAvailability
+
+        syncPresence().catch((error) => {
+          if (active) {
+            reportPresenceError(
+              error,
+              'Availability could not be updated.',
+            )
+          }
+        })
       }
     }
 
     function handleVisibilityChange() {
-      syncPresence().catch((error) =>
-        reportPresenceError(error, 'Availability could not be updated.'),
-      )
+      syncPresence().catch((error) => {
+        if (active) {
+          reportPresenceError(
+            error,
+            'Availability could not be updated.',
+          )
+        }
+      })
     }
 
-   authorizeRealtimeSession(client)
-  .then(() => {
-    if (!active) return
+    async function startPresence() {
+      try {
+        // Set the authenticated JWT before creating the private channel.
+        await authorizeRealtimeSession(client)
 
-    // Create the private channel only after Realtime auth is set.
-    channel = client.channel(
-      `qorvexa-online-presence:${user.id}`,
-      {
-        config: {
-          presence: { key: user.id },
-          private: true,
-        },
-      },
-    )
+        if (!active) return
 
-    channel.subscribe((status, error) => {
+        channel = client.channel(
+          `qorvexa-online-presence:${user.id}`,
+          {
+            config: {
+              private: true,
+              presence: {
+                key: user.id,
+                enabled: true,
+              },
+            },
+          },
+        )
+
+        channel.subscribe((status, error) => {
           console.log('[QORVEXA Presence Debug] Channel subscription:', {
             status,
             topic: `qorvexa-online-presence:${user.id}`,
+            error: error?.message || null,
           })
-
-          if (error) {
-            console.dir(error)
-
-            console.log(
-              '[QORVEXA Presence Debug] Full subscription error:',
-              JSON.stringify(
-                error,
-                Object.getOwnPropertyNames(error),
-                2,
-              ),
-            )
-
-            if (error.cause) {
-              console.log(
-                '[QORVEXA Presence Debug] Error cause:',
-                error.cause,
-              )
-            }
-          }
 
           if (!active) return
 
@@ -138,58 +141,64 @@ function PresenceTracker() {
           if (subscribed) {
             clearPresenceError()
 
-            syncPresence().catch((presenceError) =>
-              reportPresenceError(
-                presenceError,
-                'Availability could not be updated.',
-              ),
-            )
+            syncPresence().catch((presenceError) => {
+              if (active) {
+                reportPresenceError(
+                  presenceError,
+                  'Availability could not be updated.',
+                )
+              }
+            })
           } else if (
             ['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)
           ) {
-            reportPresenceError(error, 'Live availability disconnected.')
+            reportPresenceError(
+              error,
+              'Live availability disconnected.',
+            )
           }
         })
-      })
-      .catch((error) => {
+
+        const { data, error } = await client.rpc(
+          'get_own_profile_settings',
+        )
+
+        if (error) throw error
+        if (!active) return
+
+        availability =
+          data?.[0]?.availability_status || 'online'
+
+        if (subscribed) {
+          await syncPresence()
+        }
+      } catch (error) {
         if (active) {
           reportPresenceError(
             error,
             'Live availability could not be authorized.',
           )
         }
-      })
+      }
+    }
 
-    client.rpc('get_own_profile_settings')
-      .then(({ data, error }) => {
-        if (error) throw error
-        if (!active) return
+    window.addEventListener(
+      availabilityEvent,
+      handleAvailabilityChange,
+    )
 
-        availability = data?.[0]?.availability_status || 'online'
-
-        if (subscribed) {
-          syncPresence().catch((presenceError) =>
-            reportPresenceError(
-              presenceError,
-              'Availability could not be updated.',
-            ),
-          )
-        }
-      })
-      .catch((error) =>
-        reportPresenceError(
-          error,
-          'Availability preference could not be loaded.',
-        ),
-      )
-
-    window.addEventListener(availabilityEvent, handleAvailabilityChange)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibilityChange,
+    )
 
     const heartbeat = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
+      if (
+        active &&
+        document.visibilityState === 'visible'
+      ) {
         client.rpc('touch_last_active').then(({ error }) => {
-          if (error) {
+          if (error && active) {
             reportPresenceError(
               error,
               'Last-active time could not be updated.',
@@ -199,8 +208,13 @@ function PresenceTracker() {
       }
     }, 60_000)
 
+    startPresence()
+
+    // React executes this cleanup when the component unmounts
+    // or the logged-in user changes.
     return () => {
       active = false
+      subscribed = false
 
       window.removeEventListener(
         availabilityEvent,
@@ -213,9 +227,11 @@ function PresenceTracker() {
       )
 
       window.clearInterval(heartbeat)
-   if (channel) {
-  client.removeChannel(channel)
-}
+
+      if (channel) {
+        client.removeChannel(channel)
+        channel = null
+      }
     }
   }, [user])
 
