@@ -261,83 +261,146 @@ function PublicProfilePage() {
     }
   }, [loadUnreadCounts, user])
 
+ 
   useEffect(() => {
     if (!user || !profile?.id) return undefined
+
+    let active = true
+    let channel = null
+
+    const client = getSupabaseClient()
+
+    // When viewing your own profile, use your saved availability setting.
     if (user.id === profile.id) {
-      let active = true
-      const client = getSupabaseClient()
       const handleAvailabilityChange = (event) => {
         if (['online', 'busy', 'offline'].includes(event.detail?.availability)) {
           setAvailability(event.detail.availability)
         }
       }
+
       client.rpc('get_own_profile_settings')
         .then(({ data, error: settingsError }) => {
           if (settingsError) throw settingsError
-          if (active) setAvailability(data?.[0]?.availability_status || 'online')
+          if (active) {
+            setAvailability(data?.[0]?.availability_status || 'online')
+          }
         })
         .catch((settingsError) => {
-          if (active) setError(settingsError.message || 'Your availability could not be loaded.')
+          if (active) {
+            setError(settingsError.message || 'Your availability could not be loaded.')
+          }
         })
+
       window.addEventListener(availabilityEvent, handleAvailabilityChange)
+
       return () => {
         active = false
         window.removeEventListener(availabilityEvent, handleAvailabilityChange)
       }
     }
 
-    const canListen = user.id === profile.id
-      || profile.online_status_visibility === 'everyone'
-      || (profile.online_status_visibility === 'friends' && friendship.accepted)
-    if (!canListen) return undefined
-    let active = true
-    const client = getSupabaseClient()
-    const channel = client.channel(`qorvexa-online-presence:${profile.id}`, {
-      config: { presence: { key: user.id }, private: true },
-    })
-      .on('presence', { event: 'sync' }, () => {
-        if (!active) return
-        const presence = Object.values(channel.presenceState()).flat()
-          .find((entry) => entry.user_id === profile.id)
-        setAvailability(['online', 'busy'].includes(presence?.availability) ? presence.availability : presence ? 'online' : 'offline')
-      })
-   authorizeRealtimeSession(client)
-  .then(() => {
-    if (!active) return
+    // Check whether this viewer is allowed to see the member's status.
+    const canListen =
+      profile.online_status_visibility === 'everyone' ||
+      (profile.online_status_visibility === 'friends' && friendship.accepted)
 
-    channel.subscribe((status, error) => {
-      console.log('[QORVEXA Friend Presence Debug]', {
-        friendId: profile.id,
-        viewerId: user.id,
-        topic: `qorvexa-online-presence:${profile.id}`,
-        status,
-        error: error?.message || null,
-      })
-
-      if (error) {
-        console.error(
-          '[QORVEXA Friend Presence Error]',
-          error,
-        )
-      }
-    })
-  })
-  .catch((presenceError) => {
-    if (active) {
-      console.error(
-        '[QORVEXA Friend Presence Authorization Error]',
-        presenceError,
-      )
+    if (!canListen) {
+      setAvailability('offline')
+      return undefined
     }
-  })
-      .catch((presenceError) => {
-        if (active) console.error('Profile presence authorization failed.', presenceError)
-      })
+
+    setAvailability('offline')
+
+    async function subscribeToFriendPresence() {
+      try {
+        // Authenticate Realtime before creating the private channel.
+        await authorizeRealtimeSession(client)
+
+        if (!active) return
+
+        const topic = `qorvexa-online-presence:${profile.id}`
+
+        channel = client.channel(topic, {
+          config: {
+            private: true,
+            presence: {
+              key: user.id,
+              enabled: true,
+            },
+          },
+        })
+
+        channel.on('presence', { event: 'sync' }, () => {
+          if (!active) return
+
+          const state = channel.presenceState()
+
+          console.log('[QORVEXA Friend Presence]', {
+            friendId: profile.id,
+            viewerId: user.id,
+            state,
+          })
+
+          const presences = Object.values(state).flat()
+
+          const friendPresence = presences.find(
+            (entry) => entry.user_id === profile.id,
+          )
+
+          setAvailability(
+            ['online', 'busy'].includes(friendPresence?.availability)
+              ? friendPresence.availability
+              : 'offline',
+          )
+        })
+
+        channel.subscribe((status, error) => {
+          console.log('[QORVEXA Friend Presence Subscription]', {
+            friendId: profile.id,
+            topic,
+            status,
+            error: error?.message || null,
+          })
+
+          if (error) {
+            console.error('[QORVEXA Friend Presence Error]', error)
+          }
+
+          if (!active) return
+
+          if (
+            ['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)
+          ) {
+            setAvailability('offline')
+          }
+        })
+      } catch (presenceError) {
+        if (active) {
+          console.error(
+            '[QORVEXA Friend Presence Authorization Error]',
+            presenceError,
+          )
+          setAvailability('offline')
+        }
+      }
+    }
+
+    subscribeToFriendPresence()
+
     return () => {
       active = false
-      client.removeChannel(channel)
+
+      if (channel) {
+        client.removeChannel(channel)
+      }
     }
-  }, [friendship.accepted, profile?.id, profile?.online_status_visibility, user])
+  }, [
+    friendship.accepted,
+    profile?.id,
+    profile?.online_status_visibility,
+    user,
+  ])
+
 
   async function loadMorePosts() {
     if (!profile || loadingMorePosts) return
