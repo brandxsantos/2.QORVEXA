@@ -35,7 +35,15 @@ export async function authorizeRealtimeSession(client = getSupabaseClient()) {
 
   const session = data.session
   const accessToken = session?.access_token
-  if (accessToken) {
+  if (accessToken) { const jwtHeader = JSON.parse(
+  atob(accessToken.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'))
+)
+
+console.log('[QORVEXA JWT HEADER]', {
+  alg: jwtHeader.alg,
+  kid: jwtHeader.kid,
+  typ: jwtHeader.typ,
+})
   const claims = JSON.parse(atob(accessToken.split('.')[1]))
 
   console.log('[QORVEXA JWT Debug]', {
