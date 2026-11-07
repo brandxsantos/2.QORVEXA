@@ -6142,3 +6142,50 @@
     padding: 1rem;
   }
 }
+
+/* QORVEXA - Fixed Messenger Layout */
+.network-messenger {
+  height: 38rem;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.network-conversation-list {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.network-chat {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.network-chat-header {
+  flex: 0 0 auto;
+}
+
+.network-message-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.network-message-form {
+  flex: 0 0 auto;
+}
+
+/* Mobile Messenger */
+@media (max-width: 700px) {
+  .network-messenger {
+    height: min(66vh, 38rem);
+    min-height: 24rem;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .network-chat {
+    height: 100%;
+    min-height: 0;
+  }
+}
