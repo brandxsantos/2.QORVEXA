@@ -301,10 +301,35 @@ function PublicProfilePage() {
           .find((entry) => entry.user_id === profile.id)
         setAvailability(['online', 'busy'].includes(presence?.availability) ? presence.availability : presence ? 'online' : 'offline')
       })
-    authorizeRealtimeSession(client)
-      .then(() => {
-        if (active) channel.subscribe()
+   authorizeRealtimeSession(client)
+  .then(() => {
+    if (!active) return
+
+    channel.subscribe((status, error) => {
+      console.log('[QORVEXA Friend Presence Debug]', {
+        friendId: profile.id,
+        viewerId: user.id,
+        topic: `qorvexa-online-presence:${profile.id}`,
+        status,
+        error: error?.message || null,
       })
+
+      if (error) {
+        console.error(
+          '[QORVEXA Friend Presence Error]',
+          error,
+        )
+      }
+    })
+  })
+  .catch((presenceError) => {
+    if (active) {
+      console.error(
+        '[QORVEXA Friend Presence Authorization Error]',
+        presenceError,
+      )
+    }
+  })
       .catch((presenceError) => {
         if (active) console.error('Profile presence authorization failed.', presenceError)
       })
