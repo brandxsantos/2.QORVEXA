@@ -6,6 +6,7 @@ import { getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import BrandMark from '../components/BrandMark.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
+import AccountMenu from '../components/AccountMenu.jsx'
 
 function PrivacyPage() {
   const { user } = useAuth()
@@ -60,9 +61,8 @@ function PrivacyPage() {
         <Link className="brand-link" to="/app" aria-label="QORVEXA feed"><BrandMark /></Link>
         <nav className="network-nav" aria-label="Community navigation">
           <Link className="network-nav-link" to="/app">Feed</Link>
-          <Link className="network-nav-link" to="/app/bookmarks">Bookmarks</Link>
-          <Link className="network-nav-link is-active" to="/app/privacy">Privacy</Link>
-          <Link className="network-nav-link" to="/app/profile">Profile</Link>
+          <Link className="network-nav-link" to="/app/bookmarks">Saved</Link>
+          <AccountMenu />
         </nav>
       </header>
       <AccountRestrictionNotice userId={user.id} />

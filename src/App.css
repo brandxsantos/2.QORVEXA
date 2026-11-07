@@ -1139,6 +1139,14 @@
   color: #4df5bd;
 }
 
+.public-profile-stats .is-busy {
+  color: #ffba62;
+}
+
+.public-profile-stats .is-offline {
+  color: #91a1b5;
+}
+
 .auth-panel {
   padding: clamp(1.3rem, 3.5vw, 2rem);
   border: 1px solid rgb(0 229 255 / 15%);
@@ -4191,6 +4199,55 @@
   color: #5deeff;
 }
 
+.network-account-menu {
+  position: relative;
+}
+
+.network-account-menu > summary {
+  list-style: none;
+}
+
+.network-account-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.network-account-menu-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  display: grid;
+  min-width: 13rem;
+  gap: 0.2rem;
+  padding: 0.4rem;
+  border: 1px solid rgb(93 238 255 / 20%);
+  border-radius: 0.75rem;
+  background: #101927;
+  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 35%);
+}
+
+.network-account-menu-popover a {
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.5rem;
+  color: #a9b8cb;
+  font-size: 0.72rem;
+  text-decoration: none;
+}
+
+.network-account-menu-popover a:hover,
+.network-account-menu-popover a.is-active {
+  background: rgb(0 229 255 / 8%);
+  color: #5deeff;
+}
+
+.network-account-menu-popover svg {
+  flex: 0 0 auto;
+}
+
 .network-badge {
   display: grid;
   min-width: 1.05rem;
@@ -4533,8 +4590,17 @@
   margin-left: auto;
   border: 2px solid #141b29;
   border-radius: 50%;
+  background: #78889a;
+}
+
+.network-online-dot--online {
   background: #4df5bd;
   box-shadow: 0 0 0.6rem rgb(77 245 189 / 35%);
+}
+
+.network-online-dot--busy {
+  background: #ffba62;
+  box-shadow: 0 0 0.6rem rgb(255 186 98 / 35%);
 }
 
 .network-user-bio {
@@ -5221,6 +5287,14 @@
     display: block;
     width: 17px;
     height: 17px;
+  }
+
+  .network-account-menu > summary {
+    gap: 0;
+  }
+
+  .network-account-menu > summary svg:last-child {
+    display: none;
   }
 
   .network-heading {

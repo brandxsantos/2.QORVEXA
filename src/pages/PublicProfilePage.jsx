@@ -79,7 +79,7 @@ function PublicProfilePage() {
   const [replyTarget, setReplyTarget] = useState('')
   const [commentsOpen, setCommentsOpen] = useState(() => new Set())
   const [selectedPhoto, setSelectedPhoto] = useState(null)
-  const [online, setOnline] = useState(false)
+  const [availability, setAvailability] = useState('offline')
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
   const [unreadMessageCount, setUnreadMessageCount] = useState(0)
   const [notificationToast, setNotificationToast] = useState('')
@@ -264,7 +264,10 @@ function PublicProfilePage() {
       config: { presence: { key: user.id }, private: true },
     })
       .on('presence', { event: 'sync' }, () => {
-        if (active) setOnline(Object.hasOwn(channel.presenceState(), profile.id))
+        if (!active) return
+        const presence = Object.values(channel.presenceState()).flat()
+          .find((entry) => entry.user_id === profile.id)
+        setAvailability(['online', 'busy'].includes(presence?.availability) ? presence.availability : presence ? 'online' : 'offline')
       })
       .subscribe()
     return () => {
@@ -390,7 +393,7 @@ function PublicProfilePage() {
     try {
       const { data, error: rpcError } = await getSupabaseClient().rpc('start_direct_conversation', { target_user_id: profile.id })
       if (rpcError) throw rpcError
-      navigate(`/app/messages?conversation=${data}`)
+      navigate(`/app/messages/${encodeURIComponent(data)}`)
     } catch (actionError) {
       setError(actionError.message || 'This conversation could not be opened.')
     } finally {
@@ -546,7 +549,7 @@ function PublicProfilePage() {
                     <span><strong>{postCount}</strong> posts</span>
                     {mutualFriends.length > 0 && <span><strong>{mutualFriends.length}</strong> mutual friends</span>}
                     <span><CalendarDays size={14} />Joined {formatDate(profile.created_at)}</span>
-                    {canSeeOnline && <span className={online ? 'is-online' : ''}><i />{online ? 'Online' : 'Offline'}</span>}
+                    {canSeeOnline && <span className={`is-${availability}`}><i />{availability === 'busy' ? 'Busy' : availability === 'online' ? 'Online' : 'Offline'}</span>}
                   </div>
                 </div>
                 <div className="public-profile-actions">

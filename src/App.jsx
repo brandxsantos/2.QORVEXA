@@ -35,6 +35,7 @@ function App() {
       <Route path="/reset-password" element={<AccountAccess />} />
       <Route path="/profile/:username" element={<AccountAccess />} />
       <Route path="/app" element={<AccountAccess />} />
+      <Route path="/app/messages/:conversationId" element={<AccountAccess />} />
       <Route path="/app/*" element={<AccountAccess />} />
       <Route path="/admin/*" element={<AccountAccess />} />
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -6,10 +6,12 @@ import { getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import BrandMark from '../components/BrandMark.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
+import AccountMenu from '../components/AccountMenu.jsx'
 
 const usernamePattern = /^[a-z0-9_]{3,24}$/
 const maxAvatarBytes = 8 * 1024 * 1024
 const imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const availabilityEvent = 'qorvexa:availability-change'
 
 function ProfileSettingsPage() {
   const { user } = useAuth()
@@ -24,6 +26,7 @@ function ProfileSettingsPage() {
   const [profileVisibility, setProfileVisibility] = useState('public')
   const [friendsVisibility, setFriendsVisibility] = useState('everyone')
   const [onlineStatusVisibility, setOnlineStatusVisibility] = useState('friends')
+  const [availabilityStatus, setAvailabilityStatus] = useState('online')
   const [locationVisibility, setLocationVisibility] = useState('public')
   const [websiteVisibility, setWebsiteVisibility] = useState('public')
   const [educationVisibility, setEducationVisibility] = useState('public')
@@ -65,6 +68,7 @@ function ProfileSettingsPage() {
         setProfileVisibility(data.profile_visibility || 'public')
         setFriendsVisibility(data.friends_visibility || 'everyone')
         setOnlineStatusVisibility(data.online_status_visibility || 'friends')
+        setAvailabilityStatus(data.availability_status || 'online')
         setLocationVisibility(data.location_visibility || 'public')
         setWebsiteVisibility(data.website_visibility || 'public')
         setEducationVisibility(data.education_visibility || 'public')
@@ -142,6 +146,7 @@ function ProfileSettingsPage() {
           profile_visibility: profileVisibility,
           friends_visibility: friendsVisibility,
           online_status_visibility: onlineStatusVisibility,
+          availability_status: availabilityStatus,
           location_visibility: locationVisibility,
           website_visibility: websiteVisibility,
           education_visibility: educationVisibility,
@@ -165,6 +170,10 @@ function ProfileSettingsPage() {
       setProfileVisibility(data.profile_visibility)
       setFriendsVisibility(data.friends_visibility)
       setOnlineStatusVisibility(data.online_status_visibility)
+      setAvailabilityStatus(data.availability_status || 'online')
+      window.dispatchEvent(new CustomEvent(availabilityEvent, {
+        detail: { availability: data.availability_status || 'online' },
+      }))
       setLocationVisibility(data.location_visibility)
       setWebsiteVisibility(data.website_visibility)
       setEducationVisibility(data.education_visibility)
@@ -199,9 +208,8 @@ function ProfileSettingsPage() {
         <Link className="brand-link" to="/app" aria-label="QORVEXA feed"><BrandMark /></Link>
         <nav className="network-nav" aria-label="Community navigation">
           <Link className="network-nav-link" to="/app">Feed</Link>
-          <Link className="network-nav-link" to="/app/bookmarks">Bookmarks</Link>
-          <Link className="network-nav-link" to="/app/privacy">Privacy</Link>
-          <Link className="network-nav-link is-active" to="/app/profile">Profile</Link>
+          <Link className="network-nav-link" to="/app/bookmarks">Saved</Link>
+          <AccountMenu />
         </nav>
       </header>
       <AccountRestrictionNotice userId={user.id} />
@@ -263,6 +271,7 @@ function ProfileSettingsPage() {
             <label>Profile visibility<select value={profileVisibility} onChange={(event) => setProfileVisibility(event.target.value)}><option value="public">Public</option><option value="friends">Friends only</option><option value="private">Private</option></select><small>Controls who can view your profile and its posts.</small></label>
             <label>Friends list visibility<select value={friendsVisibility} onChange={(event) => setFriendsVisibility(event.target.value)}><option value="everyone">Everyone</option><option value="friends">Friends only</option><option value="only_me">Only me</option></select></label>
             <label>Online status visibility<select value={onlineStatusVisibility} onChange={(event) => setOnlineStatusVisibility(event.target.value)}><option value="everyone">Everyone</option><option value="friends">Friends only</option><option value="nobody">Nobody</option></select></label>
+            <label>Availability<select value={availabilityStatus} onChange={(event) => setAvailabilityStatus(event.target.value)}><option value="online">Online</option><option value="busy">Busy</option><option value="offline">Appear offline</option></select><small>Your availability is shown only when your online-status privacy settings allow it.</small></label>
             <Link className="network-nav-link" to={`/profile/${encodeURIComponent(username)}`}>View your public profile</Link>
             <button className="member-publish-button" type="submit" disabled={saving}>
               {saving ? <LoaderCircle className="spinner" size={16} /> : <Save size={16} />}

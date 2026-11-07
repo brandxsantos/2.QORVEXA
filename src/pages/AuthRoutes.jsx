@@ -10,6 +10,7 @@ import ProfileSettingsPage from './ProfileSettingsPage.jsx'
 import BookmarksPage from './BookmarksPage.jsx'
 import PrivacyPage from './PrivacyPage.jsx'
 import PublicProfilePage from './PublicProfilePage.jsx'
+import PresenceTracker from '../components/PresenceTracker.jsx'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -51,6 +52,7 @@ function AuthRoutes() {
 
   return (
     <AuthProvider>
+      <PresenceTracker />
       {page}
     </AuthProvider>
   )

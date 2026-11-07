@@ -29,6 +29,7 @@ import NotificationToast from '../components/NotificationToast.jsx'
 import notificationToastText from '../lib/notificationToastText.js'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
+import AccountMenu from '../components/AccountMenu.jsx'
 
 const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility, online_status_visibility'
 const requestFields = 'id, sender_id, receiver_id, status, created_at'
@@ -42,6 +43,7 @@ const notificationFilters = [
   ['comment', 'Comments & replies'],
   ['other', 'Other activity'],
 ]
+const presenceStatusEvent = 'qorvexa:presence-status'
 
 function isNetworkSetupError(error) {
   return ['42P01', '42703', 'PGRST200', 'PGRST202', 'PGRST205', '42883'].includes(error.code)
@@ -69,8 +71,9 @@ function conversationPeerReadAt(conversation, userId) {
     : conversation.user_low_last_read_at
 }
 
-function UserIdentity({ profile, online = false, small = false }) {
+function UserIdentity({ profile, availability, small = false }) {
   const name = profileName(profile)
+  const statusLabel = availability === 'busy' ? 'Busy' : availability === 'online' ? 'Online' : 'Offline'
   const identity = (
     <>
       {profile?.avatar_url
@@ -80,7 +83,7 @@ function UserIdentity({ profile, online = false, small = false }) {
         <strong>{name}</strong>
         {profile?.username && <small>@{profile.username}</small>}
       </span>
-      {online && <i className="network-online-dot" title="Online" aria-label="Online" />}
+      {availability && <i className={`network-online-dot network-online-dot--${availability}`} title={statusLabel} aria-label={statusLabel} />}
     </>
   )
   if (!profile?.username) return <div className={`network-identity${small ? ' network-identity--small' : ''}`}>{identity}</div>
@@ -117,19 +120,20 @@ function NetworkPage() {
   const [presenceError, setPresenceError] = useState('')
   const [workingId, setWorkingId] = useState('')
   const [sending, setSending] = useState(false)
-  const [onlineIds, setOnlineIds] = useState([])
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
   const [notificationToast, setNotificationToast] = useState('')
   const [typingConversationId, setTypingConversationId] = useState('')
   const [reportTarget, setReportTarget] = useState(null)
   const [signingOut, setSigningOut] = useState(false)
+  const [availabilityById, setAvailabilityById] = useState({})
   const messagesEndRef = useRef(null)
   const skipNextMessageScrollRef = useRef(false)
   const typingTimeoutRef = useRef(null)
   const typingSendTimeoutRef = useRef(null)
   const chatChannelRef = useRef(null)
 
-  const selectedConversationId = searchParams.get('conversation')
+  const pathConversationId = location.pathname.match(/^\/app\/messages\/([^/]+)$/)?.[1]
+  const selectedConversationId = pathConversationId || searchParams.get('conversation')
   const currentUserName = user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
   const currentUsername = user.user_metadata?.username
   useEffect(() => {
@@ -139,7 +143,6 @@ function NetworkPage() {
   }, [notificationToast])
 
   const presenceTargetIds = useMemo(() => [...new Set([
-    user.id,
     ...friendships
       .map((friendship) => friendship.user_low === user.id ? friendship.user_high : friendship.user_low)
       .filter((id) => profiles.some((profile) => profile.id === id && profile.online_status_visibility !== 'nobody')),
@@ -153,9 +156,10 @@ function NetworkPage() {
 
   const loadNetwork = useCallback(async () => {
     const client = getSupabaseClient()
-    const [profilesResult, ownProfileResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult] = await Promise.all([
+    const [profilesResult, ownProfileResult, ownSettingsResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult] = await Promise.all([
       client.from('profiles').select(profileFields).neq('id', user.id).order('created_at', { ascending: false }).range(0, 199),
       client.from('profiles').select('username').eq('id', user.id).maybeSingle(),
+      client.rpc('get_own_profile_settings'),
       client.from('friend_requests').select(requestFields).or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
       client.from('friendships').select('user_low, user_high, created_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
       client.from('notifications').select(notificationFields).eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
@@ -165,7 +169,7 @@ function NetworkPage() {
       client.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
     ])
 
-    for (const result of [profilesResult, ownProfileResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult]) {
+    for (const result of [profilesResult, ownProfileResult, ownSettingsResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult]) {
       if (result.error) throw result.error
     }
 
@@ -196,6 +200,7 @@ function NetworkPage() {
 
     setProfiles(Object.values(profileById))
     setOwnUsername(ownProfileResult.data?.username || '')
+    setAvailabilityById((current) => ({ ...current, [user.id]: ownSettingsResult.data?.[0]?.availability_status || 'online' }))
     setDiscoveryLoadedCount(profilesResult.data?.length || 0)
     setHasMoreDiscoverProfiles((profilesResult.data?.length || 0) === 200)
 
@@ -283,50 +288,44 @@ function NetworkPage() {
   }, [handleNetworkLoadError, loadNetwork])
 
   useEffect(() => {
+    function handlePresenceStatus(event) {
+      setPresenceError(event.detail?.message || '')
+    }
+    window.addEventListener(presenceStatusEvent, handlePresenceStatus)
+    return () => window.removeEventListener(presenceStatusEvent, handlePresenceStatus)
+  }, [])
+
+  useEffect(() => {
     const client = getSupabaseClient()
     const presenceChannels = new Map()
     let active = true
 
-    async function updateLastActive() {
-      const { error: updateError } = await client.rpc('touch_last_active')
-      if (updateError) throw updateError
-    }
-
-    function syncOnlineIds() {
+    function syncAvailability() {
       if (!active) return
-      setOnlineIds([...presenceChannels.entries()]
-        .filter(([id, channel]) => id !== user.id && Object.keys(channel.presenceState()).length > 0)
-        .map(([id]) => id))
-    }
-
-    async function syncOwnPresence(channel) {
-      if (document.visibilityState === 'visible') {
-        const trackStatus = await channel.track({ user_id: user.id, online_at: new Date().toISOString() })
-        if (trackStatus !== 'ok') throw new Error(`Online status could not be published (${trackStatus}).`)
-        await updateLastActive()
-      } else {
-        await updateLastActive()
-        const untrackStatus = await channel.untrack()
-        if (untrackStatus !== 'ok') throw new Error('Online status could not be cleared.')
-      }
+      setAvailabilityById((current) => {
+        const next = { ...current }
+        for (const [id, channel] of presenceChannels) {
+          const tracked = Object.values(channel.presenceState()).flat()
+          const person = tracked.find((presence) => presence.user_id === id)
+          next[id] = ['online', 'busy'].includes(person?.availability) ? person.availability : person ? 'online' : 'offline'
+        }
+        return next
+      })
     }
 
     for (const targetId of presenceTargetIds.split(',')) {
-      if (!targetId) continue
+      if (!targetId || targetId === user.id) continue
       const channel = client.channel(`qorvexa-online-presence:${targetId}`, {
-        config: { presence: { key: targetId }, private: true },
+        config: { presence: { key: user.id }, private: true },
       })
       presenceChannels.set(targetId, channel)
       channel
-        .on('presence', { event: 'sync' }, syncOnlineIds)
+        .on('presence', { event: 'sync' }, syncAvailability)
         .subscribe((state, channelError) => {
           if (!active) return
           if (state === 'SUBSCRIBED') {
-            if (targetId === user.id) {
-              syncOwnPresence(channel)
-                .then(() => setPresenceError(''))
-                .catch((presenceError) => setPresenceError(presenceError.message || 'Online status could not be updated.'))
-            }
+            setPresenceError('')
+            syncAvailability()
           } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(state)) {
             setPresenceError(channelError?.message || 'Online presence disconnected.')
           }
@@ -334,32 +333,21 @@ function NetworkPage() {
     }
 
     function handleVisibilityChange() {
-      const ownChannel = presenceChannels.get(user.id)
-      if (!ownChannel) return
-      syncOwnPresence(ownChannel)
-        .then(() => setPresenceError(''))
-        .catch((presenceError) => setPresenceError(presenceError.message || 'Online status could not be updated.'))
+      syncAvailability()
     }
-
-    const heartbeat = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        updateLastActive().catch((presenceError) => setPresenceError(presenceError.message || 'Last active time could not be updated.'))
-      }
-    }, 60_000)
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       active = false
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
       if (typingSendTimeoutRef.current) clearTimeout(typingSendTimeoutRef.current)
-      window.clearInterval(heartbeat)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       for (const channel of presenceChannels.values()) client.removeChannel(channel)
     }
   }, [presenceTargetIds, user.id])
 
   useEffect(() => {
-    if (!selectedConversationId || activeSection !== 'messages') return undefined
+    if (!selectedConversationId || activeSection !== 'messages' || status !== 'ready') return undefined
     let active = true
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
     // Surface load failures from the active conversation's asynchronous requests.
@@ -405,7 +393,7 @@ function NetworkPage() {
       if (chatChannelRef.current === channel) chatChannelRef.current = null
       client.removeChannel(channel)
     }
-  }, [activeSection, handleMessageLoadError, loadMessages, loadNetwork, selectedConversationId, user.id])
+  }, [activeSection, handleMessageLoadError, loadMessages, loadNetwork, selectedConversationId, status, user.id])
 
   useEffect(() => {
     if (skipNextMessageScrollRef.current) {
@@ -482,6 +470,17 @@ function NetworkPage() {
     .map((request) => [request.receiver_id, request]))
   const profileById = useMemo(() => Object.fromEntries(profiles.map((profile) => [profile.id, profile])), [profiles])
   const activeConversation = conversations.find((conversation) => conversation.id === selectedConversationId)
+  const watchedPresenceIds = new Set(presenceTargetIds.split(',').filter(Boolean))
+  const profileAvailability = (profile) => !profile || !watchedPresenceIds.has(profile.id)
+    ? undefined
+    : availabilityById[profile.id] || 'offline'
+  useEffect(() => {
+    if (status === 'ready' && selectedConversationId && !activeConversation) {
+      navigate('/app/messages', { replace: true })
+    } else if (status === 'ready' && !pathConversationId && activeConversation) {
+      navigate(`/app/messages/${encodeURIComponent(activeConversation.id)}`, { replace: true })
+    }
+  }, [activeConversation, navigate, pathConversationId, selectedConversationId, status])
   const unreadMessages = conversations.reduce((total, conversation) => total + conversation.unreadCount, 0)
   const filteredNotifications = notifications.filter((notification) => {
     if (notificationFilter === 'all') return true
@@ -498,7 +497,7 @@ function NetworkPage() {
   const filteredFriends = friendships
     .map((friendship) => profileById[friendship.user_low === user.id ? friendship.user_high : friendship.user_low])
     .filter((profile) => profile && (!query.trim() || `${profile.display_name} ${profile.username}`.toLowerCase().includes(query.trim().toLowerCase())))
-    .sort((first, second) => Number(onlineIds.includes(second.id)) - Number(onlineIds.includes(first.id)))
+    .sort((first, second) => Number(['online', 'busy'].includes(profileAvailability(second))) - Number(['online', 'busy'].includes(profileAvailability(first))))
 
   async function loadMorePeople() {
     try {
@@ -569,8 +568,8 @@ function NetworkPage() {
     try {
       const { data, error: rpcError } = await getSupabaseClient().rpc('start_direct_conversation', { target_user_id: profile.id })
       if (rpcError) throw rpcError
-      navigate(`/app/messages?conversation=${data}`)
       await loadNetwork()
+      navigate(`/app/messages/${encodeURIComponent(data)}`)
     } catch (actionError) {
       setError(actionError.message || 'Could not open this conversation.')
     } finally {
@@ -611,7 +610,7 @@ function NetworkPage() {
   async function openNotification(notification) {
     await markNotificationRead(notification)
     if (notification.type === 'message' && notification.conversation_id) {
-      navigate(`/app/messages?conversation=${notification.conversation_id}`)
+      navigate(`/app/messages/${encodeURIComponent(notification.conversation_id)}`)
       return
     }
 
@@ -783,6 +782,7 @@ function NetworkPage() {
           </Link>
           <Link to="/app/messages" className={`network-nav-link${activeSection === 'messages' ? ' is-active' : ''}`}><MessageSquare size={15} aria-hidden="true" />Messages{unreadMessages > 0 && <span className="network-badge">{unreadMessages}</span>}</Link>
           <Link to="/app/bookmarks" className="network-nav-link"><Bookmark size={15} aria-hidden="true" />Saved</Link>
+          <AccountMenu />
           {ownUsername && <Link to={`/profile/${encodeURIComponent(ownUsername)}`} className="network-nav-link"><UserRound size={15} aria-hidden="true" />My profile</Link>}
         </nav>
         <button className="button button--outline member-signout" type="button" onClick={handleSignOut} disabled={signingOut}>
@@ -806,7 +806,7 @@ function NetworkPage() {
           <div className="network-empty network-empty--setup">
             <span><ShieldCheck size={22} aria-hidden="true" /></span>
             <h2>Friends and messaging need one database migration</h2>
-            <p>Apply the Friends &amp; Messaging, Community Features, Public Profiles, Presence Privacy Fix, and Realtime Social Notifications migrations in Supabase SQL Editor, in order.</p>
+            <p>Apply the Friends &amp; Messaging, Community Features, Public Profiles, Presence Privacy Fix, Realtime Social Notifications, and Availability Presence migrations in Supabase SQL Editor, in order.</p>
             <code>supabase/migrations/20261107020000_friends_messaging.sql</code>
             <code>supabase/migrations/20261107030000_community_features.sql</code>
             <code>supabase/migrations/20261107032000_public_profiles.sql</code>
@@ -824,7 +824,7 @@ function NetworkPage() {
                   const incoming = incomingRequests.find((request) => request.sender_id === profile.id)
                   return (
                     <article className="network-user-card" key={profile.id}>
-                      <UserIdentity profile={profile} online={onlineIds.includes(profile.id)} />
+                      <UserIdentity profile={profile} availability={profileAvailability(profile)} />
                       {profile.bio && <p className="network-user-bio">{profile.bio}</p>}
                       <div className="network-card-actions">
                         {incoming ? (
@@ -854,7 +854,7 @@ function NetworkPage() {
                     const profile = profileById[request.sender_id]
                     return (
                       <div className="network-person-row" key={request.id}>
-                        <UserIdentity profile={profile} online={onlineIds.includes(request.sender_id)} />
+                        <UserIdentity profile={profile} availability={profileAvailability(profile)} />
                         <div className="network-row-actions">
                           <button className="network-icon-action network-icon-action--accept" aria-label="Accept friend request" type="button" disabled={workingId === request.id} onClick={() => respondToRequest(request, true)}><Check size={17} /></button>
                           <button className="network-icon-action" aria-label="Decline friend request" type="button" disabled={workingId === request.id} onClick={() => respondToRequest(request, false)}><X size={17} /></button>
@@ -878,7 +878,7 @@ function NetworkPage() {
                   <div className="network-panel-heading"><h2>Your friends</h2><span>{filteredFriends.length}</span></div>
                   {filteredFriends.length ? filteredFriends.map((profile) => (
                     <div className="network-person-row" key={profile.id}>
-                      <UserIdentity profile={profile} online={onlineIds.includes(profile.id)} />
+                      <UserIdentity profile={profile} availability={profileAvailability(profile)} />
                       <div className="network-row-actions">
                         <button className="network-button network-button--primary" type="button" disabled={workingId === profile.id} onClick={() => openConversation(profile)}><MessageCircle size={14} />Message</button>
                         <button className="network-icon-action" aria-label={`Remove ${profileName(profile)} from friends`} type="button" onClick={() => removeFriend(profile)}><X size={17} /></button>
@@ -962,8 +962,8 @@ function NetworkPage() {
                       className={`network-conversation-row${conversation.id === selectedConversationId ? ' is-selected' : ''}`}
                       key={conversation.id}
                     >
-                      <UserIdentity profile={conversation.peer} online={onlineIds.includes(conversation.peerId)} small />
-                      <Link className="network-conversation-summary" to={`/app/messages?conversation=${conversation.id}`}>
+                      <UserIdentity profile={conversation.peer} availability={profileAvailability(conversation.peer)} small />
+                      <Link className="network-conversation-summary" to={`/app/messages/${encodeURIComponent(conversation.id)}`}>
                         <span>{conversation.lastMessage?.content || 'Start a conversation'}</span>
                         {conversation.unreadCount > 0 && <b>{conversation.unreadCount}</b>}
                       </Link>
@@ -977,8 +977,8 @@ function NetworkPage() {
                     <>
                       <header className="network-chat-header">
                         <Link className="network-chat-back" to="/app/messages" aria-label="Back to conversations"><ArrowLeft size={17} /></Link>
-                        <UserIdentity profile={activeConversation.peer} online={onlineIds.includes(activeConversation.peerId)} small />
-                        <span className="network-chat-status">{onlineIds.includes(activeConversation.peerId) ? 'Online' : 'Offline'}</span>
+                        <UserIdentity profile={activeConversation.peer} availability={profileAvailability(activeConversation.peer)} small />
+                        {profileAvailability(activeConversation.peer) && <span className="network-chat-status">{profileAvailability(activeConversation.peer) === 'busy' ? 'Busy' : profileAvailability(activeConversation.peer) === 'online' ? 'Online' : 'Offline'}</span>}
                       </header>
                       <div className="network-message-list">
                         {hasMoreMessages && <button className="network-load-older" type="button" onClick={loadOlderMessages} disabled={loadingOlderMessages}>{loadingOlderMessages ? 'Loading…' : 'Load older messages'}</button>}
