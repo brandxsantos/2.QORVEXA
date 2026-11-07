@@ -47,6 +47,8 @@ QORVEXA is a social platform in development. The responsive landing page, Supaba
 
    `supabase/migrations/20261108000500_availability_presence.sql` (apply once after Realtime Social Notifications; adds persistent Online/Busy/Offline availability)
 
+   `supabase/migrations/20261108010000_repair_online_presence_policies.sql` (apply after all migrations above to replace any stale global-topic presence policies with privacy-aware per-member policies)
+
 5. In Supabase Authentication settings, enable email/password sign-in and email confirmations. Add the local and production `/app` and `/reset-password` URLs to the allowed redirect URLs (for local development, include both `localhost:5173` and `127.0.0.1:5173`).
 
 6. Create an account and verify its email. In Authentication → Users, copy the account UUID, replace `null::uuid` in `supabase/setup/bootstrap_super_admin.sql` with that UUID, then run that script once in the SQL Editor. The bootstrap script writes a security audit entry and cannot be run from the website.

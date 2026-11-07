@@ -27,6 +27,8 @@ grant execute on function public.can_view_online_status(uuid) to authenticated;
 
 drop policy if exists "Members can view presence allowed by profile privacy" on realtime.messages;
 drop policy if exists "Members can publish only their own QORVEXA presence" on realtime.messages;
+drop policy if exists "Members can view authorized per-member presence" on realtime.messages;
+drop policy if exists "Members can publish only their own per-member presence" on realtime.messages;
 
 create policy "Members can view authorized per-member presence"
   on realtime.messages for select to authenticated
