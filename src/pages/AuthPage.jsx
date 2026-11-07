@@ -221,7 +221,7 @@ if (data.session) {
             </label>
                         <label className="form-field">
               <span>Gender <small>(Optional)</small></span>
-              <select name="gender" defaultValue="">
+              <select className="profile-detail-control" name="gender" defaultValue="">
                 <option value="">Prefer not to specify</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
@@ -244,6 +244,7 @@ if (data.session) {
             <label className="form-field">
               <span>Birthdate <small>(Optional)</small></span>
               <input
+                className="profile-detail-control"
                 type="date"
                 name="birthdate"
                 max={new Date().toLocaleDateString('en-CA')}
