@@ -1,4 +1,4 @@
-import AccountMenu from '../components/AccountMenu.jsx'
+﻿import AccountMenu from '../components/AccountMenu.jsx'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import {
@@ -87,6 +87,9 @@ function PublicProfilePage() {
   const [notificationToast, setNotificationToast] = useState('')
   const [reportTarget, setReportTarget] = useState(null)
   const [signingOut, setSigningOut] = useState(false)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const accountMenuRef = useRef(null)
+  const avatarInputRef = useRef(null)
   const profileLoadIdRef = useRef(0)
   async function handleSignOut() {
   setError('')
@@ -267,7 +270,7 @@ function PublicProfilePage() {
       })
       .subscribe((channelStatus) => {
         if (active && (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT')) {
-          setError('Live notification counts are temporarily unavailable. Reconnecting…')
+          setError('Live notification counts are temporarily unavailable. Reconnectingâ€¦')
         }
       })
     return () => {
@@ -612,12 +615,64 @@ function PublicProfilePage() {
     }
   }
 
+  function openAccountMenu() {
+    if (!accountMenuRef.current) return
+    accountMenuRef.current.open = true
+    accountMenuRef.current.querySelector('summary')?.focus()
+  }
+
+  async function handleAvatarFileChange(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
+    if (!allowedTypes.includes(file.type) || file.size > 8 * 1024 * 1024) {
+      setError('Choose a JPG, PNG, WebP, or GIF image under 8 MB.')
+      event.target.value = ''
+      return
+    }
+
+    setAvatarUploading(true)
+    setError('')
+    setNotice('')
+
+    try {
+      const client = getSupabaseClient()
+      const path = `${user.id}/avatars/${crypto.randomUUID()}`
+
+      const { error: uploadError } = await client.storage
+        .from('qorvexa-media')
+        .upload(path, file, { contentType: file.type, upsert: false })
+
+      if (uploadError) throw uploadError
+
+      const { error: updateError } = await client
+        .from('profiles')
+        .update({ avatar_url: path })
+        .eq('id', user.id)
+
+      if (updateError) {
+        await client.storage.from('qorvexa-media').remove([path])
+        throw updateError
+      }
+
+      setProfile((current) => current ? { ...current, avatar_url: path } : current)
+      setNotice('Profile picture updated successfully.')
+    } catch (uploadError) {
+      setError(uploadError.message || 'Your profile picture could not be uploaded.')
+    } finally {
+      setAvatarUploading(false)
+      event.target.value = ''
+    }
+  }
+
   const profileAction = isPublicPreview
     ? <Link className="network-button network-button--primary" to={`/profile/${encodeURIComponent(profile.username)}`}><ArrowLeft size={15} />Exit public preview</Link>
     : !user
       ? <Link className="network-button network-button--primary" to="/login"><UserPlus size={15} />Sign in to connect</Link>
       : isOwner
-      ? <Link className="network-button network-button--primary" to="/app/profile"><Shield size={15} />Edit profile</Link>
+      ? <button type="button" className="network-button network-button--primary" onClick={openAccountMenu}><Shield size={15} />Edit profile</button>
       : friendship.accepted
         ? <>
           <button className="network-button network-button--primary" type="button" onClick={messageFriend} disabled={working}><MessageCircle size={15} />Message</button>
@@ -629,7 +684,7 @@ function PublicProfilePage() {
             <button className="network-button" type="button" onClick={() => respondToFriendRequest(false)} disabled={working}>Decline</button>
           </>
           : friendship.outgoing
-            ? <button className="network-button" type="button" onClick={cancelFriendRequest} disabled={working}>Request sent · Cancel</button>
+            ? <button className="network-button" type="button" onClick={cancelFriendRequest} disabled={working}>Request sent Â· Cancel</button>
             : <button className="network-button network-button--primary" type="button" onClick={sendFriendRequest} disabled={working}><UserPlus size={15} />Add Friend</button>
 
   const tabs = [
@@ -654,14 +709,14 @@ function PublicProfilePage() {
     <Link className="network-nav-link" to="/app/friends">Friends</Link>
     <Link className="network-nav-link" to="/app/notifications"><Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}</Link>
     <Link className="network-nav-link" to="/app/messages"><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessageCount > 0 && <span className="network-badge">{unreadMessageCount}</span>}</Link>
-    <AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
+    <AccountMenu menuRef={accountMenuRef} onSignOut={handleSignOut} signingOut={signingOut} />
   </> : <><Link className="network-nav-link" to="/login">Sign in</Link><Link className="network-nav-link" to="/signup">Join QORVEXA</Link></>}
 </nav>
       </header>
 
       <section className="public-profile-shell">
         {loading || authLoading ? (
-          <div className="member-feed-state" role="status"><LoaderCircle className="spinner" size={20} />Loading profile…</div>
+          <div className="member-feed-state" role="status"><LoaderCircle className="spinner" size={20} />Loading profileâ€¦</div>
         ) : !profile ? (
           <div className="public-profile-not-found">
             <AlertCircle size={22} />
@@ -699,7 +754,16 @@ function PublicProfilePage() {
                 <div className="public-profile-actions">
                   {profileAction}
                   {isOwner && <>
-                    <Link className="network-button" to="/app/profile#profile-picture"><Camera size={15} />Edit profile picture</Link>
+                    <button type="button" className="network-button" onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading}>
+                      <Camera size={15} />{avatarUploading ? 'Uploading picture...' : 'Edit profile picture'}
+                    </button>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      hidden
+                      onChange={handleAvatarFileChange}
+                    />
                     <Link className="network-button" to="/app/profile#cover-photo"><Camera size={15} />Edit cover photo</Link>
                   </>}
                   {!isOwner && !isProfileOwner && user && <>
@@ -778,7 +842,7 @@ function PublicProfilePage() {
                                 <div><p>{commentUrl ? <Link to={commentUrl}><strong>{commentName}</strong></Link> : <strong>{commentName}</strong>} {comment.content}</p>
                                   {user && !(isPublicPreview && isProfileOwner) && <button type="button" onClick={() => setReplyTarget(replyTarget === comment.id ? '' : comment.id)}>Reply</button>}
                                   {replyTarget === comment.id && user && !(isPublicPreview && isProfileOwner) && <form className="member-inline-comment-form" onSubmit={(event) => submitComment(event, post.id, comment.id)}>
-                                    <input maxLength={1000} value={replyDrafts[comment.id] || ''} onChange={(event) => setReplyDrafts((current) => ({ ...current, [comment.id]: event.target.value }))} placeholder={`Reply to ${commentName}…`} aria-label={`Reply to ${commentName}`} />
+                                    <input maxLength={1000} value={replyDrafts[comment.id] || ''} onChange={(event) => setReplyDrafts((current) => ({ ...current, [comment.id]: event.target.value }))} placeholder={`Reply to ${commentName}â€¦`} aria-label={`Reply to ${commentName}`} />
                                     <button type="submit" disabled={working || !replyDrafts[comment.id]?.trim()}>Reply</button>
                                   </form>}
                                 </div>
@@ -797,7 +861,7 @@ function PublicProfilePage() {
                             </div>
                           })}
                           {user && !(isPublicPreview && isProfileOwner) && <form className="member-inline-comment-form" onSubmit={(event) => submitComment(event, post.id)}>
-                            <input maxLength={1000} value={commentDrafts[post.id] || ''} onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))} placeholder="Write a comment…" aria-label="Write a comment" />
+                            <input maxLength={1000} value={commentDrafts[post.id] || ''} onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))} placeholder="Write a commentâ€¦" aria-label="Write a comment" />
                             <button type="submit" disabled={working || !commentDrafts[post.id]?.trim()}>Comment</button>
                           </form>}
                         </div>}
@@ -808,7 +872,7 @@ function PublicProfilePage() {
             )}
             {['posts', 'photos', 'activity'].includes(activeTab) && loadedPostCount < postCount && (
               <button className="public-profile-load-more" type="button" onClick={loadMorePosts} disabled={loadingMorePosts}>
-                {loadingMorePosts ? <><LoaderCircle className="spinner" size={15} />Loading…</> : 'Load more posts'}
+                {loadingMorePosts ? <><LoaderCircle className="spinner" size={15} />Loadingâ€¦</> : 'Load more posts'}
               </button>
             )}
 
@@ -833,7 +897,7 @@ function PublicProfilePage() {
                   ? <div className="member-feed-empty"><span><Users size={20} /></span><h2>Friends list is private</h2><p>{profile.display_name} has limited who can see this list.</p></div>
                   : friends.length
                     ? <>
-                      <label className="public-profile-friend-search"><Users size={15} /><input value={friendSearch} onChange={(event) => setFriendSearch(event.target.value)} placeholder="Search friends…" aria-label="Search friends" /></label>
+                      <label className="public-profile-friend-search"><Users size={15} /><input value={friendSearch} onChange={(event) => setFriendSearch(event.target.value)} placeholder="Search friendsâ€¦" aria-label="Search friends" /></label>
                       <div className="public-profile-friends-grid">{friends.filter((friend) => `${friend.display_name} ${friend.username}`.toLowerCase().includes(friendSearch.trim().toLowerCase())).map((friend) => (
                       <Link className="public-profile-friend-card" to={`/profile/${encodeURIComponent(friend.username)}`} key={friend.id}>
                         <span className="public-profile-friend-avatar">{friend.avatar_url ? <ProtectedMediaImage path={friend.avatar_url} alt="" fallback={profileInitials(friend)} /> : profileInitials(friend)}</span>
@@ -879,3 +943,4 @@ function PublicProfilePage() {
 }
 
 export default PublicProfilePage
+
