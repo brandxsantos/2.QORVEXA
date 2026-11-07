@@ -49,11 +49,26 @@ function PresenceTracker() {
         document.visibilityState === 'visible' &&
         availability !== 'offline'
       ) {
-        const status = await channel.track({
-          user_id: user.id,
-          availability,
-          online_at: new Date().toISOString(),
-        })
+       const presencePayload = {
+  user_id: user.id,
+  availability,
+  online_at: new Date().toISOString(),
+}
+
+console.log('[QORVEXA Presence Debug] Publishing:', {
+  userId: user.id,
+  availability,
+  topic: `qorvexa-online-presence:${user.id}`,
+  payload: presencePayload,
+})
+
+const status = await channel.track(presencePayload)
+
+console.log('[QORVEXA Presence Debug] Track result:', {
+  userId: user.id,
+  status,
+  topic: `qorvexa-online-presence:${user.id}`,
+})
 
         if (status !== 'ok') {
           throw new Error(
