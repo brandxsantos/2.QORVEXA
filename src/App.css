@@ -6421,3 +6421,31 @@
     flex-wrap: wrap;
   }
 }
+/* QORVEXA - Profile gender and birthdate controls only */
+.settings-form .profile-detail-control {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 14px;
+  color: #f1f5f9;
+  background-color: #171d2b;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  font: inherit;
+  color-scheme: dark;
+}
+
+.settings-form .profile-detail-control:focus {
+  outline: none;
+  border-color: #7c8cff;
+  box-shadow: 0 0 0 2px rgba(124, 140, 255, 0.15);
+}
+
+.settings-form .profile-detail-control option {
+  color: #f1f5f9;
+  background-color: #171d2b;
+}
+
+.settings-form input.profile-detail-control[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(1);
+}

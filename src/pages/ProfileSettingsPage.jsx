@@ -359,7 +359,7 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
             <label>Bio<textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={280} rows={4} placeholder="A little about you…" /><small>{bio.length}/280</small></label>
             <label>
   Gender
-  <select value={gender} onChange={(event) => setGender(event.target.value)}>
+  <select className="profile-detail-control" value={gender} onChange={(event) => setGender(event.target.value)}>
     <option value="">Prefer not to specify</option>
     <option value="Male">Male</option>
     <option value="Female">Female</option>
@@ -383,7 +383,7 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
 
 <label>
   Gender visibility
-  <select value={genderVisibility} onChange={(event) => setGenderVisibility(event.target.value)}>
+  <select className="profile-detail-control" value={genderVisibility} onChange={(event) => setGenderVisibility(event.target.value)}>
     <option value="public">Everyone</option>
     <option value="friends">Friends only</option>
     <option value="only_me">Only me</option>
@@ -393,6 +393,7 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
 <label>
   Birthdate
   <input
+    className="profile-detail-control"
     type="date"
     value={birthdate}
     max={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)}
@@ -402,7 +403,7 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
 
 <label>
   Birthdate visibility
-  <select value={birthdateVisibility} onChange={(event) => setBirthdateVisibility(event.target.value)}>
+  <select className="profile-detail-control" value={birthdateVisibility} onChange={(event) => setBirthdateVisibility(event.target.value)}>
     <option value="public">Everyone</option>
     <option value="friends">Friends only</option>
     <option value="only_me">Only me</option>
