@@ -6682,3 +6682,28 @@
   }
 }
 
+
+/* Member profile action buttons only */
+.member-profile-links button.member-home-link {
+  display: inline-block;
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #00d9f5;
+  font-family: inherit;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.member-profile-links button.member-home-link:hover {
+  color: #8af4ff;
+}
+
+.member-profile-links button.member-home-link:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}

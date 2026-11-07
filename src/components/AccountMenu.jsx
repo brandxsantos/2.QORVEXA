@@ -1,8 +1,8 @@
-
+﻿
 import { Bookmark, ChevronDown, LogOut, Settings2, Shield } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 
-function AccountMenu({ onSignOut, signingOut }) {
+function AccountMenu({ onSignOut, signingOut, menuRef }) {
   const { pathname } = useLocation()
   const profileActive = pathname === '/app/profile'
   const privacyActive = pathname === '/app/privacy'
@@ -10,7 +10,7 @@ function AccountMenu({ onSignOut, signingOut }) {
   const active = profileActive || privacyActive || bookmarksActive
 
   return (
-    <details className="network-account-menu">
+    <details ref={menuRef} className="network-account-menu">
       <summary className={`network-nav-link${active ? ' is-active' : ''}`} aria-label="Account settings">
         <Settings2 size={15} aria-hidden="true" />
         Account
@@ -43,3 +43,4 @@ function AccountMenu({ onSignOut, signingOut }) {
 }
 
 export default AccountMenu
+

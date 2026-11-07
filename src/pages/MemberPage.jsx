@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
   Bell,
@@ -82,6 +82,60 @@ function MemberPage() {
   const [submittingComment, setSubmittingComment] = useState(null)
   const [deletingComment, setDeletingComment] = useState(null)
   const [reportTarget, setReportTarget] = useState(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const accountMenuRef = useRef(null)
+  const avatarInputRef = useRef(null)
+
+  function openAccountMenu() {
+    if (!accountMenuRef.current) return
+    accountMenuRef.current.open = true
+    accountMenuRef.current.querySelector('summary')?.focus()
+  }
+
+  async function handleAvatarFileChange(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
+    if (!allowedTypes.includes(file.type) || file.size > 8 * 1024 * 1024) {
+      setError('Choose a JPG, PNG, WebP, or GIF image under 8 MB.')
+      event.target.value = ''
+      return
+    }
+
+    setAvatarUploading(true)
+    setError('')
+
+    try {
+      const client = getSupabaseClient()
+      const path = `${user.id}/avatars/${crypto.randomUUID()}`
+
+      const { error: uploadError } = await client.storage
+        .from('qorvexa-media')
+        .upload(path, file, { contentType: file.type, upsert: false })
+
+      if (uploadError) throw uploadError
+
+      const { error: updateError } = await client
+        .from('profiles')
+        .update({ avatar_url: path })
+        .eq('id', user.id)
+
+      if (updateError) {
+        await client.storage.from('qorvexa-media').remove([path])
+        throw updateError
+      }
+
+      setMemberProfile((current) => current ? { ...current, avatar_url: path } : current)
+      setNotificationToast('Profile picture updated.')
+    } catch (uploadError) {
+      setError(uploadError.message || 'Your profile picture could not be uploaded.')
+    } finally {
+      setAvatarUploading(false)
+      event.target.value = ''
+    }
+  }
   const name = memberProfile?.display_name || user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
   const username = memberProfile?.username
 
@@ -246,7 +300,7 @@ function MemberPage() {
       })
       .subscribe((channelStatus) => {
         if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
-          setError('Live feed updates are temporarily unavailable. Reconnecting…')
+          setError('Live feed updates are temporarily unavailable. Reconnectingâ€¦')
         }
       })
 
@@ -414,7 +468,7 @@ function MemberPage() {
           <Link to="/app/notifications" className="network-nav-link"><Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}</Link>
           <Link to="/app/messages" className="network-nav-link"><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessageCount > 0 && <span className="network-badge">{unreadMessageCount}</span>}</Link>
       {username && <Link to={`/profile/${encodeURIComponent(username)}`} className="network-nav-link"><Users size={15} aria-hidden="true" />Profile</Link>}
-<AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
+<AccountMenu menuRef={accountMenuRef} onSignOut={handleSignOut} signingOut={signingOut} />
         </nav>
    
       </header>
@@ -432,7 +486,22 @@ function MemberPage() {
             <p className="member-profile-email">{user.email}</p>
             {memberProfile?.bio && <p className="member-profile-bio">{memberProfile.bio}</p>}
             <nav className="member-profile-links" aria-label="Account settings">
-              <Link to="/app/profile" className="member-home-link">Edit profile</Link>
+                            <button type="button" className="member-home-link" onClick={openAccountMenu}>Edit Profile</button>
+              <button
+                type="button"
+                className="member-home-link"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarUploading}
+              >
+                {avatarUploading ? 'Uploading picture...' : 'Edit Profile Picture'}
+              </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                hidden
+                onChange={handleAvatarFileChange}
+              />
               <Link to="/app/privacy" className="member-home-link">Privacy &amp; blocked accounts</Link>
             </nav>
             <div className="member-profile-divider" />
@@ -477,7 +546,7 @@ function MemberPage() {
           )}
 
           {feedStatus === 'loading' ? (
-            <div className="member-feed-state" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" /> Loading community posts…</div>
+            <div className="member-feed-state" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" /> Loading community postsâ€¦</div>
           ) : feedStatus === 'ready' && posts.length === 0 ? (
             <div className="member-feed-empty">
               <span><Users size={20} aria-hidden="true" /></span>
@@ -512,7 +581,7 @@ function MemberPage() {
                       {post.media_path && <Link to={`/profile/${encodeURIComponent(author?.username || username || '')}?post=${post.id}`} className="member-post-media-link"><ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to post" loading="lazy" /></Link>}
                       <div className="member-post-footer">
                         <button className={`member-comments-toggle${likedPostIds.has(post.id) ? ' is-active' : ''}`} type="button" onClick={() => toggleLike(post)} disabled={postActionId === post.id} aria-pressed={likedPostIds.has(post.id)}>
-                          <span aria-hidden="true">{likedPostIds.has(post.id) ? '♥' : '♡'}</span><span>{likeCounts[post.id] || 0} likes</span>
+                          <span aria-hidden="true">{likedPostIds.has(post.id) ? 'â™¥' : 'â™¡'}</span><span>{likeCounts[post.id] || 0} likes</span>
                         </button>
                         <button className={`member-comments-toggle${bookmarkedPostIds.has(post.id) ? ' is-active' : ''}`} type="button" onClick={() => toggleBookmark(post)} disabled={postActionId === post.id} aria-pressed={bookmarkedPostIds.has(post.id)}>
                           <Bookmark size={14} aria-hidden="true" /><span>{bookmarkedPostIds.has(post.id) ? 'Saved' : 'Save'}</span>
@@ -527,7 +596,7 @@ function MemberPage() {
                       {commentsOpen[post.id] && (
                         <section className="member-comments" aria-label="Comments">
                           {commentsStatus[post.id] === 'loading' ? (
-                            <div className="member-comments-state" role="status"><LoaderCircle size={15} className="spinner" aria-hidden="true" /> Loading comments…</div>
+                            <div className="member-comments-state" role="status"><LoaderCircle size={15} className="spinner" aria-hidden="true" /> Loading commentsâ€¦</div>
                           ) : commentsStatus[post.id] === 'setup' ? (
                             <div className="member-comments-error" role="alert">
                               <strong>Comments need one database migration.</strong>
@@ -567,7 +636,7 @@ function MemberPage() {
                                             {comment.author_id !== user.id && <button type="button" onClick={() => setReportTarget({ reportedUserId: comment.author_id, type: 'comment', id: comment.id })}><Flag size={12} aria-hidden="true" /> Report</button>}
                                             {comment.author_id === user.id && (
                                               <button type="button" onClick={() => handleDeleteComment(comment)} disabled={deletingComment === comment.id}>
-                                                <Trash2 size={12} aria-hidden="true" /> {deletingComment === comment.id ? 'Deleting…' : 'Delete'}
+                                                <Trash2 size={12} aria-hidden="true" /> {deletingComment === comment.id ? 'Deletingâ€¦' : 'Delete'}
                                               </button>
                                             )}
                                           </div>
@@ -577,11 +646,11 @@ function MemberPage() {
                                                 aria-label={`Reply to ${commentName}`}
                                                 maxLength={1000}
                                                 onChange={(event) => setReplyDrafts((current) => ({ ...current, [comment.id]: event.target.value }))}
-                                                placeholder={`Reply to ${commentName}…`}
+                                                placeholder={`Reply to ${commentName}â€¦`}
                                                 value={replyDrafts[comment.id] || ''}
                                               />
                                               <button type="submit" disabled={!replyDrafts[comment.id]?.trim() || Boolean(submittingComment)}>
-                                                {submittingComment === `${post.id}:${comment.id}` ? 'Sending…' : 'Reply'}
+                                                {submittingComment === `${post.id}:${comment.id}` ? 'Sendingâ€¦' : 'Reply'}
                                               </button>
                                             </form>
                                           )}
@@ -608,7 +677,7 @@ function MemberPage() {
                                               {reply.author_id === user.id && (
                                                 <div className="member-comment-actions">
                                                   <button type="button" onClick={() => handleDeleteComment(reply)} disabled={deletingComment === reply.id}>
-                                                    <Trash2 size={12} aria-hidden="true" /> {deletingComment === reply.id ? 'Deleting…' : 'Delete'}
+                                                    <Trash2 size={12} aria-hidden="true" /> {deletingComment === reply.id ? 'Deletingâ€¦' : 'Delete'}
                                                   </button>
                                                 </div>
                                               )}
@@ -625,11 +694,11 @@ function MemberPage() {
                                   aria-label="Write a comment"
                                   maxLength={1000}
                                   onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))}
-                                  placeholder="Write a comment…"
+                                  placeholder="Write a commentâ€¦"
                                   value={commentDrafts[post.id] || ''}
                                 />
                                 <button type="submit" disabled={!commentDrafts[post.id]?.trim() || Boolean(submittingComment)}>
-                                  {submittingComment === `${post.id}:root` ? 'Sending…' : 'Comment'}
+                                  {submittingComment === `${post.id}:root` ? 'Sendingâ€¦' : 'Comment'}
                                 </button>
                               </form>
                               {(commentsByPost[post.id] || []).length === 0 && (
@@ -649,7 +718,7 @@ function MemberPage() {
       </div>
 
       <footer className="member-feed-footer">
-        <span>QORVEXA <span>·</span> Connect Beyond Limits.</span>
+        <span>QORVEXA <span>Â·</span> Connect Beyond Limits.</span>
         <span>Posts are visible to signed-in members.</span>
       </footer>
       {reportTarget && <ReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />}
@@ -658,3 +727,4 @@ function MemberPage() {
 }
 
 export default MemberPage
+
