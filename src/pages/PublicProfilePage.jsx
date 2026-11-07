@@ -1,3 +1,4 @@
+import AccountMenu from '../components/AccountMenu.jsx'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import {
@@ -631,15 +632,16 @@ function PublicProfilePage() {
       {user && <NotificationToast message={notificationToast} onDismiss={() => setNotificationToast('')} />}
       <header className="member-header member-feed-header">
         <Link className="brand-link" to={user ? '/app' : '/'} aria-label="QORVEXA home"><BrandMark /></Link>
-        <nav className="network-nav" aria-label="Community navigation">
-          {user ? <>
-            <Link className="network-nav-link" to="/app">Feed</Link>
-            <Link className="network-nav-link" to="/app/discover">Discover</Link>
-            <Link className="network-nav-link" to="/app/friends">Friends</Link>
-            <Link className="network-nav-link" to="/app/notifications"><Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}</Link>
-            <Link className="network-nav-link" to="/app/messages"><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessageCount > 0 && <span className="network-badge">{unreadMessageCount}</span>}</Link>
-          </> : <><Link className="network-nav-link" to="/login">Sign in</Link><Link className="network-nav-link" to="/signup">Join QORVEXA</Link></>}
-        </nav>
+       <nav className="network-nav" aria-label="Community navigation">
+  {user ? <>
+    <Link className="network-nav-link" to="/app">Feed</Link>
+    <Link className="network-nav-link" to="/app/discover">Discover</Link>
+    <Link className="network-nav-link" to="/app/friends">Friends</Link>
+    <Link className="network-nav-link" to="/app/notifications"><Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}</Link>
+    <Link className="network-nav-link" to="/app/messages"><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessageCount > 0 && <span className="network-badge">{unreadMessageCount}</span>}</Link>
+    <AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
+  </> : <><Link className="network-nav-link" to="/login">Sign in</Link><Link className="network-nav-link" to="/signup">Join QORVEXA</Link></>}
+</nav>
       </header>
 
       <section className="public-profile-shell">
