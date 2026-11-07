@@ -814,7 +814,15 @@ function NetworkPage() {
         </div>
 
         {error && <div className="network-error" role="alert"><AlertCircle size={17} aria-hidden="true" /><span>{error}</span><button type="button" onClick={refresh}>Retry</button></div>}
-        {presenceError && <div className="network-presence-warning" role="status"><AlertCircle size={15} aria-hidden="true" /><span>Live online status is temporarily unavailable. Apply <code>supabase/migrations/20261108010000_repair_online_presence_policies.sql</code> in Supabase SQL Editor after the earlier migrations, then reload. If it is already applied, check the browser console for the Realtime or RPC error. Other network features should still work.</span></div>}
+       {presenceError && (
+  <div className="network-presence-warning" role="status">
+    <AlertCircle size={15} aria-hidden="true" />
+    <span>
+      Live online status is temporarily unavailable. Your friends and
+      messaging features can still work. Please try again later.
+    </span>
+  </div>
+)}
 
         {status === 'setup' ? (
           <div className="network-empty network-empty--setup">
