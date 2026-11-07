@@ -71,7 +71,7 @@ function conversationPeerReadAt(conversation, userId) {
     : conversation.user_low_last_read_at
 }
 
-function UserIdentity({ profile, availability, small = false }) {
+function UserIdentity({ profile, availability, small = false, onClick }) {
   const name = profileName(profile)
   const statusLabel = availability === 'busy' ? 'Busy' : availability === 'online' ? 'Online' : 'Offline'
   const identity = (
@@ -88,7 +88,7 @@ function UserIdentity({ profile, availability, small = false }) {
   )
   if (!profile?.username) return <div className={`network-identity${small ? ' network-identity--small' : ''}`}>{identity}</div>
   return (
-    <Link className={`network-identity network-identity-button${small ? ' network-identity--small' : ''}`} to={`/profile/${encodeURIComponent(profile.username)}`} aria-label={`View ${name}'s profile`}>
+    <Link className={`network-identity network-identity-button${small ? ' network-identity--small' : ''}`} to={`/profile/${encodeURIComponent(profile.username)}`} aria-label={`View ${name}'s profile`} onClick={onClick}>
       {identity}
     </Link>
   )
@@ -961,9 +961,10 @@ function NetworkPage() {
                     <div
                       className={`network-conversation-row${conversation.id === selectedConversationId ? ' is-selected' : ''}`}
                       key={conversation.id}
+                      onClick={() => navigate(`/app/messages/${encodeURIComponent(conversation.id)}`)}
                     >
-                      <UserIdentity profile={conversation.peer} availability={profileAvailability(conversation.peer)} small />
-                      <Link className="network-conversation-summary" to={`/app/messages/${encodeURIComponent(conversation.id)}`}>
+                      <UserIdentity profile={conversation.peer} availability={profileAvailability(conversation.peer)} small onClick={(event) => event.stopPropagation()} />
+                      <Link className="network-conversation-summary" to={`/app/messages/${encodeURIComponent(conversation.id)}`} onClick={(event) => event.stopPropagation()}>
                         <span>{conversation.lastMessage?.content || 'Start a conversation'}</span>
                         {conversation.unreadCount > 0 && <b>{conversation.unreadCount}</b>}
                       </Link>

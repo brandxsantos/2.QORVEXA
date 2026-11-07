@@ -4969,12 +4969,14 @@
 }
 
 .network-conversation-row {
+  position: relative;
   display: grid;
   gap: 0.35rem;
   padding: 0.7rem 0.8rem;
   border-left: 2px solid transparent;
   color: inherit;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .network-conversation-row:hover,
