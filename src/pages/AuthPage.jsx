@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import DatePicker from '../components/DatePicker.jsx'
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import AuthLayout from '../components/auth/AuthLayout.jsx'
@@ -243,12 +244,7 @@ if (data.session) {
 
             <label className="form-field">
               <span>Birthdate <small>(Optional)</small></span>
-              <input
-                className="profile-detail-control"
-                type="date"
-                name="birthdate"
-                max={new Date().toLocaleDateString('en-CA')}
-              />
+              <DatePicker name="birthdate" />
             </label>
 
             <label className="form-field">

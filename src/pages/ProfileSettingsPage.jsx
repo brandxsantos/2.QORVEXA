@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import DatePicker from '../components/DatePicker.jsx'
 import { AlertCircle, LoaderCircle, Save, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/useAuth.js'
@@ -392,13 +393,7 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
 
 <label>
   Birthdate
-  <input
-    className="profile-detail-control"
-    type="date"
-    value={birthdate}
-    max={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)}
-    onChange={(event) => setBirthdate(event.target.value)}
-  />
+  <DatePicker value={birthdate} onChange={setBirthdate} />
 </label>
 
 <label>
