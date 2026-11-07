@@ -327,6 +327,7 @@ function NetworkPage() {
             setPresenceError('')
             syncAvailability()
           } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(state)) {
+            console.error('Online presence channel failed.', channelError)
             setPresenceError(channelError?.message || 'Online presence disconnected.')
           }
         })
@@ -800,7 +801,7 @@ function NetworkPage() {
         </div>
 
         {error && <div className="network-error" role="alert"><AlertCircle size={17} aria-hidden="true" /><span>{error}</span><button type="button" onClick={refresh}>Retry</button></div>}
-        {presenceError && <div className="network-presence-warning" role="status"><AlertCircle size={15} aria-hidden="true" /><span>Live online status is temporarily unavailable. Other network features should still work.</span></div>}
+        {presenceError && <div className="network-presence-warning" role="status"><AlertCircle size={15} aria-hidden="true" /><span>Live online status is temporarily unavailable. Apply <code>supabase/migrations/20261108010000_repair_online_presence_policies.sql</code> in Supabase SQL Editor after the earlier migrations, then reload. If it is already applied, check the browser console for the Realtime or RPC error. Other network features should still work.</span></div>}
 
         {status === 'setup' ? (
           <div className="network-empty network-empty--setup">
@@ -813,6 +814,7 @@ function NetworkPage() {
             <code>supabase/migrations/20261107035000_presence_privacy_fix.sql</code>
             <code>supabase/migrations/20261107040000_realtime_social_notifications.sql</code>
             <code>supabase/migrations/20261108000500_availability_presence.sql</code>
+            <code>supabase/migrations/20261108010000_repair_online_presence_policies.sql</code>
           </div>
         ) : status === 'loading' ? (
           <div className="network-loading" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" />Loading your network…</div>
