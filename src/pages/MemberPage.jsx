@@ -83,7 +83,7 @@ function MemberPage() {
   const [deletingComment, setDeletingComment] = useState(null)
   const [reportTarget, setReportTarget] = useState(null)
   const name = memberProfile?.display_name || user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
-  const username = memberProfile?.username || user.user_metadata?.username
+  const username = memberProfile?.username
 
   useEffect(() => { commentsOpenRef.current = commentsOpen }, [commentsOpen])
 

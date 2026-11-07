@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import {
   AlertCircle,
@@ -84,6 +84,7 @@ function PublicProfilePage() {
   const [unreadMessageCount, setUnreadMessageCount] = useState(0)
   const [notificationToast, setNotificationToast] = useState('')
   const [reportTarget, setReportTarget] = useState(null)
+  const profileLoadIdRef = useRef(0)
 
   const loadUnreadCounts = useCallback(async () => {
     if (!user) return
@@ -99,8 +100,11 @@ function PublicProfilePage() {
   }, [user])
 
   const loadProfile = useCallback(async () => {
+    const loadId = ++profileLoadIdRef.current
     setLoading(true)
     setError('')
+    setProfile(null)
+    setPosts([])
     try {
       const client = getSupabaseClient()
       const { data: profileRows, error: profileError } = await client.rpc('get_public_profile', {
@@ -108,14 +112,12 @@ function PublicProfilePage() {
         public_preview: previewRequested,
       })
       if (profileError) throw profileError
+      if (loadId !== profileLoadIdRef.current) return
       const member = profileRows?.[0] || null
       if (!member) {
-        setProfile(null)
-        setPosts([])
         setPostCount(0)
         setLoadedPostCount(0)
         setFriends([])
-        setLoading(false)
         return
       }
 
@@ -132,6 +134,7 @@ function PublicProfilePage() {
           ? client.rpc('get_profile_friends', { target_user_id: user.id })
           : Promise.resolve({ data: [], error: null }),
       ])
+      if (loadId !== profileLoadIdRef.current) return
       for (const result of [postResult, friendListResult, requestResult, ownFriendsResult]) {
         if (result.error) throw result.error
       }
@@ -154,6 +157,7 @@ function PublicProfilePage() {
         .or(`and(user_low.eq.${user.id},user_high.eq.${member.id}),and(user_low.eq.${member.id},user_high.eq.${user.id})`)
         .maybeSingle() : { data: null, error: null }
       if (accepted.error) throw accepted.error
+      if (loadId !== profileLoadIdRef.current) return
       const outgoing = requestRows.find((request) => request.status === 'pending' && request.sender_id === user?.id) || null
       const incoming = requestRows.find((request) => request.status === 'pending' && request.receiver_id === user?.id) || null
       const isFriend = Boolean(accepted.data)
@@ -188,6 +192,7 @@ function PublicProfilePage() {
             .order('created_at', { ascending: true })
             .limit(500),
         ])
+        if (loadId !== profileLoadIdRef.current) return
         if (likesResult.error) throw likesResult.error
         if (likedResult.error) throw likedResult.error
         if (commentsResult.error) throw commentsResult.error
@@ -204,9 +209,11 @@ function PublicProfilePage() {
         setCommentsByPost({})
       }
     } catch (loadError) {
-      setError(loadError.message || 'This profile could not be loaded.')
+      if (loadId === profileLoadIdRef.current) {
+        setError(loadError.message || 'This profile could not be loaded.')
+      }
     } finally {
-      setLoading(false)
+      if (loadId === profileLoadIdRef.current) setLoading(false)
     }
   }, [previewRequested, selectedPostId, user, username])
 
@@ -525,6 +532,7 @@ function PublicProfilePage() {
             <h1>Profile unavailable</h1>
             <p>This profile may not exist, may be private, or may not be visible to your account.</p>
             {error && <p role="alert">{error}</p>}
+            {error && <button className="network-button" type="button" onClick={loadProfile}>Try again</button>}
             <Link className="member-home-link" to={user ? '/app' : '/'}><ArrowLeft size={14} />Return to QORVEXA</Link>
           </div>
         ) : (

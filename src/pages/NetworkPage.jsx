@@ -812,6 +812,7 @@ function NetworkPage() {
             <code>supabase/migrations/20261107032000_public_profiles.sql</code>
             <code>supabase/migrations/20261107035000_presence_privacy_fix.sql</code>
             <code>supabase/migrations/20261107040000_realtime_social_notifications.sql</code>
+            <code>supabase/migrations/20261108000500_availability_presence.sql</code>
           </div>
         ) : status === 'loading' ? (
           <div className="network-loading" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" />Loading your network…</div>
@@ -965,7 +966,7 @@ function NetworkPage() {
                     >
                       <UserIdentity profile={conversation.peer} availability={profileAvailability(conversation.peer)} small onClick={(event) => event.stopPropagation()} />
                       <Link className="network-conversation-summary" to={`/app/messages/${encodeURIComponent(conversation.id)}`} onClick={(event) => event.stopPropagation()}>
-                        <span>{conversation.lastMessage?.content || 'Start a conversation'}</span>
+                        <span>{conversation.lastMessage?.content || 'Start a conversation'}<small>Open conversation</small></span>
                         {conversation.unreadCount > 0 && <b>{conversation.unreadCount}</b>}
                       </Link>
                     </div>

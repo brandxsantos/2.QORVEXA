@@ -1052,7 +1052,7 @@
 .auth-header,
 .member-header {
   position: relative;
-  z-index: 1;
+  z-index: 5;
   display: flex;
   min-height: 5.2rem;
   align-items: center;
@@ -4994,11 +4994,19 @@
 }
 
 .network-conversation-summary > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
   overflow: hidden;
   color: #7e8da2;
   font-size: 0.59rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.network-conversation-summary > span small {
+  color: #4fcde0;
+  font-size: 0.54rem;
 }
 
 .network-conversation-summary b {
