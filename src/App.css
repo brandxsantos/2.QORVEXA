@@ -4211,41 +4211,31 @@
   display: none;
 }
 
-.network-account-menu-popover {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 0.35rem);
-  right: 0;
-  display: grid;
-  min-width: 13rem;
-  gap: 0.2rem;
-  padding: 0.4rem;
-  border: 1px solid rgb(93 238 255 / 20%);
-  border-radius: 0.75rem;
-  background: #101927;
-  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 35%);
-}
-
-.network-account-menu-popover a {
+.network-account-menu-popover button {
   display: flex;
+  width: 100%;
   min-height: 2.25rem;
   align-items: center;
   gap: 0.55rem;
   padding: 0.45rem 0.55rem;
+  border: 0;
   border-radius: 0.5rem;
+  background: transparent;
   color: #a9b8cb;
+  font: inherit;
   font-size: 0.72rem;
-  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
 }
 
-.network-account-menu-popover a:hover,
-.network-account-menu-popover a.is-active {
+.network-account-menu-popover button:hover:not(:disabled) {
   background: rgb(0 229 255 / 8%);
   color: #5deeff;
 }
 
-.network-account-menu-popover svg {
-  flex: 0 0 auto;
+.network-account-menu-popover button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .network-badge {
