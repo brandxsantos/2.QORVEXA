@@ -35,6 +35,16 @@ export async function authorizeRealtimeSession(client = getSupabaseClient()) {
 
   const session = data.session
   const accessToken = session?.access_token
+  if (accessToken) {
+  const claims = JSON.parse(atob(accessToken.split('.')[1]))
+
+  console.log('[QORVEXA JWT Debug]', {
+    role: claims.role,
+    sub: claims.sub,
+    aud: claims.aud,
+    expiresAt: claims.exp,
+  })
+}
 
   if (!accessToken) {
     throw new Error('A signed-in session is required for Realtime presence.')
