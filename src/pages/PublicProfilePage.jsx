@@ -671,8 +671,6 @@ function PublicProfilePage() {
     ? <Link className="network-button network-button--primary" to={`/profile/${encodeURIComponent(profile.username)}`}><ArrowLeft size={15} />Exit public preview</Link>
     : !user
       ? <Link className="network-button network-button--primary" to="/login"><UserPlus size={15} />Sign in to connect</Link>
-      : isOwner
-      ? <button type="button" className="network-button network-button--primary" onClick={openAccountMenu}><Shield size={15} />Edit profile</button>
       : friendship.accepted
         ? <>
           <button className="network-button network-button--primary" type="button" onClick={messageFriend} disabled={working}><MessageCircle size={15} />Message</button>
@@ -943,4 +941,6 @@ function PublicProfilePage() {
 }
 
 export default PublicProfilePage
+
+
 
