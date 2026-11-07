@@ -795,7 +795,7 @@ function NetworkPage() {
           <Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}
           </Link>
           <Link to="/app/messages" className={`network-nav-link${activeSection === 'messages' ? ' is-active' : ''}`}><MessageSquare size={15} aria-hidden="true" />Messages{unreadMessages > 0 && <span className="network-badge">{unreadMessages}</span>}</Link>
-          <Link to="/app/bookmarks" className="network-nav-link"><Bookmark size={15} aria-hidden="true" />Saved</Link>
+      
     <AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
           {ownUsername && <Link to={`/profile/${encodeURIComponent(ownUsername)}`} className="network-nav-link"><UserRound size={15} aria-hidden="true" />My profile</Link>}
         </nav>
