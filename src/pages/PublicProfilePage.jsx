@@ -767,7 +767,7 @@ function PublicProfilePage() {
 
       <section className="public-profile-shell">
         {loading || authLoading ? (
-          <div className="member-feed-state" role="status"><LoaderCircle className="spinner" size={20} />Loading profileâ€¦</div>
+          <div className="member-feed-state" role="status"><LoaderCircle className="spinner" size={20} />Loading profile...</div>
         ) : !profile ? (
           <div className="public-profile-not-found">
             <AlertCircle size={22} />
@@ -1048,6 +1048,7 @@ function PublicProfilePage() {
 }
 
 export default PublicProfilePage
+
 
 
 
