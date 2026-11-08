@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import DatePicker from '../components/DatePicker.jsx'
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
@@ -35,7 +35,7 @@ function AuthPage() {
     return (
       <div className="auth-loading" role="status">
         <LoaderCircle size={22} className="spinner" aria-hidden="true" />
-        Checking your session…
+        Checking your sessionâ€¦
       </div>
     )
   }
@@ -50,7 +50,7 @@ function AuthPage() {
       ? 'Find your people.'
       : 'Welcome back.'
   const description = isForgotPassword
-    ? 'Enter the email address on your account and we’ll send you a reset link.'
+    ? 'Enter the email address on your account and weâ€™ll send you a reset link.'
     : isRecovery
       ? 'Choose a new password for your QORVEXA account.'
     : isSignup
@@ -110,7 +110,7 @@ function AuthPage() {
         const confirmPassword = String(formData.get('confirmPassword') ?? '')
 
         if (!usernamePattern.test(username)) {
-          throw new Error('Use 3–24 characters for your username: lowercase letters, numbers, and underscores.')
+          throw new Error('Use 3â€“24 characters for your username: lowercase letters, numbers, and underscores.')
         }
 
         if (displayName.length < 2 || displayName.length > 60) {
@@ -214,11 +214,11 @@ if (data.session) {
                   minLength={3}
                   maxLength={24}
                   pattern="[a-zA-Z0-9_]{3,24}"
-                  title="Use 3–24 letters, numbers, or underscores."
+                  title="Use 3â€“24 letters, numbers, or underscores."
                   required
                 />
               </div>
-              <small>3–24 letters, numbers, or underscores.</small>
+              <small>3â€“24 letters, numbers, or underscores.</small>
             </label>
                         <label className="form-field">
               <span>Gender <small>(Optional)</small></span>
@@ -322,7 +322,7 @@ if (data.session) {
                 <input type="checkbox" name="terms" required />
                <span>
   I agree to the <Link to="/terms">Terms of Service</Link> and{' '}
-  <Link to="/#privacy">Privacy Policy</Link>.
+  <Link to="/privacy">Privacy Policy</Link> and acknowledge that I have read it.
 </span>
               </label>
             )}
@@ -339,7 +339,7 @@ if (data.session) {
         <button className="button button--primary auth-submit" type="submit" disabled={submitting}>
           {submitting && <LoaderCircle size={17} className="spinner" aria-hidden="true" />}
           {submitting
-            ? 'Please wait…'
+            ? 'Please waitâ€¦'
             : isForgotPassword
               ? 'Send reset link'
               : isSignup
@@ -367,3 +367,4 @@ if (data.session) {
 }
 
 export default AuthPage
+

@@ -1,16 +1,17 @@
-import { lazy, Suspense } from 'react'
+﻿import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import LandingPage from './pages/LandingPage.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { useAuth } from './context/useAuth.js'
 import TermsPage from './pages/TermsPage.jsx'
+import PrivacyPage from './pages/PrivacyPage.jsx'
 import './App.css'
 
 const AuthRoutes = lazy(() => import('./pages/AuthRoutes.jsx'))
 
 function AccountAccess() {
   return (
-    <Suspense fallback={<div className="auth-loading" role="status">Loading account access…</div>}>
+    <Suspense fallback={<div className="auth-loading" role="status">Loading account accessâ€¦</div>}>
       <AuthRoutes />
     </Suspense>
   )
@@ -20,7 +21,7 @@ function HomeRoute() {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return <div className="auth-loading" role="status">Checking your session…</div>
+    return <div className="auth-loading" role="status">Checking your sessionâ€¦</div>
   }
 
   return user ? <Navigate to="/app" replace /> : <LandingPage />
@@ -31,6 +32,7 @@ function App() {
     <Routes>
       <Route path="/" element={<AuthProvider><HomeRoute /></AuthProvider>} />
       <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/login" element={<AccountAccess />} />
       <Route path="/signup" element={<AccountAccess />} />
       <Route path="/forgot-password" element={<AccountAccess />} />
@@ -46,3 +48,4 @@ function App() {
 }
 
 export default App
+
