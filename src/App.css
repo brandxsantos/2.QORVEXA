@@ -6848,3 +6848,84 @@
     width: 11.5rem;
   }
 }
+
+/* Real public posts on the landing page */
+.landing-feed-state {
+  display: flex;
+  min-height: 10rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 2rem;
+  color: #9aaabd;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.landing-feed-state strong {
+  color: #e6edf6;
+  font-size: 0.95rem;
+}
+
+.landing-feed-state a {
+  margin-top: 0.35rem;
+  color: #62ddeb;
+  text-decoration: none;
+}
+
+.landing-preview-post + .landing-preview-post {
+  border-top: 1px solid rgb(255 255 255 / 6%);
+}
+
+.landing-post-avatar {
+  overflow: hidden;
+  background: linear-gradient(135deg, #00e5ff, #76f4e3);
+}
+
+.landing-post-avatar-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.landing-post-author {
+  color: #e6edf6;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.landing-post-author:hover {
+  color: #62ddeb;
+}
+
+.landing-post-text {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.landing-post-media {
+  overflow: hidden;
+  margin: 0.75rem 0;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 0.75rem;
+  background: #111b29;
+}
+
+.landing-post-media-image {
+  display: block;
+  width: 100%;
+  max-height: 17rem;
+  object-fit: cover;
+}
+
+.landing-post-attachment {
+  display: inline-block;
+  margin: 0.4rem 0 0.7rem;
+  color: #8fa1b8;
+  font-size: 0.68rem;
+}
+

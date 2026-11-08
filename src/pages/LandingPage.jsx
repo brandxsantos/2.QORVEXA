@@ -3,17 +3,16 @@
   ArrowRight,
   Code2,
   Globe2,
-  Heart,
   LockKeyhole,
   MessageCircle,
   Radio,
   Sparkles,
   Users,
-  Zap,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
 import FeatureCard from '../components/landing/FeatureCard.jsx'
+import LandingCommunityFeed from '../components/landing/LandingCommunityFeed.jsx'
 
 const features = [
   {
@@ -145,40 +144,7 @@ function LandingPage() {
           </Link>
         </div>
 
-        <div className="community-preview" aria-label="Illustrative community preview">
-          <div className="preview-topbar">
-            <div className="preview-window-dots" aria-hidden="true"><i /><i /><i /></div>
-            <span>COMMUNITY PREVIEW</span>
-            <span className="preview-live"><span className="label-dot" /> EARLY BUILD</span>
-          </div>
-          <article className="preview-post">
-            <div className="post-avatar avatar--cyan">K</div>
-            <div className="post-content">
-              <div className="post-meta"><strong>kai.builds</strong><span>in Makers &amp; Ideas</span><span>· 2m</span></div>
-              <p>What if the internet felt a little more like your favorite corner of a café?</p>
-              <div className="post-tags"><span>#community</span><span>#buildinpublic</span></div>
-              <div className="post-actions">
-                <span><Heart size={15} aria-hidden="true" /> 24</span>
-                <span><MessageCircle size={15} aria-hidden="true" /> 8 replies</span>
-              </div>
-            </div>
-          </article>
-          <article className="preview-post preview-post--second">
-            <div className="post-avatar avatar--violet">N</div>
-            <div className="post-content">
-              <div className="post-meta"><strong>nora.codes</strong><span>in Creative Tech</span><span>· 8m</span></div>
-              <p>Shipped a tiny experiment today. Small steps count. ✨</p>
-              <div className="post-actions">
-                <span><Heart size={15} aria-hidden="true" /> 12</span>
-                <span><MessageCircle size={15} aria-hidden="true" /> 3 replies</span>
-              </div>
-            </div>
-          </article>
-          <div className="preview-note">
-            <Zap size={14} aria-hidden="true" />
-            Illustrative preview · social features are still in development
-          </div>
-        </div>
+        <LandingCommunityFeed />
       </section>
 
       <section className="access-section page-width" id="account-access">
@@ -219,4 +185,5 @@ function LandingPage() {
 }
 
 export default LandingPage
+
 
