@@ -112,10 +112,22 @@ export function CallProvider({ children }) {
     const outgoingStream = localStreamRef.current
 
     outgoingStream?.getTracks().forEach(track => {
+      console.info('[QORVEXA WebRTC] Local track added:', {
+        kind: track.kind,
+        enabled: track.enabled,
+        readyState: track.readyState,
+      })
       peer.addTrack(track, outgoingStream)
     })
 
     peer.ontrack = event => {
+      console.info('[QORVEXA WebRTC] Remote track received:', {
+        kind: event.track.kind,
+        enabled: event.track.enabled,
+        readyState: event.track.readyState,
+        streams: event.streams?.length || 0,
+      })
+
       const stream = event.streams?.[0]
       if (stream) {
         remoteStreamRef.current = stream
@@ -131,10 +143,28 @@ export function CallProvider({ children }) {
       }
     }
 
+    peer.oniceconnectionstatechange = () => {
+      console.info('[QORVEXA WebRTC] ICE state:', peer.iceConnectionState)
+    }
+
+    peer.onicegatheringstatechange = () => {
+      console.info('[QORVEXA WebRTC] ICE gathering:', peer.iceGatheringState)
+    }
+
     peer.onconnectionstatechange = () => {
+      console.info('[QORVEXA WebRTC] Peer connection state:', peer.connectionState)
+
       if (peer.connectionState === 'failed') {
         setCallError('The connection was interrupted. Please end the call and try again.')
       }
+    }
+
+    peer.onicecandidateerror = event => {
+      console.warn('[QORVEXA WebRTC] ICE candidate error:', {
+        url: event.url,
+        code: event.errorCode,
+        text: event.errorText,
+      })
     }
 
     let channel = null

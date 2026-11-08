@@ -35,10 +35,20 @@ function CallOverlay() {
   const remoteAudioRef = useRef(null)
 
   useEffect(() => {
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = localStream || null
+    const video = localVideoRef.current
+    if (!video) return
+
+    video.srcObject = localStream || null
+
+    if (localStream) {
+      const playAttempt = video.play()
+      if (playAttempt && typeof playAttempt.catch === 'function') {
+        playAttempt.catch((error) => {
+          console.warn('[QORVEXA Call Debug] Local video preview playback was blocked:', error)
+        })
+      }
     }
-  }, [localStream])
+  }, [localStream, call?.status, call?.call_type])
 
   useEffect(() => {
     if (remoteVideoRef.current) {
