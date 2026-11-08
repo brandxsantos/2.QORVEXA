@@ -217,10 +217,10 @@ function PrivacyPage() {
             </p>
             <div className="terms-contact-details">
               <p><strong>Platform:</strong> QORVEXA</p>
-              <p><strong>Operator / Personal Information Controller:</strong> [INSERT LEGAL NAME OR REGISTERED BUSINESS NAME]</p>
-              <p><strong>Business Address:</strong> [INSERT OFFICIAL BUSINESS ADDRESS]</p>
-              <p><strong>Privacy Contact Email:</strong> [INSERT OFFICIAL PRIVACY EMAIL]</p>
-              <p><strong>Support Email:</strong> [INSERT OFFICIAL SUPPORT EMAIL]</p>
+              <p><strong>Operator / Personal Information Controller:</strong> BrandXSaints</p>
+              <p><strong>Business Address:</strong> Philippines</p>
+              <p><strong>Privacy Contact Email:</strong> brandizsantos13@gmail.com</p>
+              <p><strong>Support Email:</strong> brandizsantos82@gmail.com</p>
             </div>
           </section>
         </div>
@@ -252,3 +252,4 @@ function PrivacyPage() {
 }
 
 export default PrivacyPage
+

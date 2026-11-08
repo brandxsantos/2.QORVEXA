@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowUp, ShieldCheck } from 'lucide-react'
+﻿import { ArrowLeft, ArrowUp, ShieldCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
 
@@ -22,7 +22,7 @@ const sections = [
     title: '3. Account Security',
     content: [
       'You are responsible for safeguarding your login credentials and for activity conducted through your account, subject to rights and protections provided by applicable law.',
-      'Notify us promptly if you suspect unauthorized access to your account. You must not attempt to access another person’s account, bypass security controls, or interfere with account authentication.',
+      'Notify us promptly if you suspect unauthorized access to your account. You must not attempt to access another personâ€™s account, bypass security controls, or interfere with account authentication.',
     ],
   },
   {
@@ -42,7 +42,7 @@ const sections = [
     bullets: [
       'Harass, threaten, stalk, intimidate, bully, or target another person.',
       'Publish hate speech, threats, or content encouraging violence or harm.',
-      'Share another person’s private information without lawful authority or permission.',
+      'Share another personâ€™s private information without lawful authority or permission.',
       'Impersonate individuals, organizations, or public officials.',
       'Commit fraud, scams, phishing, or other deceptive activities.',
       'Distribute malware, malicious links, or harmful software.',
@@ -130,7 +130,7 @@ const sections = [
   {
     title: '15. Disclaimers',
     content: [
-      'To the extent permitted by applicable law, QORVEXA is provided on an “as available” basis. We do not guarantee that the Platform will always be available, that user-generated content will be accurate or lawful, that every user is who they claim to be, or that all harmful conduct will be detected or prevented.',
+      'To the extent permitted by applicable law, QORVEXA is provided on an â€œas availableâ€ basis. We do not guarantee that the Platform will always be available, that user-generated content will be accurate or lawful, that every user is who they claim to be, or that all harmful conduct will be detected or prevented.',
       'Users are responsible for their own interactions and decisions when communicating with other users.',
       'Nothing in this section excludes warranties or rights that cannot lawfully be excluded.',
     ],
@@ -146,14 +146,14 @@ const sections = [
   {
     title: '17. Responsibility for Violations',
     content: [
-      'To the extent permitted by law, you are responsible for claims, losses, and reasonable expenses arising from your unlawful conduct, infringement of another person’s rights, or material violation of these Terms.',
+      'To the extent permitted by law, you are responsible for claims, losses, and reasonable expenses arising from your unlawful conduct, infringement of another personâ€™s rights, or material violation of these Terms.',
       'You are not required to assume responsibility for our own unlawful acts or liabilities that cannot legally be transferred to you.',
     ],
   },
   {
     title: '18. Changes to These Terms',
     content: [
-      'We may revise these Terms as QORVEXA develops or as legal and operational requirements change. We will update the “Last Updated” date when changes are made.',
+      'We may revise these Terms as QORVEXA develops or as legal and operational requirements change. We will update the â€œLast Updatedâ€ date when changes are made.',
       'For material changes, we will provide reasonable notice through the Platform or another appropriate method where required.',
       'Your continued use after revised Terms become effective constitutes acceptance where permitted by law. If you do not agree, you should stop using the Platform.',
     ],
@@ -261,10 +261,10 @@ function TermsPage() {
             </p>
             <div className="terms-contact-details">
               <p><strong>Platform:</strong> QORVEXA</p>
-              <p><strong>Operator / Legal Entity:</strong> [INSERT LEGAL NAME OR REGISTERED BUSINESS NAME]</p>
-              <p><strong>Business Address:</strong> [INSERT OFFICIAL BUSINESS ADDRESS]</p>
-              <p><strong>Contact Email:</strong> [INSERT OFFICIAL SUPPORT EMAIL]</p>
-              <p><strong>Privacy Inquiries:</strong> [INSERT PRIVACY CONTACT EMAIL, IF APPLICABLE]</p>
+              <p><strong>Operator / Brand:</strong> BrandXSaints</p>
+              <p><strong>Business Address:</strong> Philippines</p>
+              <p><strong>Contact Email:</strong> brandizsantos82@gmail.com</p>
+              <p><strong>Privacy Inquiries:</strong> brandizsantos13@gmail.com</p>
             </div>
           </section>
         </div>
@@ -289,7 +289,7 @@ function TermsPage() {
       <footer className="terms-footer">
         <Link to="/">QORVEXA</Link>
         <span>Connect Beyond Limits.</span>
-        <span>© 2026 QORVEXA</span>
+        <span>Â© 2026 QORVEXA</span>
       </footer>
     </main>
   )
