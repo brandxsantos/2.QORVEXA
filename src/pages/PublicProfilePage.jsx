@@ -71,6 +71,7 @@ function PublicProfilePage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const selectedPostId = searchParams.get('post')
+  const selectedCommentId = searchParams.get('comment')
   const previewRequested = searchParams.get('view') === 'public'
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
@@ -266,6 +267,29 @@ function PublicProfilePage() {
     const timer = window.setTimeout(() => { void loadProfile() }, 0)
     return () => window.clearTimeout(timer)
   }, [loadProfile])
+  useEffect(() => {
+    if (!selectedPostId || !selectedCommentId) return undefined
+
+    const postComments = commentsByPost[selectedPostId]
+    if (!postComments) return undefined
+
+    setCommentsOpen((current) => {
+      if (current.has(selectedPostId)) return current
+      return new Set([...current, selectedPostId])
+    })
+
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(`post-comment-${selectedCommentId}`)
+        || document.getElementById(`post-${selectedPostId}`)
+
+      target?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    }, 300)
+
+    return () => window.clearTimeout(timer)
+  }, [selectedPostId, selectedCommentId, commentsByPost])
   useEffect(() => {
     if (!profile?.id) return undefined
 
@@ -848,7 +872,7 @@ function PublicProfilePage() {
                 {!visiblePosts.length
                   ? <div className="member-feed-empty"><span><MessageSquare size={20} /></span><h2>No visible posts yet</h2><p>Posts shared with you will appear here.</p></div>
                   : visiblePosts.map((post) => (
-                    <article className={`member-post public-profile-post${selectedPostId ? ' is-detail' : ''}`} key={post.id}>
+                    <article id={`post-${post.id}`} className={`member-post public-profile-post${selectedPostId ? ' is-detail' : ''}`} key={post.id}>
                       <div className="member-post-avatar">
                         {profile.avatar_url ? <ProtectedMediaImage path={profile.avatar_url} alt="" fallback={profileInitials(profile)} /> : profileInitials(profile)}
                       </div>
@@ -881,7 +905,7 @@ function PublicProfilePage() {
                             const commentName = commentAuthor?.display_name || commentAuthor?.username || 'QORVEXA member'
                             const commentUrl = commentAuthor?.username ? `/profile/${encodeURIComponent(commentAuthor.username)}` : ''
                             const commentReplies = commentsByPost[post.id].filter((reply) => reply.parent_id === comment.id)
-                            return <div className="public-profile-comment-thread" key={comment.id}>
+                            return <div id={`post-comment-${comment.id}`} className="public-profile-comment-thread" key={comment.id}>
                               <div className="public-profile-comment">
                                 {commentUrl
                                   ? <Link to={commentUrl} className="public-profile-comment-avatar">{commentAuthor?.avatar_url ? <ProtectedMediaImage path={commentAuthor.avatar_url} alt="" fallback={profileInitials(commentAuthor)} /> : profileInitials(commentAuthor)}</Link>
@@ -899,7 +923,7 @@ function PublicProfilePage() {
                                 const replyAuthor = reply.profiles
                                 const replyName = replyAuthor?.display_name || replyAuthor?.username || 'QORVEXA member'
                                 const replyUrl = replyAuthor?.username ? `/profile/${encodeURIComponent(replyAuthor.username)}` : ''
-                                return <div className="public-profile-comment public-profile-comment--reply" key={reply.id}>
+                                return <div id={`post-comment-${reply.id}`} className="public-profile-comment public-profile-comment--reply" key={reply.id}>
                                   {replyUrl
                                     ? <Link to={replyUrl} className="public-profile-comment-avatar">{replyAuthor?.avatar_url ? <ProtectedMediaImage path={replyAuthor.avatar_url} alt="" fallback={profileInitials(replyAuthor)} /> : profileInitials(replyAuthor)}</Link>
                                     : <span className="public-profile-comment-avatar">{profileInitials({ display_name: replyName })}</span>}
@@ -1048,6 +1072,7 @@ function PublicProfilePage() {
 }
 
 export default PublicProfilePage
+
 
 
 

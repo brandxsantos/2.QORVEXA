@@ -664,7 +664,10 @@ function NetworkPage() {
           return
         }
         if (author?.username) {
-          navigate(`/profile/${encodeURIComponent(author.username)}?post=${postId}`)
+          const commentQuery = ['comment', 'reply'].includes(notification.type)
+          ? `&comment=${encodeURIComponent(notification.reference_id)}`
+          : ''
+        navigate(`/profile/${encodeURIComponent(author.username)}?post=${encodeURIComponent(postId)}${commentQuery}`)
           return
         }
       }
@@ -1074,5 +1077,6 @@ function NetworkPage() {
 }
 
 export default NetworkPage
+
 
 
