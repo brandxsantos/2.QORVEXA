@@ -52,6 +52,8 @@ function AdminRoutes() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [overview, setOverview] = useState(null)
+  const [analytics, setAnalytics] = useState(null)
+  const [analyticsError, setAnalyticsError] = useState('')
   const [adminRole, setAdminRole] = useState('')
   const [status, setStatus] = useState('loading')
   const [errorMessage, setErrorMessage] = useState('')
@@ -65,13 +67,20 @@ function AdminRoutes() {
       if (!role) return { error: { code: '42501', message: 'Administrator access required.' } }
       if (!['super_admin', 'admin'].includes(role)) return { role, data: null, error: null }
       const { data, error } = await client.rpc('admin_get_overview')
-      return { role, data, error }
+      if (error) return { role, data, error }
+
+      const { data: analytics, error: analyticsError } =
+        await client.rpc('admin_get_advanced_analytics')
+
+      return { role, data, error: null, analytics, analyticsError }
     } catch (error) {
       return { error }
     }
   }, [])
 
-  const applyAdminResult = useCallback(({ role, data, error }) => {
+  const applyAdminResult = useCallback(({ role, data, error, analytics, analyticsError }) => {
+    setAnalytics(analytics || null)
+    setAnalyticsError(analyticsError?.message || '')
     if (error) {
       if (error.code === '42501') {
         setStatus('denied')
@@ -280,6 +289,14 @@ function AdminRoutes() {
     { label: 'THIS MONTH', value: metrics.registered_this_month, icon: CalendarDays, note: 'Since the start of this month' },
   ]
   const peakRegistrations = Math.max(1, ...(overview?.registration_trend || []).map((item) => Number(item.count)))
+  const dailyActivity = analytics?.daily_active_members || []
+  const followerGrowth = analytics?.follower_growth || []
+  const moderationActivity = analytics?.moderation_activity || []
+  const topPosts = analytics?.top_posts || []
+  const reports = analytics?.reports || {}
+  const peakDailyActivity = Math.max(1, ...dailyActivity.map((item) => Number(item.count)))
+  const peakFollows = Math.max(1, ...followerGrowth.map((item) => Number(item.follows)))
+  const peakModeration = Math.max(1, ...moderationActivity.map((item) => Number(item.count)))
 
   return (
     <div className={`admin-layout${collapsed ? ' admin-layout--collapsed' : ''}${sidebarOpen ? ' admin-layout--sidebar-open' : ''}`}>
@@ -417,6 +434,135 @@ function AdminRoutes() {
             <p className="admin-readiness-footnote"><ShieldCheck size={16} aria-hidden="true" /> Account statistics are calculated in PostgreSQL and returned only to an authorized administrator.</p>
           </section>
 
+          <section className="admin-analytics" aria-labelledby="advanced-analytics-heading">
+            <div className="admin-section-heading">
+              <div>
+                <h2 id="advanced-analytics-heading">Advanced platform analytics</h2>
+                <p>Member activity, community growth, content engagement and moderation.</p>
+              </div>
+              <span className="admin-generated-time">
+                {analytics?.generated_at ? `UPDATED ${new Date(analytics.generated_at).toLocaleTimeString()}` : 'ANALYTICS UNAVAILABLE'}
+              </span>
+            </div>
+
+            {analyticsError ? (
+              <p className="admin-analytics-error" role="status">
+                Advanced analytics could not be loaded: {analyticsError}
+              </p>
+            ) : analytics ? (
+              <>
+                <div className="admin-analytics-stats">
+                  <article className="admin-stat-card">
+                    <span className="admin-stat-heading">ACTIVE MEMBERS · 24H</span>
+                    <strong>{formatCount(analytics.active_members_24h || 0)}</strong>
+                    <p>Members seen through presence heartbeats</p>
+                  </article>
+                  <article className="admin-stat-card">
+                    <span className="admin-stat-heading">TOTAL REPORTS</span>
+                    <strong>{formatCount(reports.total || 0)}</strong>
+                    <p>{formatCount(reports.urgent_open || 0)} urgent reports still open</p>
+                  </article>
+                  <article className="admin-stat-card">
+                    <span className="admin-stat-heading">NET FOLLOW GROWTH · 7D</span>
+                    <strong>{formatCount(followerGrowth.reduce((sum, item) => sum + Number(item.net_growth || 0), 0))}</strong>
+                    <p>Follows minus unfollows</p>
+                  </article>
+                </div>
+
+                <div className="admin-analytics-grid">
+                  <section className="admin-analytics-card">
+                    <h3>Daily active members</h3>
+                    <p>Unique members recorded per UTC day · 7 days</p>
+                    <div className="admin-analytics-bars">
+                      {dailyActivity.map((item) => {
+                        const count = Number(item.count || 0)
+                        return (
+                          <div className="admin-analytics-day" key={item.date} title={`${item.date}: ${formatCount(count)} members`}>
+                            <strong>{formatCount(count)}</strong>
+                            <div className="admin-analytics-track"><span style={{ height: `${count ? Math.max(5, count / peakDailyActivity * 100) : 0}%` }} /></div>
+                            <small>{formatTrendDate(item.date)}</small>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+
+                  <section className="admin-analytics-card">
+                    <h3>Follower growth</h3>
+                    <p>Daily follows, unfollows and net growth · 7 days</p>
+                    <div className="admin-analytics-list">
+                      {followerGrowth.map((item) => (
+                        <div className="admin-analytics-row" key={item.date}>
+                          <strong>{formatTrendDate(item.date)}</strong>
+                          <span>+{formatCount(item.follows)}</span>
+                          <span>−{formatCount(item.unfollows)}</span>
+                          <b>{Number(item.net_growth) > 0 ? '+' : ''}{formatCount(item.net_growth)}</b>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="admin-analytics-card">
+                    <h3>Top posts by engagement</h3>
+                    <p>Top five visible posts · reactions and non-hidden comments</p>
+                    {topPosts.length ? (
+                      <div className="admin-analytics-list">
+                        {topPosts.map((post, index) => (
+                          <div className="admin-top-post" key={post.id}>
+                            <strong>#{index + 1} · {String(post.id).slice(0, 8)}</strong>
+                            <span>{formatCount(post.engagement)} engagements</span>
+                            <small>{formatCount(post.reaction_count)} reactions · {formatCount(post.comment_count)} comments · {post.visibility}</small>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="admin-analytics-empty">No eligible posts recorded.</p>}
+                  </section>
+
+                  <section className="admin-analytics-card">
+                    <h3>Report queue</h3>
+                    <p>Current report status breakdown</p>
+                    <div className="admin-report-grid">
+                      {[
+                        ['Pending', reports.pending],
+                        ['In review', reports.in_review],
+                        ['Resolved', reports.resolved],
+                        ['Dismissed', reports.dismissed],
+                        ['Urgent open', reports.urgent_open],
+                      ].map(([label, value]) => (
+                        <div className="admin-report-item" key={label}>
+                          <span>{label}</span>
+                          <strong>{formatCount(value || 0)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="admin-analytics-card">
+                    <h3>Moderation activity</h3>
+                    <p>Recorded moderation actions per UTC day · 7 days</p>
+                    <div className="admin-analytics-bars">
+                      {moderationActivity.map((item) => {
+                        const count = Number(item.count || 0)
+                        return (
+                          <div className="admin-analytics-day" key={item.date} title={`${item.date}: ${formatCount(count)} actions`}>
+                            <strong>{formatCount(count)}</strong>
+                            <div className="admin-analytics-track"><span style={{ height: `${count ? Math.max(5, count / peakModeration * 100) : 0}%` }} /></div>
+                            <small>{formatTrendDate(item.date)}</small>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                </div>
+              </>
+            ) : (
+              <p className="admin-analytics-empty">Waiting for advanced analytics data…</p>
+            )}
+            <p className="admin-readiness-footnote">
+              <ShieldCheck size={16} aria-hidden="true" />
+              Analytics are calculated by administrator-authorized database functions. Activity history begins when tracking was enabled.
+            </p>
+          </section>
           <div className="admin-section-heading">
             <div><h2>Platform data readiness</h2><p>No estimates or sample metrics—only tables detected in the connected database.</p></div>
             <span className="admin-generated-time">

@@ -647,7 +647,6 @@ function MemberPage() {
             </nav>
             <div className="member-profile-divider" />
             <div className="member-profile-status"><ShieldCheck size={16} aria-hidden="true" /><span>Signed in securely</span></div>
-            <Link to="/app" className="member-home-link">Back to QORVEXA feed</Link>
           </div>
         </aside>
 

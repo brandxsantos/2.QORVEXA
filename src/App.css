@@ -1,4 +1,4 @@
-#root {
+﻿#root {
   min-height: 100vh;
 }
 
@@ -79,7 +79,7 @@
 .brand-mark {
   display: inline-flex;
   align-items: center;
-  gap: 0.62rem;
+  gap: 0.12rem;
 }
 
 .brand-symbol {
@@ -8001,4 +8001,305 @@
 :root[data-theme="light"] .explore-error {
   background: #fff1f2;
   color: #be123c;
+}
+/* QORVEXA COMMUNITY STICKY NAVIGATION */
+.member-page {
+  overflow: clip;
+}
+
+.member-feed-page {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.member-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgb(23 29 43 / 88%);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* QORVEXA FULL-WIDTH STICKY HEADER */
+.member-header {
+  width: calc(100% + 2 * max(1.25rem, calc((100% - 78rem) / 2)));
+  margin-inline: calc(-1 * max(1.25rem, calc((100% - 78rem) / 2)));
+  padding-inline: max(1.25rem, calc((100% - 78rem) / 2));
+}
+
+/* QORVEXA VIEWPORT-WIDE STICKY HEADER BACKGROUND */
+.member-header {
+  background: transparent;
+  border-bottom-color: transparent;
+  isolation: isolate;
+}
+
+.member-header::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  bottom: 0;
+  left: calc(50% + (100vw - 100%) / 2);
+  width: 100vw;
+  transform: translateX(-50%);
+  background: rgb(23 29 43 / 88%);
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  pointer-events: none;
+}
+
+/* QORVEXA BRAND PNG - PRESERVE ORIGINAL PROPORTIONS */
+.brand-symbol {
+  object-fit: contain;
+  object-position: center;
+  display: block;
+}
+
+
+/* QORVEXA BRAND ICON - CROPPED ASSETS AND NATURAL PROPORTIONS */
+.brand-mark {
+  gap: 0.12rem;
+}
+
+.brand-symbol {
+  width: auto;
+  height: 2rem;
+  max-width: 2rem;
+  object-fit: contain;
+  object-position: center;
+}
+
+/* QORVEXA HEADER - MATCH CIRCULAR FAVICON */
+.brand-symbol {
+  width: 2rem;
+  height: 2rem;
+  max-width: 2rem;
+  flex: 0 0 2rem;
+  object-fit: contain;
+  object-position: center;
+}
+
+/* QORVEXA — Advanced Admin Analytics */
+.admin-analytics {
+  display: grid;
+  gap: 20px;
+  margin-top: 28px;
+}
+
+.admin-generated-time {
+  color: #8fa8bf;
+  font-size: 11px;
+  letter-spacing: .08em;
+  font-weight: 700;
+}
+
+.admin-analytics-error {
+  padding: 14px 16px;
+  border: 1px solid rgba(248, 113, 113, .3);
+  border-radius: 12px;
+  background: rgba(127, 29, 29, .16);
+  color: #fca5a5;
+  overflow-wrap: anywhere;
+}
+
+.admin-analytics-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-analytics-stats .admin-stat-card {
+  min-width: 0;
+}
+
+.admin-analytics-stats .admin-stat-card strong {
+  display: block;
+  margin-top: 12px;
+  font-size: clamp(25px, 3vw, 34px);
+}
+
+.admin-analytics-stats .admin-stat-card p {
+  margin: 8px 0 0;
+  color: #91a6bb;
+  font-size: 12px;
+}
+
+.admin-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-analytics-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid rgba(139, 169, 196, .16);
+  border-radius: 16px;
+  background: rgba(12, 27, 44, .72);
+}
+
+.admin-analytics-card h3 {
+  margin: 0;
+  color: #e7f1fa;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.admin-analytics-card > p {
+  margin: 7px 0 18px;
+  color: #91a6bb;
+  font-size: 12px;
+}
+
+.admin-analytics-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+  min-height: 150px;
+}
+
+.admin-analytics-day {
+  display: flex;
+  min-width: 0;
+  height: 150px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.admin-analytics-day strong {
+  color: #dceaf7;
+  font-size: 11px;
+}
+
+.admin-analytics-track {
+  display: flex;
+  width: min(100%, 30px);
+  height: 100px;
+  align-items: flex-end;
+  overflow: hidden;
+  border-radius: 7px;
+  background: rgba(116, 148, 179, .12);
+}
+
+.admin-analytics-track span {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #39c6d8, #2874a8);
+}
+
+.admin-analytics-day small {
+  color: #91a6bb;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.admin-analytics-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-analytics-row {
+  display: grid;
+  grid-template-columns: minmax(60px, 1fr) repeat(3, auto);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(139, 169, 196, .12);
+  font-size: 12px;
+}
+
+.admin-analytics-row strong {
+  color: #c8d9e8;
+}
+
+.admin-analytics-row span {
+  color: #91a6bb;
+}
+
+.admin-analytics-row b {
+  color: #6dd6c0;
+  text-align: right;
+}
+
+.admin-top-post {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid rgba(139, 169, 196, .12);
+  font-size: 12px;
+}
+
+.admin-top-post strong {
+  color: #dceaf7;
+}
+
+.admin-top-post span {
+  color: #6dd6c0;
+  font-weight: 700;
+}
+
+.admin-top-post small {
+  grid-column: 1 / -1;
+  color: #91a6bb;
+}
+
+.admin-report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-report-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 13px;
+  border: 1px solid rgba(139, 169, 196, .12);
+  border-radius: 10px;
+  background: rgba(116, 148, 179, .06);
+  color: #a9bdcf;
+  font-size: 12px;
+}
+
+.admin-report-item strong {
+  color: #e7f1fa;
+  font-size: 17px;
+}
+
+.admin-analytics-empty {
+  color: #91a6bb;
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .admin-analytics-stats,
+  .admin-analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-analytics-card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .admin-analytics-row {
+    gap: 7px;
+    font-size: 10px;
+  }
+
+  .admin-report-item {
+    padding: 10px;
+    font-size: 11px;
+  }
 }

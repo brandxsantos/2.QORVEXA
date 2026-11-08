@@ -27,3 +27,6 @@ dist-ssr
 
 # Local repair backups
 backups/
+
+# Supabase local CLI state
+/supabase/.temp/

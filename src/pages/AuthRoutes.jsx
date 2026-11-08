@@ -1,4 +1,4 @@
-import { LoaderCircle } from 'lucide-react'
+﻿import { LoaderCircle } from 'lucide-react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider } from '../context/AuthContext.jsx'
 import { useAuth } from '../context/useAuth.js'
@@ -13,6 +13,7 @@ import PrivacyPage from './PrivacyPage.jsx'
 import PublicProfilePage from './PublicProfilePage.jsx'
 import HashtagPage from './HashtagPage.jsx'
 import PresenceTracker from '../components/PresenceTracker.jsx'
+import FloatingChatDock from '../components/FloatingChatDock.jsx'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -21,7 +22,7 @@ function ProtectedRoute({ children }) {
     return (
       <div className="auth-loading" role="status">
         <LoaderCircle size={22} className="spinner" aria-hidden="true" />
-        Checking your sessionâ€¦
+        Checking your sessionÃ¢â‚¬Â¦
       </div>
     )
   }
@@ -56,12 +57,18 @@ function AuthRoutes() {
       ? <AuthPage />
       : <Navigate to="/" replace />
 
+  const showFloatingChatDock =
+    pathname.startsWith('/app') ||
+    pathname.startsWith('/profile/') ||
+    pathname.startsWith('/hashtag/')
   return (
     <AuthProvider>
       <PresenceTracker />
+      {showFloatingChatDock && <FloatingChatDock />}
       {page}
     </AuthProvider>
   )
 }
 
 export default AuthRoutes
+
