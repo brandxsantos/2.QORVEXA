@@ -92,6 +92,16 @@ function PublicProfilePage() {
   const [replyDrafts, setReplyDrafts] = useState({})
   const [replyTarget, setReplyTarget] = useState('')
   const [commentsOpen, setCommentsOpen] = useState(() => new Set())
+  const postsRef = useRef(posts)
+  const commentsOpenRef = useRef(commentsOpen)
+
+  useEffect(() => {
+    postsRef.current = posts
+  }, [posts])
+
+  useEffect(() => {
+    commentsOpenRef.current = commentsOpen
+  }, [commentsOpen])
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [availability, setAvailability] = useState('offline')
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
@@ -250,6 +260,63 @@ function PublicProfilePage() {
     const timer = window.setTimeout(() => { void loadProfile() }, 0)
     return () => window.clearTimeout(timer)
   }, [loadProfile])
+  useEffect(() => {
+    if (!profile?.id) return undefined
+
+    let active = true
+    let refreshTimer
+    const client = getSupabaseClient()
+
+    function scheduleProfileRefresh() {
+      window.clearTimeout(refreshTimer)
+      refreshTimer = window.setTimeout(() => {
+        if (active) void loadProfile()
+      }, 150)
+    }
+
+    const channel = client.channel(`profile-post-updates-${profile.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'posts',
+        filter: `author_id=eq.${profile.id}`,
+      }, scheduleProfileRefresh)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'post_likes',
+      }, (payload) => {
+        const postId = payload.new?.post_id || payload.old?.post_id
+        if (postId && postsRef.current.some((post) => post.id === postId)) {
+          scheduleProfileRefresh()
+        }
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'comments',
+      }, (payload) => {
+        const postId = payload.new?.post_id || payload.old?.post_id
+        if (
+          postId &&
+          postsRef.current.some((post) => post.id === postId) &&
+          commentsOpenRef.current.has(postId)
+        ) {
+          scheduleProfileRefresh()
+        }
+      })
+      .subscribe((channelStatus) => {
+        if (active && ['CHANNEL_ERROR', 'TIMED_OUT'].includes(channelStatus)) {
+          setError('Live profile updates are temporarily unavailable. Reconnecting…')
+        }
+      })
+
+    return () => {
+      active = false
+      window.clearTimeout(refreshTimer)
+      client.removeChannel(channel)
+    }
+  }, [loadProfile, profile?.id])
 
   useEffect(() => {
     if (!notificationToast) return undefined
@@ -947,4 +1014,5 @@ function PublicProfilePage() {
 }
 
 export default PublicProfilePage
+
 
