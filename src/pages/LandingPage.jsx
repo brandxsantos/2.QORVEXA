@@ -109,12 +109,12 @@ function LandingPage() {
 
       <section className="ticker" aria-label="QORVEXA tagline">
         <div className="ticker-track">
-          <span>CONNECT BEYOND LIMITS</span><span className="ticker-star">âœ³</span>
-          <span>FIND YOUR PEOPLE</span><span className="ticker-star">âœ³</span>
-          <span>BUILD WHAT&apos;S NEXT</span><span className="ticker-star">âœ³</span>
-          <span>CONNECT BEYOND LIMITS</span><span className="ticker-star">âœ³</span>
-          <span>FIND YOUR PEOPLE</span><span className="ticker-star">âœ³</span>
-          <span>BUILD WHAT&apos;S NEXT</span><span className="ticker-star">âœ³</span>
+          <span>CONNECT BEYOND LIMITS</span><span className="ticker-star">✳</span>
+          <span>FIND YOUR PEOPLE</span><span className="ticker-star">✳</span>
+          <span>BUILD WHAT&apos;S NEXT</span><span className="ticker-star">✳</span>
+          <span>CONNECT BEYOND LIMITS</span><span className="ticker-star">✳</span>
+          <span>FIND YOUR PEOPLE</span><span className="ticker-star">✳</span>
+          <span>BUILD WHAT&apos;S NEXT</span><span className="ticker-star">✳</span>
         </div>
       </section>
 
@@ -154,8 +154,8 @@ function LandingPage() {
           <article className="preview-post">
             <div className="post-avatar avatar--cyan">K</div>
             <div className="post-content">
-              <div className="post-meta"><strong>kai.builds</strong><span>in Makers &amp; Ideas</span><span>Â· 2m</span></div>
-              <p>What if the internet felt a little more like your favorite corner of a cafÃ©?</p>
+              <div className="post-meta"><strong>kai.builds</strong><span>in Makers &amp; Ideas</span><span>· 2m</span></div>
+              <p>What if the internet felt a little more like your favorite corner of a café?</p>
               <div className="post-tags"><span>#community</span><span>#buildinpublic</span></div>
               <div className="post-actions">
                 <span><Heart size={15} aria-hidden="true" /> 24</span>
@@ -166,8 +166,8 @@ function LandingPage() {
           <article className="preview-post preview-post--second">
             <div className="post-avatar avatar--violet">N</div>
             <div className="post-content">
-              <div className="post-meta"><strong>nora.codes</strong><span>in Creative Tech</span><span>Â· 8m</span></div>
-              <p>Shipped a tiny experiment today. Small steps count. âœ¨</p>
+              <div className="post-meta"><strong>nora.codes</strong><span>in Creative Tech</span><span>· 8m</span></div>
+              <p>Shipped a tiny experiment today. Small steps count. ✨</p>
               <div className="post-actions">
                 <span><Heart size={15} aria-hidden="true" /> 12</span>
                 <span><MessageCircle size={15} aria-hidden="true" /> 3 replies</span>
@@ -176,7 +176,7 @@ function LandingPage() {
           </article>
           <div className="preview-note">
             <Zap size={14} aria-hidden="true" />
-            Illustrative preview Â· social features are still in development
+            Illustrative preview · social features are still in development
           </div>
         </div>
       </section>
@@ -188,7 +188,7 @@ function LandingPage() {
             <p className="eyebrow">MEMBER ACCESS</p>
             <h2>Your next conversation starts here.</h2>
             <p>
-              Create an account to get started, or log in if youâ€™re already part of QORVEXA.
+              Create an account to get started, or log in if you’re already part of QORVEXA.
             </p>
           </div>
           <div className="access-actions">
@@ -212,7 +212,7 @@ function LandingPage() {
          
           <p id="contact"><strong>Contact:</strong> Contact details will be published before early access opens.</p>
         </div>
-        <p className="copyright">Â© 2026 QORVEXA. Built for the curious.</p>
+        <p className="copyright">© 2026 QORVEXA. Built for the curious.</p>
       </footer>
     </main>
   )

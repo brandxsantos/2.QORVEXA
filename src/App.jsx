@@ -11,7 +11,7 @@ const AuthRoutes = lazy(() => import('./pages/AuthRoutes.jsx'))
 
 function AccountAccess() {
   return (
-    <Suspense fallback={<div className="auth-loading" role="status">Loading account accessâ€¦</div>}>
+    <Suspense fallback={<div className="auth-loading" role="status">Loading account access…</div>}>
       <AuthRoutes />
     </Suspense>
   )
@@ -21,7 +21,7 @@ function HomeRoute() {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return <div className="auth-loading" role="status">Checking your sessionâ€¦</div>
+    return <div className="auth-loading" role="status">Checking your session…</div>
   }
 
   return user ? <Navigate to="/app" replace /> : <LandingPage />
