@@ -84,6 +84,7 @@ function PublicProfilePage() {
   const [friendSearch, setFriendSearch] = useState('')
   const [mutualFriends, setMutualFriends] = useState([])
   const [friendListVisible, setFriendListVisible] = useState(false)
+  const [followStats, setFollowStats] = useState({ followerCount: 0, followingCount: 0, isFollowing: false })
   const [friendship, setFriendship] = useState({ accepted: false, outgoing: null, incoming: null })
   const [activeTab, setActiveTab] = useState('posts')
   const [loading, setLoading] = useState(true)
@@ -163,12 +164,13 @@ function PublicProfilePage() {
         setPostCount(0)
         setLoadedPostCount(0)
         setFriends([])
+        setFollowStats({ followerCount: 0, followingCount: 0, isFollowing: false })
         return
       }
 
       let postsQuery = client.from('posts').select(postFields, { count: 'exact' }).eq('author_id', member.id).order('created_at', { ascending: false }).limit(50)
       if (previewRequested && user?.id === member.id) postsQuery = postsQuery.eq('post_visibility', 'public')
-      const [postResult, friendListResult, requestResult, ownFriendsResult] = await Promise.all([
+      const [postResult, friendListResult, requestResult, ownFriendsResult, followStatsResult] = await Promise.all([
         postsQuery,
         client.rpc('get_profile_friends', { target_user_id: member.id }),
         user && user.id !== member.id
@@ -178,9 +180,10 @@ function PublicProfilePage() {
         user && user.id !== member.id
           ? client.rpc('get_profile_friends', { target_user_id: user.id })
           : Promise.resolve({ data: [], error: null }),
+        client.rpc('get_profile_follow_stats', { target_user_id: member.id }),
       ])
       if (loadId !== profileLoadIdRef.current) return
-      for (const result of [postResult, friendListResult, requestResult, ownFriendsResult]) {
+      for (const result of [postResult, friendListResult, requestResult, ownFriendsResult, followStatsResult]) {
         if (result.error) throw result.error
       }
 
@@ -215,6 +218,12 @@ function PublicProfilePage() {
       setLoadedPostCount((postResult.data || []).length)
       setFriends(profileFriends)
       setFriendship({ accepted: isFriend, outgoing, incoming })
+      const followRow = followStatsResult.data?.[0]
+      setFollowStats({
+        followerCount: Number(followRow?.follower_count || 0),
+        followingCount: Number(followRow?.following_count || 0),
+        isFollowing: Boolean(followRow?.is_following),
+      })
       setFriendListVisible(
         previewRequested && user?.id === member.id
           ? member.friends_visibility === 'everyone'
@@ -339,7 +348,7 @@ function PublicProfilePage() {
       })
       .subscribe((channelStatus) => {
         if (active && ['CHANNEL_ERROR', 'TIMED_OUT'].includes(channelStatus)) {
-          setError('Live profile updates are temporarily unavailable. Reconnecting…')
+          setError('Live profile updates are temporarily unavailable. Reconnectingâ€¦')
         }
       })
 
@@ -609,6 +618,18 @@ function PublicProfilePage() {
     }
   }
 
+  function toggleFollow() {
+    const shouldUnfollow = followStats.isFollowing
+
+    return runAction(async () => {
+      const { error: rpcError } = await getSupabaseClient().rpc(
+        shouldUnfollow ? 'unfollow_member' : 'follow_member',
+        { target_user_id: profile.id }
+      )
+      if (rpcError) throw rpcError
+    }, shouldUnfollow ? 'You unfollowed this member.' : 'You are now following this member.')
+  }
+
   function sendFriendRequest() {
     return runAction(async () => {
       const { error: rpcError } = await getSupabaseClient().rpc('send_friend_request', { target_user_id: profile.id })
@@ -761,7 +782,7 @@ function PublicProfilePage() {
             <button className="network-button" type="button" onClick={() => respondToFriendRequest(false)} disabled={working}>Decline</button>
           </>
           : friendship.outgoing
-            ? <button className="network-button" type="button" onClick={cancelFriendRequest} disabled={working}>Request sent · Cancel</button>
+            ? <button className="network-button" type="button" onClick={cancelFriendRequest} disabled={working}>Request sent Â· Cancel</button>
             : <button className="network-button network-button--primary" type="button" onClick={sendFriendRequest} disabled={working}><UserPlus size={15} />Add Friend</button>
 
   const tabs = [
@@ -822,6 +843,8 @@ function PublicProfilePage() {
                   {profile.bio && <p className="public-profile-bio">{profile.bio}</p>}
                   <div className="public-profile-stats">
                     {friendListVisible && <span><strong>{friends.length}</strong> friends</span>}
+                    <span><strong>{followStats.followerCount}</strong> followers</span>
+                    <span><strong>{followStats.followingCount}</strong> following</span>
                     <span><strong>{postCount}</strong> posts</span>
                     {mutualFriends.length > 0 && <span><strong>{mutualFriends.length}</strong> mutual friends</span>}
                     <span><CalendarDays size={14} />Joined {formatDate(profile.created_at)}</span>
@@ -830,6 +853,16 @@ function PublicProfilePage() {
                 </div>
                 <div className="public-profile-actions">
                   {profileAction}
+                  {user && !isOwner && !isPublicPreview && (
+                    <button
+                      className={`network-button ${followStats.isFollowing ? '' : 'network-button--primary'}`}
+                      type="button"
+                      onClick={toggleFollow}
+                      disabled={working}
+                    >
+                      {followStats.isFollowing ? <><Check size={15} />Following</> : <><UserPlus size={15} />Follow</>}
+                    </button>
+                  )}
                   {isOwner && <>
                     <Link className="network-button" to="/app/profile#profile-picture"><Camera size={15} />Edit profile picture</Link>
                     <Link className="network-button" to="/app/profile#cover-photo"><Camera size={15} />Edit cover photo</Link>

@@ -65,6 +65,9 @@ function MemberPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [posts, setPosts] = useState([])
+  const [feedFilter, setFeedFilter] = useState('for-you')
+  const [friendIds, setFriendIds] = useState(() => new Set())
+  const [followingIds, setFollowingIds] = useState(() => new Set())
   const [memberProfile, setMemberProfile] = useState(null)
   const [likeCounts, setLikeCounts] = useState({})
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
@@ -205,6 +208,45 @@ function MemberPage() {
     return postRows
   }, [user.id])
 
+  const loadFeedRelationships = useCallback(async () => {
+    const client = getSupabaseClient()
+
+    const [friendshipsResult, followingResult] = await Promise.all([
+      client.from('friendships')
+        .select('user_low, user_high')
+        .or(`user_low.eq.${user.id},user_high.eq.${user.id}`)
+        .limit(500),
+      client.from('user_follows')
+        .select('following_id')
+        .eq('follower_id', user.id)
+        .limit(500),
+    ])
+
+    if (friendshipsResult.error) throw friendshipsResult.error
+    if (followingResult.error) throw followingResult.error
+
+    const nextFriendIds = new Set(
+      (friendshipsResult.data || []).map((friendship) => (
+        friendship.user_low === user.id ? friendship.user_high : friendship.user_low
+      ))
+    )
+    const nextFollowingIds = new Set(
+      (followingResult.data || []).map((follow) => follow.following_id)
+    )
+
+    setFriendIds(nextFriendIds)
+    setFollowingIds(nextFollowingIds)
+  }, [user.id])
+
+  useEffect(() => {
+    let active = true
+
+    loadFeedRelationships().catch((loadError) => {
+      if (active) setError(loadError.message || 'Your feed relationships could not be loaded.')
+    })
+
+    return () => { active = false }
+  }, [loadFeedRelationships])
   const loadMemberBadges = useCallback(async () => {
     const client = getSupabaseClient()
     const [notificationsResult, conversationsResult] = await Promise.all([
@@ -483,6 +525,30 @@ function MemberPage() {
     }
   }
 
+  const visiblePosts = [...posts]
+    .filter((post) => {
+      if (feedFilter === 'following') {
+        return followingIds.has(post.author_id) && post.post_visibility === 'public'
+      }
+
+      if (feedFilter === 'friends') {
+        return friendIds.has(post.author_id)
+      }
+
+      return true
+    })
+    .sort((a, b) => {
+      if (feedFilter === 'for-you') {
+        const score = (post) => (
+          (friendIds.has(post.author_id) ? 2 : 0)
+          + (followingIds.has(post.author_id) ? 1 : 0)
+        )
+        const priorityDifference = score(b) - score(a)
+        if (priorityDifference !== 0) return priorityDifference
+      }
+
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
   return (
     <main className="member-page member-feed-page">
       <div className="ambient ambient--one" aria-hidden="true" />
@@ -559,6 +625,25 @@ function MemberPage() {
             }}
           />
 
+          <div className="member-feed-tabs" role="tablist" aria-label="Choose feed">
+            {[
+              { id: 'for-you', label: 'For You' },
+              { id: 'following', label: 'Following' },
+              { id: 'friends', label: 'Friends' },
+              { id: 'latest', label: 'Latest' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={feedFilter === tab.id}
+                className={`member-feed-tab${feedFilter === tab.id ? ' is-active' : ''}`}
+                onClick={() => setFeedFilter(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
           {error && (
             <div className="member-feed-error" role="alert">
               <AlertCircle size={18} aria-hidden="true" />
@@ -576,15 +661,31 @@ function MemberPage() {
 
           {feedStatus === 'loading' ? (
             <div className="member-feed-state" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" /> Loading community posts...</div>
-          ) : feedStatus === 'ready' && posts.length === 0 ? (
+          ) : feedStatus === 'ready' && visiblePosts.length === 0 ? (
             <div className="member-feed-empty">
               <span><Users size={20} aria-hidden="true" /></span>
-              <h3>Your community starts here</h3>
-              <p>No posts yet. Share the first update and welcome everyone in.</p>
+              <h3>
+                {feedFilter === 'following'
+                  ? 'No posts from followed members yet'
+                  : feedFilter === 'friends'
+                    ? "Your friends haven't posted yet"
+                    : feedFilter === 'latest'
+                      ? 'No community posts yet'
+                      : 'Your feed is getting ready'}
+              </h3>
+              <p>
+                {feedFilter === 'following'
+                  ? 'Follow members to see their public posts here.'
+                  : feedFilter === 'friends'
+                    ? 'Connect with members and their posts will appear here.'
+                    : feedFilter === 'latest'
+                      ? 'There are no posts currently available to you.'
+                      : 'Follow members, add friends, or share the first update with your community.'}
+              </p>
             </div>
           ) : (
             <div className="member-post-list">
-              {posts.map((post) => {
+              {visiblePosts.map((post) => {
                 const author = post.profiles
                 const authorName = author?.display_name || author?.username || 'QORVEXA member'
                 const authorProfile = author?.username ? `/profile/${encodeURIComponent(author.username)}` : ''

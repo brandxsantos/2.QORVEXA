@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -42,6 +42,7 @@ const notificationFilters = [
   ['message', 'Messages'],
   ['post_like', 'Reactions'],
   ['comment', 'Comments & replies'],
+  ['new_follower', 'Follows'],
   ['other', 'Other activity'],
 ]
 const presenceStatusEvent = 'qorvexa:presence-status'
@@ -500,7 +501,7 @@ function NetworkPage() {
   const filteredNotifications = notifications.filter((notification) => {
     if (notificationFilter === 'all') return true
     if (notificationFilter === 'friend_request') return ['friend_request', 'friend_request_accepted'].includes(notification.type)
-    if (notificationFilter === 'other') return !['friend_request', 'friend_request_accepted', 'message', 'post_like', 'comment', 'reply'].includes(notification.type)
+    if (notificationFilter === 'other') return !['friend_request', 'friend_request_accepted', 'message', 'post_like', 'comment', 'reply', 'new_follower'].includes(notification.type)
     if (notificationFilter === 'comment') return ['comment', 'reply'].includes(notification.type)
     return notification.type === notificationFilter
   })
@@ -624,6 +625,16 @@ function NetworkPage() {
 
   async function openNotification(notification) {
     await markNotificationRead(notification)
+
+    if (notification.type === 'new_follower') {
+      const username = notification.profiles?.username
+      if (username) {
+        navigate(`/profile/${encodeURIComponent(username)}`)
+      } else {
+        navigate('/app/friends')
+      }
+      return
+    }
     if (notification.type === 'message' && notification.conversation_id) {
       navigate(`/app/messages/${encodeURIComponent(notification.conversation_id)}`)
       return
@@ -941,7 +952,8 @@ function NetworkPage() {
                     && request?.status === 'pending'
                     && request.receiver_id === user.id
                   const actorName = profileName(notification.profiles)
-                  const notificationText = notification.type === 'friend_request' ? 'sent you a friend request.'
+                  const notificationText = notification.type === 'new_follower' ? 'started following you.'
+                    : notification.type === 'friend_request' ? 'sent you a friend request.'
                     : notification.type === 'friend_request_accepted' ? 'accepted your friend request.'
                       : notification.type === 'message' ? 'sent you a message.'
                         : notification.type === 'post_like' ? 'liked your post.'
@@ -1077,6 +1089,3 @@ function NetworkPage() {
 }
 
 export default NetworkPage
-
-
-
