@@ -6707,3 +6707,144 @@
   cursor: wait;
   opacity: 0.65;
 }
+
+/* QORVEXA emoji and reaction pickers */
+.qv-emoji-picker,
+.qv-reaction-picker {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+.qv-emoji-trigger {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgb(148 163 184 / 16%);
+  border-radius: 0.55rem;
+  background: #101725;
+  color: #a9bacd;
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+.qv-emoji-trigger:hover {
+  border-color: rgb(0 229 255 / 45%);
+  color: #00e5ff;
+}
+
+.qv-emoji-menu {
+  position: absolute;
+  z-index: 100;
+  right: 0;
+  bottom: calc(100% + 0.55rem);
+  display: grid;
+  width: 12.5rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border: 1px solid rgb(0 229 255 / 20%);
+  border-radius: 0.75rem;
+  background: #172235;
+  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 40%);
+}
+
+.qv-emoji-menu button {
+  display: grid;
+  min-width: 0;
+  min-height: 2.25rem;
+  place-items: center;
+  padding: 0.2rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.qv-emoji-menu button:hover {
+  background: rgb(0 229 255 / 12%);
+}
+
+.qv-reaction-picker .member-comments-toggle {
+  white-space: nowrap;
+}
+
+.qv-reaction-menu {
+  position: absolute;
+  z-index: 100;
+  bottom: calc(100% + 0.65rem);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.4rem;
+  border: 1px solid rgb(0 229 255 / 20%);
+  border-radius: 2rem;
+  background: #172235;
+  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 40%);
+}
+
+.qv-reaction-menu button {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 1.35rem;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.qv-reaction-menu button:hover {
+  transform: scale(1.2);
+  background: rgb(0 229 255 / 12%);
+}
+
+.qv-reaction-menu button.is-selected {
+  background: rgb(0 229 255 / 15%);
+}
+
+.qv-reaction-menu button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.member-inline-comment-form > .qv-emoji-picker {
+  flex: 0 0 auto;
+}
+
+.network-message-form > .qv-emoji-picker {
+  flex: 0 0 auto;
+}
+
+.network-message-form textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .qv-reaction-menu {
+    gap: 0.05rem;
+    padding: 0.3rem;
+  }
+
+  .qv-reaction-menu button {
+    width: 1.95rem;
+    height: 1.95rem;
+    font-size: 1.15rem;
+  }
+
+  .qv-emoji-menu {
+    width: 11.5rem;
+  }
+}

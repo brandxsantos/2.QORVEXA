@@ -33,6 +33,8 @@ import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import NotificationToast from '../components/NotificationToast.jsx'
 import notificationToastText from '../lib/notificationToastText.js'
 import PostComposer from '../components/PostComposer.jsx'
+import PostReactionButton from '../components/PostReactionButton.jsx'
+import EmojiPicker from '../components/EmojiPicker.jsx'
 import BrandMark from '../components/BrandMark.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 
@@ -87,6 +89,7 @@ function PublicProfilePage() {
   const [notice, setNotice] = useState('')
   const [likeCounts, setLikeCounts] = useState({})
   const [likedPostIds, setLikedPostIds] = useState(() => new Set())
+  const [postReactions, setPostReactions] = useState({})
   const [commentsByPost, setCommentsByPost] = useState({})
   const [commentDrafts, setCommentDrafts] = useState({})
   const [replyDrafts, setReplyDrafts] = useState({})
@@ -223,7 +226,7 @@ function PublicProfilePage() {
         const [likesResult, likedResult, commentsResult] = await Promise.all([
           client.rpc('get_visible_post_like_counts', { target_post_ids: postIds }),
           user
-            ? client.from('post_likes').select('post_id').eq('user_id', user.id).in('post_id', postIds)
+            ? client.from('post_likes').select('post_id,reaction_type').eq('user_id', user.id).in('post_id', postIds)
             : Promise.resolve({ data: [], error: null }),
           client.from('comments')
             .select('id, post_id, author_id, parent_id, content, created_at, profiles!comments_author_id_fkey(username, display_name, avatar_url)')
@@ -237,14 +240,17 @@ function PublicProfilePage() {
         if (commentsResult.error) throw commentsResult.error
         const counts = Object.fromEntries((likesResult.data || []).map((like) => [like.post_id, Number(like.like_count)]))
         const liked = new Set((likedResult.data || []).map((like) => like.post_id))
+        const reactions = Object.fromEntries((likedResult.data || []).map((like) => [like.post_id, like.reaction_type]))
         const commentRows = commentsResult.data || []
         const groupedComments = Object.fromEntries(postIds.map((id) => [id, commentRows.filter((comment) => comment.post_id === id)]))
         setLikeCounts(counts)
         setLikedPostIds(liked)
+        setPostReactions(reactions)
         setCommentsByPost(groupedComments)
       } else {
         setLikeCounts({})
         setLikedPostIds(new Set())
+        setPostReactions({})
         setCommentsByPost({})
       }
     } catch (loadError) {
@@ -519,7 +525,7 @@ function PublicProfilePage() {
         const [likesResult, likedResult, commentsResult] = await Promise.all([
           client.rpc('get_visible_post_like_counts', { target_post_ids: postIds }),
           user
-            ? client.from('post_likes').select('post_id').eq('user_id', user.id).in('post_id', postIds)
+            ? client.from('post_likes').select('post_id,reaction_type').eq('user_id', user.id).in('post_id', postIds)
             : Promise.resolve({ data: [], error: null }),
           client.from('comments')
             .select('id, post_id, author_id, parent_id, content, created_at, profiles!comments_author_id_fkey(username, display_name, avatar_url)')
@@ -535,6 +541,7 @@ function PublicProfilePage() {
           ...Object.fromEntries((likesResult.data || []).map((like) => [like.post_id, Number(like.like_count)])),
         }))
         setLikedPostIds((current) => new Set([...current, ...(likedResult.data || []).map((like) => like.post_id)]))
+        setPostReactions((current) => ({ ...current, ...Object.fromEntries((likedResult.data || []).map((like) => [like.post_id, like.reaction_type])) }))
         const groupedComments = Object.fromEntries(postIds.map((id) => [id, (commentsResult.data || []).filter((comment) => comment.post_id === id)]))
         setCommentsByPost((current) => ({ ...current, ...groupedComments }))
       }
@@ -631,35 +638,55 @@ function PublicProfilePage() {
     })
   }
 
-  async function toggleLike(post) {
+  async function handlePostReaction(post, nextType) {
     if (isPublicPreview && isProfileOwner) return
     if (!user) {
       navigate('/login')
       return
     }
-    const liked = likedPostIds.has(post.id)
+
+    const currentType = postReactions[post.id] || null
+    const removeReaction = !nextType || nextType === currentType
+
     setWorking(true)
     setError('')
+
     try {
       const query = getSupabaseClient().from('post_likes')
-      const result = liked
+      const result = removeReaction
         ? await query.delete().eq('post_id', post.id).eq('user_id', user.id)
-        : await query.insert({ post_id: post.id, user_id: user.id })
+        : await query.upsert(
+            { post_id: post.id, user_id: user.id, reaction_type: nextType },
+            { onConflict: 'post_id,user_id' },
+          )
+
       if (result.error) throw result.error
+
+      setPostReactions((current) => {
+        const next = { ...current }
+        if (removeReaction) delete next[post.id]
+        else next[post.id] = nextType
+        return next
+      })
+
       setLikedPostIds((current) => {
         const next = new Set(current)
-        if (liked) next.delete(post.id)
+        if (removeReaction) next.delete(post.id)
         else next.add(post.id)
         return next
       })
-      setLikeCounts((current) => ({ ...current, [post.id]: Math.max(0, (current[post.id] || 0) + (liked ? -1 : 1)) }))
-    } catch (likeError) {
-      setError(likeError.message || 'The like could not be updated.')
+
+      if (!currentType && !removeReaction) {
+        setLikeCounts((current) => ({ ...current, [post.id]: (current[post.id] || 0) + 1 }))
+      } else if (currentType && removeReaction) {
+        setLikeCounts((current) => ({ ...current, [post.id]: Math.max(0, (current[post.id] || 0) - 1) }))
+      }
+    } catch (reactionError) {
+      setError(reactionError.message || 'Your reaction could not be updated.')
     } finally {
       setWorking(false)
     }
   }
-
   async function submitComment(event, postId, parentId = null) {
     event.preventDefault()
     if (isPublicPreview && isProfileOwner) return
@@ -834,7 +861,12 @@ function PublicProfilePage() {
                         {post.content && <p className="member-post-content">{post.content}</p>}
                         {post.media_path && <button className="public-profile-photo-button" type="button" onClick={() => setSelectedPhoto(post.media_path)}><ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to post" loading="lazy" /></button>}
                         <div className="member-post-footer">
-                          <button className={`member-comments-toggle${likedPostIds.has(post.id) ? ' is-active' : ''}`} type="button" onClick={() => toggleLike(post)} aria-pressed={likedPostIds.has(post.id)} disabled={working || (isPublicPreview && isProfileOwner)}><Heart size={14} />{likeCounts[post.id] || 0} likes</button>
+                          <PostReactionButton
+                            reaction={postReactions[post.id]}
+                            count={likeCounts[post.id] || 0}
+                            disabled={working || (isPublicPreview && isProfileOwner)}
+                            onReact={(type) => handlePostReaction(post, type)}
+                          />
                           <button className="member-comments-toggle" type="button" onClick={() => setCommentsOpen((current) => {
                             const next = new Set(current)
                             if (next.has(post.id)) next.delete(post.id)
@@ -858,6 +890,7 @@ function PublicProfilePage() {
                                   {user && !(isPublicPreview && isProfileOwner) && <button type="button" onClick={() => setReplyTarget(replyTarget === comment.id ? '' : comment.id)}>Reply</button>}
                                   {replyTarget === comment.id && user && !(isPublicPreview && isProfileOwner) && <form className="member-inline-comment-form" onSubmit={(event) => submitComment(event, post.id, comment.id)}>
                                     <input maxLength={1000} value={replyDrafts[comment.id] || ''} onChange={(event) => setReplyDrafts((current) => ({ ...current, [comment.id]: event.target.value }))} placeholder={`Reply to ${commentName}â€¦`} aria-label={`Reply to ${commentName}`} />
+                                    <EmojiPicker onSelect={(emoji) => setReplyDrafts((current) => ({ ...current, [comment.id]: `${current[comment.id] || ''}${emoji}` }))} />
                                     <button type="submit" disabled={working || !replyDrafts[comment.id]?.trim()}>Reply</button>
                                   </form>}
                                 </div>
@@ -877,6 +910,7 @@ function PublicProfilePage() {
                           })}
                           {user && !(isPublicPreview && isProfileOwner) && <form className="member-inline-comment-form" onSubmit={(event) => submitComment(event, post.id)}>
                             <input maxLength={1000} value={commentDrafts[post.id] || ''} onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))} placeholder="Write a commentâ€¦" aria-label="Write a comment" />
+                            <EmojiPicker onSelect={(emoji) => setCommentDrafts((current) => ({ ...current, [post.id]: `${current[post.id] || ''}${emoji}` }))} />
                             <button type="submit" disabled={working || !commentDrafts[post.id]?.trim()}>Comment</button>
                           </form>}
                         </div>}
@@ -1014,5 +1048,7 @@ function PublicProfilePage() {
 }
 
 export default PublicProfilePage
+
+
 
 

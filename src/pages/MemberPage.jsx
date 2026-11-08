@@ -23,6 +23,8 @@ import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import NotificationToast from '../components/NotificationToast.jsx'
 import notificationToastText from '../lib/notificationToastText.js'
 import PostComposer from '../components/PostComposer.jsx'
+import PostReactionButton from '../components/PostReactionButton.jsx'
+import EmojiPicker from '../components/EmojiPicker.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 import AccountMenu from '../components/AccountMenu.jsx'
@@ -67,6 +69,7 @@ function MemberPage() {
   const [unreadMessageCount, setUnreadMessageCount] = useState(0)
   const [notificationToast, setNotificationToast] = useState('')
   const [likedPostIds, setLikedPostIds] = useState(() => new Set())
+  const [postReactions, setPostReactions] = useState({})
   const [bookmarkedPostIds, setBookmarkedPostIds] = useState(() => new Set())
   const [postActionId, setPostActionId] = useState('')
   const [commentsByPost, setCommentsByPost] = useState({})
@@ -178,7 +181,7 @@ function MemberPage() {
       const client = getSupabaseClient()
       const [likesResult, likedResult, bookmarksResult] = await Promise.all([
         client.rpc('get_visible_post_like_counts', { target_post_ids: postIds }),
-        client.from('post_likes').select('post_id').eq('user_id', user.id).in('post_id', postIds),
+        client.from('post_likes').select('post_id,reaction_type').eq('user_id', user.id).in('post_id', postIds),
         client.from('post_bookmarks').select('post_id').eq('user_id', user.id).in('post_id', postIds),
       ])
       if (likesResult.error) throw likesResult.error
@@ -186,12 +189,15 @@ function MemberPage() {
       if (bookmarksResult.error) throw bookmarksResult.error
       const counts = Object.fromEntries((likesResult.data || []).map((like) => [like.post_id, Number(like.like_count)]))
       const likedIds = new Set((likedResult.data || []).map((like) => like.post_id))
+      const reactions = Object.fromEntries((likedResult.data || []).map((like) => [like.post_id, like.reaction_type]))
       setLikeCounts(counts)
       setLikedPostIds(likedIds)
+      setPostReactions(reactions)
       setBookmarkedPostIds(new Set((bookmarksResult.data || []).map((bookmark) => bookmark.post_id)))
     } else {
       setLikeCounts({})
       setLikedPostIds(new Set())
+      setPostReactions({})
       setBookmarkedPostIds(new Set())
     }
     return postRows
@@ -312,26 +318,47 @@ function MemberPage() {
     }
   }, [loadComments, loadMemberBadges, loadPosts, user.id])
 
-  async function toggleLike(post) {
+  async function handlePostReaction(post, nextType) {
     if (postActionId) return
-    const isLiked = likedPostIds.has(post.id)
+
+    const currentType = postReactions[post.id] || null
+    const removeReaction = !nextType || nextType === currentType
+
     setPostActionId(post.id)
     setError('')
+
     try {
       const query = getSupabaseClient().from('post_likes')
-      const result = isLiked
+      const result = removeReaction
         ? await query.delete().eq('post_id', post.id).eq('user_id', user.id)
-        : await query.insert({ post_id: post.id, user_id: user.id })
+        : await query.upsert(
+            { post_id: post.id, user_id: user.id, reaction_type: nextType },
+            { onConflict: 'post_id,user_id' },
+          )
+
       if (result.error) throw result.error
+
+      setPostReactions((current) => {
+        const next = { ...current }
+        if (removeReaction) delete next[post.id]
+        else next[post.id] = nextType
+        return next
+      })
+
       setLikedPostIds((current) => {
         const next = new Set(current)
-        if (isLiked) next.delete(post.id)
+        if (removeReaction) next.delete(post.id)
         else next.add(post.id)
         return next
       })
-      setLikeCounts((current) => ({ ...current, [post.id]: Math.max(0, (current[post.id] || 0) + (isLiked ? -1 : 1)) }))
-    } catch (likeError) {
-      setError(likeError.message || 'Your like could not be updated.')
+
+      if (!currentType && !removeReaction) {
+        setLikeCounts((current) => ({ ...current, [post.id]: (current[post.id] || 0) + 1 }))
+      } else if (currentType && removeReaction) {
+        setLikeCounts((current) => ({ ...current, [post.id]: Math.max(0, (current[post.id] || 0) - 1) }))
+      }
+    } catch (reactionError) {
+      setError(reactionError.message || 'Your reaction could not be updated.')
     } finally {
       setPostActionId('')
     }
@@ -580,9 +607,12 @@ function MemberPage() {
                       {post.content && <p className="member-post-content">{post.content}</p>}
                       {post.media_path && <Link to={`/profile/${encodeURIComponent(author?.username || username || '')}?post=${post.id}`} className="member-post-media-link"><ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to post" loading="lazy" /></Link>}
                       <div className="member-post-footer">
-                        <button className={`member-comments-toggle${likedPostIds.has(post.id) ? ' is-active' : ''}`} type="button" onClick={() => toggleLike(post)} disabled={postActionId === post.id} aria-pressed={likedPostIds.has(post.id)}>
-                          <span aria-hidden="true">{likedPostIds.has(post.id) ? 'â™¥' : 'â™¡'}</span><span>{likeCounts[post.id] || 0} likes</span>
-                        </button>
+                        <PostReactionButton
+                          reaction={postReactions[post.id]}
+                          count={likeCounts[post.id] || 0}
+                          disabled={postActionId === post.id}
+                          onReact={(type) => handlePostReaction(post, type)}
+                        />
                         <button className={`member-comments-toggle${bookmarkedPostIds.has(post.id) ? ' is-active' : ''}`} type="button" onClick={() => toggleBookmark(post)} disabled={postActionId === post.id} aria-pressed={bookmarkedPostIds.has(post.id)}>
                           <Bookmark size={14} aria-hidden="true" /><span>{bookmarkedPostIds.has(post.id) ? 'Saved' : 'Save'}</span>
                         </button>
@@ -649,6 +679,7 @@ function MemberPage() {
                                                 placeholder={`Reply to ${commentName}â€¦`}
                                                 value={replyDrafts[comment.id] || ''}
                                               />
+                                              <EmojiPicker onSelect={(emoji) => setReplyDrafts((current) => ({ ...current, [comment.id]: `${current[comment.id] || ''}${emoji}` }))} />
                                               <button type="submit" disabled={!replyDrafts[comment.id]?.trim() || Boolean(submittingComment)}>
                                                 {submittingComment === `${post.id}:${comment.id}` ? 'Sendingâ€¦' : 'Reply'}
                                               </button>
@@ -697,6 +728,7 @@ function MemberPage() {
                                   placeholder="Write a commentâ€¦"
                                   value={commentDrafts[post.id] || ''}
                                 />
+                                <EmojiPicker onSelect={(emoji) => setCommentDrafts((current) => ({ ...current, [post.id]: `${current[post.id] || ''}${emoji}` }))} />
                                 <button type="submit" disabled={!commentDrafts[post.id]?.trim() || Boolean(submittingComment)}>
                                   {submittingComment === `${post.id}:root` ? 'Sendingâ€¦' : 'Comment'}
                                 </button>
@@ -727,4 +759,7 @@ function MemberPage() {
 }
 
 export default MemberPage
+
+
+
 
