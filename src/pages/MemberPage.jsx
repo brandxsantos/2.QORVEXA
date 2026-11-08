@@ -306,7 +306,7 @@ function MemberPage() {
       })
       .subscribe((channelStatus) => {
         if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
-          setError('Live feed updates are temporarily unavailable. Reconnectingâ€¦')
+          setError('Live feed updates are temporarily unavailable. Reconnecting...')
         }
       })
 
@@ -573,7 +573,7 @@ function MemberPage() {
           )}
 
           {feedStatus === 'loading' ? (
-            <div className="member-feed-state" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" /> Loading community postsâ€¦</div>
+            <div className="member-feed-state" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" /> Loading community posts...</div>
           ) : feedStatus === 'ready' && posts.length === 0 ? (
             <div className="member-feed-empty">
               <span><Users size={20} aria-hidden="true" /></span>
@@ -626,7 +626,7 @@ function MemberPage() {
                       {commentsOpen[post.id] && (
                         <section className="member-comments" aria-label="Comments">
                           {commentsStatus[post.id] === 'loading' ? (
-                            <div className="member-comments-state" role="status"><LoaderCircle size={15} className="spinner" aria-hidden="true" /> Loading commentsâ€¦</div>
+                            <div className="member-comments-state" role="status"><LoaderCircle size={15} className="spinner" aria-hidden="true" /> Loading comments...</div>
                           ) : commentsStatus[post.id] === 'setup' ? (
                             <div className="member-comments-error" role="alert">
                               <strong>Comments need one database migration.</strong>
@@ -666,7 +666,7 @@ function MemberPage() {
                                             {comment.author_id !== user.id && <button type="button" onClick={() => setReportTarget({ reportedUserId: comment.author_id, type: 'comment', id: comment.id })}><Flag size={12} aria-hidden="true" /> Report</button>}
                                             {comment.author_id === user.id && (
                                               <button type="button" onClick={() => handleDeleteComment(comment)} disabled={deletingComment === comment.id}>
-                                                <Trash2 size={12} aria-hidden="true" /> {deletingComment === comment.id ? 'Deletingâ€¦' : 'Delete'}
+                                                <Trash2 size={12} aria-hidden="true" /> {deletingComment === comment.id ? 'Deleting...' : 'Delete'}
                                               </button>
                                             )}
                                           </div>
@@ -676,12 +676,12 @@ function MemberPage() {
                                                 aria-label={`Reply to ${commentName}`}
                                                 maxLength={1000}
                                                 onChange={(event) => setReplyDrafts((current) => ({ ...current, [comment.id]: event.target.value }))}
-                                                placeholder={`Reply to ${commentName}â€¦`}
+                                                placeholder={`Reply to ${commentName}...`}
                                                 value={replyDrafts[comment.id] || ''}
                                               />
                                               <EmojiPicker onSelect={(emoji) => setReplyDrafts((current) => ({ ...current, [comment.id]: `${current[comment.id] || ''}${emoji}` }))} />
                                               <button type="submit" disabled={!replyDrafts[comment.id]?.trim() || Boolean(submittingComment)}>
-                                                {submittingComment === `${post.id}:${comment.id}` ? 'Sendingâ€¦' : 'Reply'}
+                                                {submittingComment === `${post.id}:${comment.id}` ? 'Sending...' : 'Reply'}
                                               </button>
                                             </form>
                                           )}
@@ -708,7 +708,7 @@ function MemberPage() {
                                               {reply.author_id === user.id && (
                                                 <div className="member-comment-actions">
                                                   <button type="button" onClick={() => handleDeleteComment(reply)} disabled={deletingComment === reply.id}>
-                                                    <Trash2 size={12} aria-hidden="true" /> {deletingComment === reply.id ? 'Deletingâ€¦' : 'Delete'}
+                                                    <Trash2 size={12} aria-hidden="true" /> {deletingComment === reply.id ? 'Deleting...' : 'Delete'}
                                                   </button>
                                                 </div>
                                               )}
@@ -725,12 +725,12 @@ function MemberPage() {
                                   aria-label="Write a comment"
                                   maxLength={1000}
                                   onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))}
-                                  placeholder="Write a commentâ€¦"
+                                  placeholder="Write a comment..."
                                   value={commentDrafts[post.id] || ''}
                                 />
                                 <EmojiPicker onSelect={(emoji) => setCommentDrafts((current) => ({ ...current, [post.id]: `${current[post.id] || ''}${emoji}` }))} />
                                 <button type="submit" disabled={!commentDrafts[post.id]?.trim() || Boolean(submittingComment)}>
-                                  {submittingComment === `${post.id}:root` ? 'Sendingâ€¦' : 'Comment'}
+                                  {submittingComment === `${post.id}:root` ? 'Sending...' : 'Comment'}
                                 </button>
                               </form>
                               {(commentsByPost[post.id] || []).length === 0 && (
@@ -750,7 +750,7 @@ function MemberPage() {
       </div>
 
       <footer className="member-feed-footer">
-        <span>QORVEXA <span>Â·</span> Connect Beyond Limits.</span>
+        <span>QORVEXA <span>·</span> Connect Beyond Limits.</span>
         <span>Posts are visible to signed-in members.</span>
       </footer>
       {reportTarget && <ReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />}
@@ -759,6 +759,7 @@ function MemberPage() {
 }
 
 export default MemberPage
+
 
 
 

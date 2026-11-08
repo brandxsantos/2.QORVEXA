@@ -398,7 +398,7 @@ function NetworkPage() {
       })
       .subscribe((channelStatus) => {
         if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
-          setError('The live conversation connection was interrupted. Reconnectingâ€¦')
+          setError('The live conversation connection was interrupted. Reconnecting...')
         }
       })
     chatChannelRef.current = channel
@@ -450,7 +450,7 @@ function NetworkPage() {
       })
       .subscribe((channelStatus) => {
         if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
-          setError('Live notifications are temporarily unavailable. Reconnectingâ€¦')
+          setError('Live notifications are temporarily unavailable. Reconnecting...')
         }
       })
     return () => { client.removeChannel(channel) }
@@ -470,7 +470,7 @@ function NetworkPage() {
       })
       .subscribe((channelStatus) => {
         if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
-          setError('Live network updates are temporarily unavailable. Reconnectingâ€¦')
+          setError('Live network updates are temporarily unavailable. Reconnecting...')
         }
       })
     return () => { client.removeChannel(channel) }
@@ -808,7 +808,7 @@ function NetworkPage() {
         <div className="network-heading">
           <div><p className="eyebrow">YOUR COMMUNITY</p><h1>{pageTitles[activeSection] || 'Your network'}</h1></div>
           {['friends', 'discover'].includes(activeSection) && (
-            <label className="network-search"><Search size={16} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${activeSection === 'friends' ? 'friends' : 'people'}â€¦`} /></label>
+            <label className="network-search"><Search size={16} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${activeSection === 'friends' ? 'friends' : 'people'}...`} /></label>
           )}
         </div>
 
@@ -837,7 +837,7 @@ function NetworkPage() {
             <code>supabase/migrations/20261108010000_repair_online_presence_policies.sql</code>
           </div>
         ) : status === 'loading' ? (
-          <div className="network-loading" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" />Loading your networkâ€¦</div>
+          <div className="network-loading" role="status"><LoaderCircle size={20} className="spinner" aria-hidden="true" />Loading your network...</div>
         ) : (
           <>
             {activeSection === 'discover' && (
@@ -856,7 +856,7 @@ function NetworkPage() {
                             <button className="network-button" type="button" disabled={workingId === incoming.id} onClick={() => respondToRequest(incoming, false)}><X size={14} />Decline</button>
                           </>
                         ) : outgoing ? (
-                          <button className="network-button" type="button" disabled={workingId === outgoing.id} onClick={() => cancelRequest(outgoing)}>Request sent Â· Cancel</button>
+                          <button className="network-button" type="button" disabled={workingId === outgoing.id} onClick={() => cancelRequest(outgoing)}>Request sent · Cancel</button>
                         ) : (
                           <button className="network-button network-button--primary" type="button" disabled={workingId === profile.id} onClick={() => sendFriendRequest(profile)}><UserPlus size={14} />Add friend</button>
                         )}
@@ -971,7 +971,7 @@ function NetworkPage() {
                       {!notification.is_read && <span className="network-unread-dot" aria-label="Unread" />}
                     </article>
                   )
-                }) : <div className="network-empty"><Bell size={21} /><h2>{notifications.length ? 'No matching notifications' : 'Youâ€™re all caught up'}</h2><p>{notifications.length ? 'Choose another category to see more activity.' : 'Friend requests, messages, reactions, and comments will appear here.'}</p></div>}
+                }) : <div className="network-empty"><Bell size={21} /><h2>{notifications.length ? 'No matching notifications' : 'You"™re all caught up'}</h2><p>{notifications.length ? 'Choose another category to see more activity.' : 'Friend requests, messages, reactions, and comments will appear here.'}</p></div>}
               </section>
             )}
 
@@ -979,7 +979,7 @@ function NetworkPage() {
               <div className="network-messenger">
                 <aside className={`network-conversation-list${selectedConversationId ? ' network-conversation-list--mobile-hidden' : ''}`}>
                   <div className="network-conversation-heading"><h2>Messages</h2><span>{conversations.length}</span></div>
-                  <label className="network-search network-search--conversation"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversationsâ€¦" /></label>
+                  <label className="network-search network-search--conversation"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations..." /></label>
                   {conversations.filter((conversation) => profileName(conversation.peer).toLowerCase().includes(query.trim().toLowerCase()) || conversation.peer?.username?.toLowerCase().includes(query.trim().toLowerCase())).map((conversation) => (
                     <div
                       className={`network-conversation-row${conversation.id === selectedConversationId ? ' is-selected' : ''}`}
@@ -1005,7 +1005,7 @@ function NetworkPage() {
                         {profileAvailability(activeConversation.peer) && <span className="network-chat-status">{profileAvailability(activeConversation.peer) === 'busy' ? 'Busy' : profileAvailability(activeConversation.peer) === 'online' ? 'Online' : 'Offline'}</span>}
                       </header>
                       <div className="network-message-list">
-                        {hasMoreMessages && <button className="network-load-older" type="button" onClick={loadOlderMessages} disabled={loadingOlderMessages}>{loadingOlderMessages ? 'Loadingâ€¦' : 'Load older messages'}</button>}
+                        {hasMoreMessages && <button className="network-load-older" type="button" onClick={loadOlderMessages} disabled={loadingOlderMessages}>{loadingOlderMessages ? 'Loading...' : 'Load older messages'}</button>}
                         {messages.map((message) => (
                           <article className={`network-message${message.sender_id === user.id ? ' network-message--own' : ''}`} key={message.id}>
                             <div className="network-message-bubble">
@@ -1025,7 +1025,7 @@ function NetworkPage() {
                             </div>
                           </article>
                         ))}
-                        {typingConversationId === selectedConversationId && <div className="network-typing"><Link to={`/profile/${encodeURIComponent(activeConversation.peer?.username || '')}`}>{profileName(activeConversation.peer)}</Link> is typingâ€¦</div>}
+                        {typingConversationId === selectedConversationId && <div className="network-typing"><Link to={`/profile/${encodeURIComponent(activeConversation.peer?.username || '')}`}>{profileName(activeConversation.peer)}</Link> is typing...</div>}
                         <div ref={messagesEndRef} />
                         {!messages.length && <div className="network-chat-empty">Say hello and start the conversation.</div>}
                       </div>
@@ -1040,7 +1040,7 @@ function NetworkPage() {
                               event.currentTarget.form.requestSubmit()
                             }
                           }}
-                          placeholder="Write a messageâ€¦ (Enter to send, Shift+Enter for a new line)"
+                          placeholder="Write a message... (Enter to send, Shift+Enter for a new line)"
                           rows={2}
                           value={draft}
                         />
@@ -1065,7 +1065,7 @@ function NetworkPage() {
         )}
       </section>
       <footer className="member-feed-footer">
-        <span>QORVEXA <span>Â·</span> Connect Beyond Limits.</span>
+        <span>QORVEXA <span>·</span> Connect Beyond Limits.</span>
         <span>Signed in as {currentUsername ? `@${currentUsername}` : currentUserName}</span>
       </footer>
       {reportTarget && <ReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />}
@@ -1074,4 +1074,5 @@ function NetworkPage() {
 }
 
 export default NetworkPage
+
 

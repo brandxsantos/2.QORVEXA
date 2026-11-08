@@ -352,7 +352,7 @@ function PublicProfilePage() {
       })
       .subscribe((channelStatus) => {
         if (active && (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT')) {
-          setError('Live notification counts are temporarily unavailable. Reconnectingâ€¦')
+          setError('Live notification counts are temporarily unavailable. Reconnecting...')
         }
       })
     return () => {
@@ -735,7 +735,7 @@ function PublicProfilePage() {
             <button className="network-button" type="button" onClick={() => respondToFriendRequest(false)} disabled={working}>Decline</button>
           </>
           : friendship.outgoing
-            ? <button className="network-button" type="button" onClick={cancelFriendRequest} disabled={working}>Request sent Â· Cancel</button>
+            ? <button className="network-button" type="button" onClick={cancelFriendRequest} disabled={working}>Request sent · Cancel</button>
             : <button className="network-button network-button--primary" type="button" onClick={sendFriendRequest} disabled={working}><UserPlus size={15} />Add Friend</button>
 
   const tabs = [
@@ -889,7 +889,7 @@ function PublicProfilePage() {
                                 <div><p>{commentUrl ? <Link to={commentUrl}><strong>{commentName}</strong></Link> : <strong>{commentName}</strong>} {comment.content}</p>
                                   {user && !(isPublicPreview && isProfileOwner) && <button type="button" onClick={() => setReplyTarget(replyTarget === comment.id ? '' : comment.id)}>Reply</button>}
                                   {replyTarget === comment.id && user && !(isPublicPreview && isProfileOwner) && <form className="member-inline-comment-form" onSubmit={(event) => submitComment(event, post.id, comment.id)}>
-                                    <input maxLength={1000} value={replyDrafts[comment.id] || ''} onChange={(event) => setReplyDrafts((current) => ({ ...current, [comment.id]: event.target.value }))} placeholder={`Reply to ${commentName}â€¦`} aria-label={`Reply to ${commentName}`} />
+                                    <input maxLength={1000} value={replyDrafts[comment.id] || ''} onChange={(event) => setReplyDrafts((current) => ({ ...current, [comment.id]: event.target.value }))} placeholder={`Reply to ${commentName}...`} aria-label={`Reply to ${commentName}`} />
                                     <EmojiPicker onSelect={(emoji) => setReplyDrafts((current) => ({ ...current, [comment.id]: `${current[comment.id] || ''}${emoji}` }))} />
                                     <button type="submit" disabled={working || !replyDrafts[comment.id]?.trim()}>Reply</button>
                                   </form>}
@@ -909,7 +909,7 @@ function PublicProfilePage() {
                             </div>
                           })}
                           {user && !(isPublicPreview && isProfileOwner) && <form className="member-inline-comment-form" onSubmit={(event) => submitComment(event, post.id)}>
-                            <input maxLength={1000} value={commentDrafts[post.id] || ''} onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))} placeholder="Write a commentâ€¦" aria-label="Write a comment" />
+                            <input maxLength={1000} value={commentDrafts[post.id] || ''} onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))} placeholder="Write a comment..." aria-label="Write a comment" />
                             <EmojiPicker onSelect={(emoji) => setCommentDrafts((current) => ({ ...current, [post.id]: `${current[post.id] || ''}${emoji}` }))} />
                             <button type="submit" disabled={working || !commentDrafts[post.id]?.trim()}>Comment</button>
                           </form>}
@@ -921,7 +921,7 @@ function PublicProfilePage() {
             )}
             {['posts', 'photos', 'activity'].includes(activeTab) && loadedPostCount < postCount && (
               <button className="public-profile-load-more" type="button" onClick={loadMorePosts} disabled={loadingMorePosts}>
-                {loadingMorePosts ? <><LoaderCircle className="spinner" size={15} />Loadingâ€¦</> : 'Load more posts'}
+                {loadingMorePosts ? <><LoaderCircle className="spinner" size={15} />Loading...</> : 'Load more posts'}
               </button>
             )}
 
@@ -1002,7 +1002,7 @@ function PublicProfilePage() {
                   ? <div className="member-feed-empty"><span><Users size={20} /></span><h2>Friends list is private</h2><p>{profile.display_name} has limited who can see this list.</p></div>
                   : friends.length
                     ? <>
-                      <label className="public-profile-friend-search"><Users size={15} /><input value={friendSearch} onChange={(event) => setFriendSearch(event.target.value)} placeholder="Search friendsâ€¦" aria-label="Search friends" /></label>
+                      <label className="public-profile-friend-search"><Users size={15} /><input value={friendSearch} onChange={(event) => setFriendSearch(event.target.value)} placeholder="Search friends..." aria-label="Search friends" /></label>
                       <div className="public-profile-friends-grid">{friends.filter((friend) => `${friend.display_name} ${friend.username}`.toLowerCase().includes(friendSearch.trim().toLowerCase())).map((friend) => (
                       <Link className="public-profile-friend-card" to={`/profile/${encodeURIComponent(friend.username)}`} key={friend.id}>
                         <span className="public-profile-friend-avatar">{friend.avatar_url ? <ProtectedMediaImage path={friend.avatar_url} alt="" fallback={profileInitials(friend)} /> : profileInitials(friend)}</span>
@@ -1048,6 +1048,7 @@ function PublicProfilePage() {
 }
 
 export default PublicProfilePage
+
 
 
 
