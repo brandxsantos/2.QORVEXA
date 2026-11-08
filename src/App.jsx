@@ -1,4 +1,4 @@
-﻿import { lazy, Suspense } from 'react'
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import LandingPage from './pages/LandingPage.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
@@ -38,6 +38,7 @@ function App() {
       <Route path="/forgot-password" element={<AccountAccess />} />
       <Route path="/reset-password" element={<AccountAccess />} />
       <Route path="/profile/:username" element={<AccountAccess />} />
+      <Route path="/hashtag/:tag" element={<AccountAccess />} />
       <Route path="/app" element={<AccountAccess />} />
       <Route path="/app/messages/:conversationId" element={<AccountAccess />} />
       <Route path="/app/*" element={<AccountAccess />} />
@@ -48,4 +49,3 @@ function App() {
 }
 
 export default App
-

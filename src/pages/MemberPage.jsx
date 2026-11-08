@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
   Bell,
@@ -25,6 +25,8 @@ import notificationToastText from '../lib/notificationToastText.js'
 import PostComposer from '../components/PostComposer.jsx'
 import PostReactionButton from '../components/PostReactionButton.jsx'
 import EmojiPicker from '../components/EmojiPicker.jsx'
+import SmartTextInput from '../components/social/SmartTextInput.jsx'
+import LinkedText from '../components/social/LinkedText.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 import AccountMenu from '../components/AccountMenu.jsx'
@@ -604,7 +606,7 @@ function MemberPage() {
                         </Link>
                       </div>
                       {post.author_id === user.id && <span className="public-post-audience"><ShieldCheck size={12} />{post.post_visibility === 'only_me' ? 'Only me' : post.post_visibility === 'friends' ? 'Friends' : 'Public'}</span>}
-                      {post.content && <p className="member-post-content">{post.content}</p>}
+                      {post.content && <p className="member-post-content"><LinkedText text={post.content} /></p>}
                       {post.media_path && <Link to={`/profile/${encodeURIComponent(author?.username || username || '')}?post=${post.id}`} className="member-post-media-link"><ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to post" loading="lazy" /></Link>}
                       <div className="member-post-footer">
                         <PostReactionButton
@@ -660,7 +662,7 @@ function MemberPage() {
                                           {commentAuthor?.username && <Link to={`/profile/${encodeURIComponent(commentAuthor.username)}`}>@{commentAuthor.username}</Link>}
                                           <time dateTime={comment.created_at}>{formatPostDate(comment.created_at)}</time>
                                         </div>
-                                          <p>{comment.content}</p>
+                                          <p><LinkedText text={comment.content} /></p>
                                           <div className="member-comment-actions">
                                             <button type="button" onClick={() => setReplyTarget(replyTarget === comment.id ? null : comment.id)}>Reply</button>
                                             {comment.author_id !== user.id && <button type="button" onClick={() => setReportTarget({ reportedUserId: comment.author_id, type: 'comment', id: comment.id })}><Flag size={12} aria-hidden="true" /> Report</button>}
@@ -672,10 +674,10 @@ function MemberPage() {
                                           </div>
                                           {replyTarget === comment.id && (
                                             <form className="member-inline-comment-form" onSubmit={(event) => handleCommentSubmit(event, post.id, comment.id)}>
-                                              <input
+                                              <SmartTextInput
                                                 aria-label={`Reply to ${commentName}`}
                                                 maxLength={1000}
-                                                onChange={(event) => setReplyDrafts((current) => ({ ...current, [comment.id]: event.target.value }))}
+                                                onChange={(nextValue) => setReplyDrafts((current) => ({ ...current, [comment.id]: nextValue }))}
                                                 placeholder={`Reply to ${commentName}...`}
                                                 value={replyDrafts[comment.id] || ''}
                                               />
@@ -704,7 +706,7 @@ function MemberPage() {
                                                 {replyAuthor?.username && <Link to={`/profile/${encodeURIComponent(replyAuthor.username)}`}>@{replyAuthor.username}</Link>}
                                                 <time dateTime={reply.created_at}>{formatPostDate(reply.created_at)}</time>
                                               </div>
-                                              <p>{reply.content}</p>
+                                              <p><LinkedText text={reply.content} /></p>
                                               {reply.author_id === user.id && (
                                                 <div className="member-comment-actions">
                                                   <button type="button" onClick={() => handleDeleteComment(reply)} disabled={deletingComment === reply.id}>
@@ -721,10 +723,10 @@ function MemberPage() {
                                   )
                                 })}
                               <form className="member-inline-comment-form" onSubmit={(event) => handleCommentSubmit(event, post.id)}>
-                                <input
+                                <SmartTextInput
                                   aria-label="Write a comment"
                                   maxLength={1000}
-                                  onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))}
+                                  onChange={(nextValue) => setCommentDrafts((current) => ({ ...current, [post.id]: nextValue }))}
                                   placeholder="Write a comment..."
                                   value={commentDrafts[post.id] || ''}
                                 />
@@ -759,8 +761,3 @@ function MemberPage() {
 }
 
 export default MemberPage
-
-
-
-
-

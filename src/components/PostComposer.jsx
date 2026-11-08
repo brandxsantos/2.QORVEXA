@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowUp, ImagePlus, LoaderCircle } from 'lucide-react'
 import { getSupabaseClient } from '../lib/supabase.js'
+import SmartTextInput from './social/SmartTextInput.jsx'
 
 const imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const maxImageBytes = 8 * 1024 * 1024
@@ -90,12 +91,12 @@ function PostComposer({ userId, onPublished, onError, idPrefix = 'post' }) {
 
   return (
     <form className="member-composer" onSubmit={handlePublish}>
-      <label className="member-composer-label" htmlFor={`${idPrefix}-content`}>What’s on your mind?</label>
-      <textarea
+      <label className="member-composer-label" htmlFor={`${idPrefix}-content`}>Whatâ€™s on your mind?</label>
+      <SmartTextInput as="textarea"
         id={`${idPrefix}-content`}
         maxLength={1000}
-        onChange={(event) => setDraft(event.target.value)}
-        placeholder="Share an idea, a moment, or something you’re working on…"
+        onChange={setDraft}
+        placeholder="Share an idea, a moment, or something youâ€™re working onâ€¦"
         rows={4}
         value={draft}
       />
@@ -115,13 +116,13 @@ function PostComposer({ userId, onPublished, onError, idPrefix = 'post' }) {
       <div className="member-media-picker">
         <label className="member-comments-toggle" htmlFor={`${idPrefix}-media-file`}><ImagePlus size={15} />Add an image</label>
         <input id={`${idPrefix}-media-file`} type="file" accept={imageTypes.join(',')} onChange={chooseImage} />
-        <span>JPG, PNG, WebP, or GIF · up to 8 MB</span>
+        <span>JPG, PNG, WebP, or GIF Â· up to 8 MB</span>
       </div>
       <div className="member-composer-footer">
         <span>{draft.length}/1000</span>
         <button className="member-publish-button" type="submit" disabled={publishing || (!draft.trim() && !mediaFile)}>
           {publishing ? <LoaderCircle size={16} className="spinner" aria-hidden="true" /> : <ArrowUp size={16} aria-hidden="true" />}
-          {publishing ? 'Publishing…' : 'Publish post'}
+          {publishing ? 'Publishingâ€¦' : 'Publish post'}
         </button>
       </div>
     </form>

@@ -10,6 +10,7 @@ import ProfileSettingsPage from './ProfileSettingsPage.jsx'
 import BookmarksPage from './BookmarksPage.jsx'
 import PrivacyPage from './PrivacyPage.jsx'
 import PublicProfilePage from './PublicProfilePage.jsx'
+import HashtagPage from './HashtagPage.jsx'
 import PresenceTracker from '../components/PresenceTracker.jsx'
 
 function ProtectedRoute({ children }) {
@@ -19,7 +20,7 @@ function ProtectedRoute({ children }) {
     return (
       <div className="auth-loading" role="status">
         <LoaderCircle size={22} className="spinner" aria-hidden="true" />
-        Checking your session…
+        Checking your sessionâ€¦
       </div>
     )
   }
@@ -31,6 +32,8 @@ function AuthRoutes() {
   const { pathname } = useLocation()
   const memberPage = pathname.startsWith('/profile/')
     ? <PublicProfilePage />
+    : pathname.startsWith('/hashtag/')
+      ? <HashtagPage />
     : pathname === '/app'
       ? <MemberPage />
       : pathname === '/app/profile'
@@ -40,7 +43,7 @@ function AuthRoutes() {
         : pathname === '/app/privacy'
           ? <PrivacyPage />
           : <NetworkPage />
-  const page = pathname.startsWith('/profile/')
+  const page = pathname.startsWith('/profile/') || pathname.startsWith('/hashtag/')
     ? memberPage
     : pathname.startsWith('/app')
       ? <ProtectedRoute>{memberPage}</ProtectedRoute>

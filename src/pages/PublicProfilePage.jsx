@@ -1,4 +1,4 @@
-﻿import AccountMenu from '../components/AccountMenu.jsx'
+import AccountMenu from '../components/AccountMenu.jsx'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import {
@@ -35,6 +35,8 @@ import notificationToastText from '../lib/notificationToastText.js'
 import PostComposer from '../components/PostComposer.jsx'
 import PostReactionButton from '../components/PostReactionButton.jsx'
 import EmojiPicker from '../components/EmojiPicker.jsx'
+import SmartTextInput from '../components/social/SmartTextInput.jsx'
+import LinkedText from '../components/social/LinkedText.jsx'
 import BrandMark from '../components/BrandMark.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 
@@ -882,7 +884,7 @@ function PublicProfilePage() {
                           <Link className="member-post-permalink" to={`/profile/${encodeURIComponent(profile.username)}?post=${post.id}`}><Clock3 size={13} />{formatDate(post.created_at)}</Link>
                         </div>
                         {isOwner && <span className="public-post-audience"><Shield size={12} />{post.post_visibility === 'only_me' ? 'Only me' : post.post_visibility === 'friends' ? 'Friends' : 'Public'}</span>}
-                        {post.content && <p className="member-post-content">{post.content}</p>}
+                        {post.content && <p className="member-post-content"><LinkedText text={post.content} /></p>}
                         {post.media_path && <button className="public-profile-photo-button" type="button" onClick={() => setSelectedPhoto(post.media_path)}><ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to post" loading="lazy" /></button>}
                         <div className="member-post-footer">
                           <PostReactionButton
@@ -910,10 +912,10 @@ function PublicProfilePage() {
                                 {commentUrl
                                   ? <Link to={commentUrl} className="public-profile-comment-avatar">{commentAuthor?.avatar_url ? <ProtectedMediaImage path={commentAuthor.avatar_url} alt="" fallback={profileInitials(commentAuthor)} /> : profileInitials(commentAuthor)}</Link>
                                   : <span className="public-profile-comment-avatar">{profileInitials({ display_name: commentName })}</span>}
-                                <div><p>{commentUrl ? <Link to={commentUrl}><strong>{commentName}</strong></Link> : <strong>{commentName}</strong>} {comment.content}</p>
+                                <div><p>{commentUrl ? <Link to={commentUrl}><strong>{commentName}</strong></Link> : <strong>{commentName}</strong>} <LinkedText text={comment.content} /></p>
                                   {user && !(isPublicPreview && isProfileOwner) && <button type="button" onClick={() => setReplyTarget(replyTarget === comment.id ? '' : comment.id)}>Reply</button>}
                                   {replyTarget === comment.id && user && !(isPublicPreview && isProfileOwner) && <form className="member-inline-comment-form" onSubmit={(event) => submitComment(event, post.id, comment.id)}>
-                                    <input maxLength={1000} value={replyDrafts[comment.id] || ''} onChange={(event) => setReplyDrafts((current) => ({ ...current, [comment.id]: event.target.value }))} placeholder={`Reply to ${commentName}...`} aria-label={`Reply to ${commentName}`} />
+                                    <SmartTextInput maxLength={1000} value={replyDrafts[comment.id] || ''} onChange={(nextValue) => setReplyDrafts((current) => ({ ...current, [comment.id]: nextValue }))} placeholder={`Reply to ${commentName}...`} aria-label={`Reply to ${commentName}`} />
                                     <EmojiPicker onSelect={(emoji) => setReplyDrafts((current) => ({ ...current, [comment.id]: `${current[comment.id] || ''}${emoji}` }))} />
                                     <button type="submit" disabled={working || !replyDrafts[comment.id]?.trim()}>Reply</button>
                                   </form>}
@@ -927,13 +929,13 @@ function PublicProfilePage() {
                                   {replyUrl
                                     ? <Link to={replyUrl} className="public-profile-comment-avatar">{replyAuthor?.avatar_url ? <ProtectedMediaImage path={replyAuthor.avatar_url} alt="" fallback={profileInitials(replyAuthor)} /> : profileInitials(replyAuthor)}</Link>
                                     : <span className="public-profile-comment-avatar">{profileInitials({ display_name: replyName })}</span>}
-                                  <p>{replyUrl ? <Link to={replyUrl}><strong>{replyName}</strong></Link> : <strong>{replyName}</strong>} {reply.content}</p>
+                                  <p>{replyUrl ? <Link to={replyUrl}><strong>{replyName}</strong></Link> : <strong>{replyName}</strong>} <LinkedText text={reply.content} /></p>
                                 </div>
                               })}
                             </div>
                           })}
                           {user && !(isPublicPreview && isProfileOwner) && <form className="member-inline-comment-form" onSubmit={(event) => submitComment(event, post.id)}>
-                            <input maxLength={1000} value={commentDrafts[post.id] || ''} onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))} placeholder="Write a comment..." aria-label="Write a comment" />
+                            <SmartTextInput maxLength={1000} value={commentDrafts[post.id] || ''} onChange={(nextValue) => setCommentDrafts((current) => ({ ...current, [post.id]: nextValue }))} placeholder="Write a comment..." aria-label="Write a comment" />
                             <EmojiPicker onSelect={(emoji) => setCommentDrafts((current) => ({ ...current, [post.id]: `${current[post.id] || ''}${emoji}` }))} />
                             <button type="submit" disabled={working || !commentDrafts[post.id]?.trim()}>Comment</button>
                           </form>}
@@ -1072,10 +1074,3 @@ function PublicProfilePage() {
 }
 
 export default PublicProfilePage
-
-
-
-
-
-
-
