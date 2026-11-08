@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -12,6 +12,7 @@ import {
   LoaderCircle,
   LogOut,
   MessageCircle,
+  Phone,
   MessageSquare,
   Search,
   Send,
@@ -19,12 +20,14 @@ import {
   Trash2,
   UserPlus,
   UserRound,
+  Video,
   Users,
   X,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
 import { useAuth } from '../context/useAuth.js'
+import { useCall } from '../context/useCall.js'
 import { authorizeRealtimeSession, getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import NotificationToast from '../components/NotificationToast.jsx'
@@ -100,6 +103,7 @@ function UserIdentity({ profile, availability, small = false, onClick }) {
 
 function NetworkPage() {
   const { user } = useAuth()
+  const { call, startCall } = useCall()
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -813,11 +817,11 @@ function NetworkPage() {
           <Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}
           </Link>
           <Link to="/app/messages" className={`network-nav-link${activeSection === 'messages' ? ' is-active' : ''}`}><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessages > 0 && <span className="network-badge">{unreadMessages}</span>}</Link>
-      
+
    {ownUsername && <Link to={`/profile/${encodeURIComponent(ownUsername)}`} className="network-nav-link"><UserRound size={15} aria-hidden="true" />My profile</Link>}
 <AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
         </nav>
- 
+
       </header>
 
       <AccountRestrictionNotice userId={user.id} />
@@ -1021,7 +1025,27 @@ function NetworkPage() {
                         <Link className="network-chat-back" to="/app/messages" aria-label="Back to conversations"><ArrowLeft size={17} /></Link>
                         <UserIdentity profile={activeConversation.peer} availability={profileAvailability(activeConversation.peer)} small />
                         {profileAvailability(activeConversation.peer) && <span className="network-chat-status">{profileAvailability(activeConversation.peer) === 'busy' ? 'Busy' : profileAvailability(activeConversation.peer) === 'online' ? 'Online' : 'Offline'}</span>}
-                      </header>
+
+                        <div className="network-chat-call-controls">
+                          <button
+                            type="button"
+                            onClick={() => startCall(activeConversation.id, 'audio').catch(() => {})}
+                            disabled={Boolean(call)}
+                            aria-label={`Start audio call with ${profileName(activeConversation.peer)}`}
+                            title="Audio call"
+                          >
+                            <Phone size={17} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => startCall(activeConversation.id, 'video').catch(() => {})}
+                            disabled={Boolean(call)}
+                            aria-label={`Start video call with ${profileName(activeConversation.peer)}`}
+                            title="Video call"
+                          >
+                            <Video size={17} />
+                          </button>
+                        </div>                      </header>
                       <div className="network-message-list">
                         {hasMoreMessages && <button className="network-load-older" type="button" onClick={loadOlderMessages} disabled={loadingOlderMessages}>{loadingOlderMessages ? 'Loading...' : 'Load older messages'}</button>}
                         {messages.map((message) => (

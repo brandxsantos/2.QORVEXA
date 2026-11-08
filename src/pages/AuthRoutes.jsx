@@ -1,4 +1,4 @@
-﻿import { LoaderCircle } from 'lucide-react'
+import { LoaderCircle } from 'lucide-react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider } from '../context/AuthContext.jsx'
 import { useAuth } from '../context/useAuth.js'
@@ -14,6 +14,8 @@ import PublicProfilePage from './PublicProfilePage.jsx'
 import HashtagPage from './HashtagPage.jsx'
 import PresenceTracker from '../components/PresenceTracker.jsx'
 import FloatingChatDock from '../components/FloatingChatDock.jsx'
+import { CallProvider } from '../components/CallProvider.jsx'
+import CallOverlay from '../components/CallOverlay.jsx'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -63,9 +65,12 @@ function AuthRoutes() {
     pathname.startsWith('/hashtag/')
   return (
     <AuthProvider>
-      <PresenceTracker />
-      {showFloatingChatDock && <FloatingChatDock />}
-      {page}
+      <CallProvider>
+        <PresenceTracker />
+        {showFloatingChatDock && <FloatingChatDock />}
+        {page}
+        <CallOverlay />
+      </CallProvider>
     </AuthProvider>
   )
 }

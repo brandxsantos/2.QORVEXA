@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MessageCircle, Minus, Search, Send, X } from 'lucide-react'
+import { MessageCircle, Minus, Phone, Search, Send, Video, X } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
+import { useCall } from '../context/useCall.js'
 import { getSupabaseClient, authorizeRealtimeSession } from '../lib/supabase.js'
 import ProtectedMediaImage from './ProtectedMediaImage.jsx'
+import EmojiPicker from './EmojiPicker.jsx'
 import './FloatingChatDock.css'
 
 const profileFields = 'id, username, display_name, avatar_url, online_status_visibility'
@@ -20,6 +22,7 @@ function initials(name = '') {
 
 function FloatingChatDock() {
   const { user } = useAuth()
+  const { call, startCall } = useCall()
   const [conversations, setConversations] = useState([])
   const [friends, setFriends] = useState([])
   const [openIds, setOpenIds] = useState([])
@@ -426,6 +429,24 @@ function FloatingChatDock() {
                 </Link>
 
                 <div className="floating-chat-controls">
+                  <button
+                    type="button"
+                    onClick={() => startCall(conversationId, 'audio')}
+                    aria-label={`Start audio call with ${name}`}
+                    title="Audio call"
+                    disabled={Boolean(call)}
+                  >
+                    <Phone size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startCall(conversationId, 'video')}
+                    aria-label={`Start video call with ${name}`}
+                    title="Video call"
+                    disabled={Boolean(call)}
+                  >
+                    <Video size={16} />
+                  </button>
                   <button type="button" onClick={() => minimizeChat(conversationId)} aria-label="Minimize chat">
                     <Minus size={16} />
                   </button>
@@ -471,6 +492,12 @@ function FloatingChatDock() {
                       event.currentTarget.form.requestSubmit()
                     }
                   }}
+                />
+                <EmojiPicker
+                  onSelect={(emoji) => setDrafts((current) => ({
+                    ...current,
+                    [conversationId]: `${current[conversationId] || ''}${emoji}`,
+                  }))}
                 />
                 <button
                   type="submit"
@@ -715,10 +742,3 @@ function FloatingChatDock() {
 }
 
 export default FloatingChatDock
-
-
-
-
-
-
-

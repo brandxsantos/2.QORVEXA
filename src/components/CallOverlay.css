@@ -1,0 +1,309 @@
+.q-call-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(5, 8, 16, .78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.q-call-window {
+  width: min(100%, 430px);
+  overflow: hidden;
+  color: #f8fafc;
+  background: #111827;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 22px;
+  box-shadow: 0 25px 90px rgba(0,0,0,.5);
+}
+
+.q-call-header {
+  height: 58px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.q-call-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.q-call-brand-dot,
+.q-call-pulse {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #34d399;
+}
+
+.q-call-close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: #cbd5e1;
+  background: rgba(255,255,255,.08);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.q-call-main {
+  min-height: 290px;
+  padding: 42px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.q-call-avatar {
+  width: 92px;
+  height: 92px;
+  display: grid;
+  place-items: center;
+  color: #c4b5fd;
+  background: linear-gradient(145deg, #312e81, #172554);
+  border: 1px solid rgba(196,181,253,.3);
+  border-radius: 50%;
+  margin-bottom: 22px;
+}
+
+.q-call-main h2 {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 750;
+}
+
+.q-call-description {
+  margin: 10px 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.q-call-connection-status {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #86efac;
+  font-size: 12px;
+}
+
+.q-call-controls {
+  min-height: 104px;
+  padding: 20px 14px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  background: rgba(0,0,0,.2);
+  border-top: 1px solid rgba(255,255,255,.07);
+}
+
+.q-call-control {
+  min-width: 76px;
+  min-height: 64px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  color: #e2e8f0;
+  background: #263244;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background .18s ease, transform .18s ease;
+}
+
+.q-call-control:hover {
+  background: #39475c;
+  transform: translateY(-2px);
+}
+
+.q-call-control span {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.q-call-decline {
+  color: white;
+  background: #dc3545;
+}
+
+.q-call-decline:hover {
+  background: #b91c1c;
+}
+
+.q-call-accept {
+  color: white;
+  background: #16a34a;
+}
+
+.q-call-accept:hover {
+  background: #15803d;
+}
+
+.q-call-control-active {
+  color: white;
+  background: #475569;
+}
+
+.q-call-video-mode .q-call-window {
+  width: min(100%, 760px);
+}
+
+.q-call-video-stage {
+  position: relative;
+  min-height: 300px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #030712;
+}
+
+.q-call-remote-video {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+  object-fit: cover;
+  background: #030712;
+}
+
+.q-call-local-video {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 24%;
+  max-height: 125px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #1e293b;
+  border: 2px solid rgba(255,255,255,.7);
+  border-radius: 12px;
+  transform: scaleX(-1);
+}
+
+.q-call-video-waiting {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.q-call-local-preview {
+  width: min(100%, 220px);
+  margin-top: 22px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #030712;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 14px;
+  transform: scaleX(-1);
+}
+
+.q-call-inline-error {
+  margin: 0 18px 14px;
+  padding: 10px 12px;
+  color: #fecaca;
+  background: rgba(127,29,29,.35);
+  border: 1px solid rgba(248,113,113,.25);
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.q-call-error {
+  position: fixed;
+  z-index: 12001;
+  right: 20px;
+  bottom: 20px;
+  max-width: min(380px, calc(100vw - 40px));
+  padding: 14px 17px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #fee2e2;
+  background: #451a1a;
+  border: 1px solid #7f1d1d;
+  border-radius: 12px;
+  box-shadow: 0 12px 35px rgba(0,0,0,.3);
+  font-size: 13px;
+}
+
+.q-call-error-label {
+  color: #fca5a5;
+  font-size: 11px;
+}
+
+@media (max-width: 520px) {
+  .q-call-overlay {
+    padding: 10px;
+  }
+
+  .q-call-window {
+    border-radius: 18px;
+  }
+
+  .q-call-controls {
+    gap: 9px;
+  }
+
+  .q-call-control {
+    min-width: 68px;
+    padding-inline: 8px;
+  }
+
+  .q-call-video-stage {
+    min-height: 230px;
+  }
+}
+
+/* Dismissible call error controls */
+.q-call-error-dismiss {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+}
+
+.q-call-error-dismiss:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.q-call-inline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.q-call-inline-error .q-call-error-dismiss {
+  flex: 0 0 auto;
+}

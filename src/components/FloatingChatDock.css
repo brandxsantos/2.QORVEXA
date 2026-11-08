@@ -1,4 +1,4 @@
-.floating-chat-dock {
+﻿.floating-chat-dock {
   position: fixed;
   z-index: 90;
   right: 1.5rem;
@@ -650,3 +650,30 @@
   background: #ef4444;
 }
 
+
+
+/* Emoji support in floating chat composer */
+.floating-chat-compose .qv-emoji-picker {
+  flex: 0 0 auto;
+  align-self: flex-end;
+}
+
+.floating-chat-compose .qv-emoji-trigger {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 10px;
+  background: #263247;
+  color: #f8fafc;
+  font-size: 1.35rem;
+}
+
+.floating-chat-compose .qv-emoji-trigger:hover {
+  border-color: #60a5fa;
+  background: #33445e;
+  color: white;
+}
+
+.floating-chat-message {
+  font-size: 0.9rem;
+}
