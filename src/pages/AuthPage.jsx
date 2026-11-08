@@ -1,5 +1,5 @@
-﻿import { useState } from 'react'
-import DatePicker from '../components/DatePicker.jsx'
+import { useState } from 'react'
+import CustomSelect from '../components/CustomSelect.jsx'
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import AuthLayout from '../components/auth/AuthLayout.jsx'
@@ -108,6 +108,39 @@ function AuthPage() {
         const username = String(formData.get('username') ?? '').trim().toLowerCase()
         const displayName = String(formData.get('displayName') ?? '').trim()
         const confirmPassword = String(formData.get('confirmPassword') ?? '')
+                const genderChoice = String(formData.get('gender') ?? '')
+        const genderCustom = String(formData.get('genderCustom') ?? '').trim()
+        const birthdate = String(formData.get('birthdate') ?? '')
+        const phoneNumber = String(formData.get('phoneNumber') ?? '').trim()
+
+        const gender = genderChoice === 'self_describe'
+          ? genderCustom
+          : genderChoice
+
+        if (genderChoice === 'self_describe' && !genderCustom) {
+          throw new Error('Please describe your gender or choose another option.')
+        }
+
+        if (gender.length > 50) {
+          throw new Error('Gender description must not exceed 50 characters.')
+        }
+
+        if (birthdate) {
+          const today = new Date()
+          const todayString = [
+            today.getFullYear(),
+            String(today.getMonth() + 1).padStart(2, '0'),
+            String(today.getDate()).padStart(2, '0'),
+          ].join('-')
+
+          if (birthdate > todayString) {
+            throw new Error('Birthdate cannot be in the future.')
+          }
+        }
+
+        if (phoneNumber && !/^[+]?[\d\s().-]{7,32}$/.test(phoneNumber)) {
+          throw new Error('Please enter a valid phone number.')
+        }
 
         if (!usernamePattern.test(username)) {
           throw new Error('Use 3–24 characters for your username: lowercase letters, numbers, and underscores.')
@@ -129,7 +162,13 @@ function AuthPage() {
           email,
           password,
           options: {
-            data: { username, display_name: displayName },
+              data: {
+    username,
+    display_name: displayName,
+    gender: gender || null,
+    birthdate: birthdate || null,
+    phone_number: phoneNumber || null,
+  },
             emailRedirectTo: `${window.location.origin}/app`,
           },
         })
@@ -222,14 +261,19 @@ if (data.session) {
             </label>
                         <label className="form-field">
               <span>Gender <small>(Optional)</small></span>
-              <select className="profile-detail-control" name="gender" defaultValue="">
-                <option value="">Prefer not to specify</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Non-binary">Non-binary</option>
-                <option value="self_describe">Self-describe</option>
-                <option value="Prefer not to say">Prefer not to say</option>
-              </select>
+              <CustomSelect
+  name="gender"
+  defaultValue=""
+  ariaLabel="Gender"
+  options={[
+    { value: '', label: 'Prefer not to specify' },
+    { value: 'Male', label: 'Male' },
+    { value: 'Female', label: 'Female' },
+    { value: 'Non-binary', label: 'Non-binary' },
+    { value: 'self_describe', label: 'Self-describe' },
+    { value: 'Prefer not to say', label: 'Prefer not to say' },
+  ]}
+/>
             </label>
 
             <label className="form-field">
@@ -244,7 +288,11 @@ if (data.session) {
 
             <label className="form-field">
               <span>Birthdate <small>(Optional)</small></span>
-              <DatePicker name="birthdate" />
+              <input
+                type="date"
+                name="birthdate"
+                max={new Date().toLocaleDateString('en-CA')}
+              />
             </label>
 
             <label className="form-field">
@@ -322,7 +370,7 @@ if (data.session) {
                 <input type="checkbox" name="terms" required />
                <span>
   I agree to the <Link to="/terms">Terms of Service</Link> and{' '}
-  <Link to="/privacy">Privacy Policy</Link> and acknowledge that I have read it.
+  <Link to="/#privacy">Privacy Policy</Link>.
 </span>
               </label>
             )}
@@ -367,4 +415,3 @@ if (data.session) {
 }
 
 export default AuthPage
-

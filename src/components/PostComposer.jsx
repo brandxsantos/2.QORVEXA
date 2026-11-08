@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { ArrowUp, ImagePlus, LoaderCircle } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowUp, ImagePlus, LoaderCircle, ChevronDown, Check, Globe, Users, Lock } from 'lucide-react'
 import { getSupabaseClient } from '../lib/supabase.js'
 import SmartTextInput from './social/SmartTextInput.jsx'
 
@@ -13,11 +13,39 @@ function PostComposer({ userId, onPublished, onError, idPrefix = 'post' }) {
   const [mediaFile, setMediaFile] = useState(null)
   const [mediaPreview, setMediaPreview] = useState('')
   const [publishing, setPublishing] = useState(false)
+    const [visibilityOpen, setVisibilityOpen] = useState(false)
+  const visibilityRef = useRef(null)
 
   useEffect(() => {
     return () => { if (mediaPreview) URL.revokeObjectURL(mediaPreview) }
   }, [mediaPreview])
+  useEffect(() => {
+    function handleOutsideClick(event) {
+      if (visibilityRef.current && !visibilityRef.current.contains(event.target)) {
+        setVisibilityOpen(false)
+      }
+    }
 
+    function handleEscape(event) {
+      if (event.key === 'Escape') setVisibilityOpen(false)
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [])
+
+  const visibilityOptions = [
+    { value: 'public', label: 'Public', description: 'Anyone can see this post', Icon: Globe },
+    { value: 'friends', label: 'Friends', description: 'Only your friends can see it', Icon: Users },
+    { value: 'only_me', label: 'Only me', description: 'Private to you', Icon: Lock },
+  ]
+
+  const selectedVisibility = visibilityOptions.find(option => option.value === visibility) || visibilityOptions[0]
   function chooseImage(event) {
     const file = event.target.files?.[0] || null
     setMediaFile(file)
@@ -100,13 +128,53 @@ function PostComposer({ userId, onPublished, onError, idPrefix = 'post' }) {
         rows={4}
         value={draft}
       />
-      <label className="member-post-visibility">Post audience
-        <select value={visibility} onChange={(event) => setVisibility(event.target.value)}>
-          <option value="public">Public</option>
-          <option value="friends">Friends</option>
-          <option value="only_me">Only me</option>
-        </select>
-      </label>
+           <div className="member-post-visibility" ref={visibilityRef}>
+        <span className="member-audience-label">Post audience</span>
+
+        <div className="audience-dropdown">
+          <button
+            type="button"
+            className="audience-trigger"
+            aria-haspopup="listbox"
+            aria-expanded={visibilityOpen}
+            onClick={() => setVisibilityOpen(open => !open)}
+          >
+            <selectedVisibility.Icon size={17} />
+            <span>{selectedVisibility.label}</span>
+            <ChevronDown size={16} className={visibilityOpen ? 'is-open' : ''} />
+          </button>
+
+          {visibilityOpen && (
+            <div className="audience-menu" role="listbox" aria-label="Post audience">
+              {visibilityOptions.map(option => {
+                const Icon = option.Icon
+                const selected = visibility === option.value
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    className={`audience-option${selected ? ' is-selected' : ''}`}
+                    onClick={() => {
+                      setVisibility(option.value)
+                      setVisibilityOpen(false)
+                    }}
+                  >
+                    <span className="audience-option-icon"><Icon size={18} /></span>
+                    <span className="audience-option-copy">
+                      <strong>{option.label}</strong>
+                      <small>{option.description}</small>
+                    </span>
+                    {selected && <Check size={17} className="audience-check" />}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
       {mediaPreview && (
         <div className="member-media-preview">
           <img src={mediaPreview} alt="Selected post image preview" />

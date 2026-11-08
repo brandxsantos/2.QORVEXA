@@ -26,7 +26,7 @@ const restrictionOptions = [
 ]
 
 function dateLabel(value) {
-  return value ? new Date(value).toLocaleString() : 'â€”'
+  return value ? new Date(value).toLocaleString() : '—'
 }
 
 function rpcMessage(error) {
@@ -308,7 +308,7 @@ function AdminManagementPage({ section, role, userId }) {
     <section className="admin-content admin-management">
       <div className="admin-page-heading">
         <div>
-          <p className="admin-eyebrow"><ShieldCheck size={14} aria-hidden="true" /> ADMINISTRATION Â· {role.replace('_', ' ').toUpperCase()}</p>
+          <p className="admin-eyebrow"><ShieldCheck size={14} aria-hidden="true" /> ADMINISTRATION · {role.replace('_', ' ').toUpperCase()}</p>
           <h1>{heading[0]}</h1>
           <p>{heading[1]}</p>
         </div>
@@ -318,7 +318,7 @@ function AdminManagementPage({ section, role, userId }) {
       </div>
 
       {error && <div className="admin-inline-error" role="alert"><AlertCircle size={18} /><div><strong>Request failed</strong><span>{error}</span></div></div>}
-      {notice && <div className="admin-management-notice" role="status">{notice}<button type="button" onClick={() => setNotice('')} aria-label="Dismiss">Ã—</button></div>}
+      {notice && <div className="admin-management-notice" role="status">{notice}<button type="button" onClick={() => setNotice('')} aria-label="Dismiss">×</button></div>}
 
       {(section === 'users' || section === 'audit' || section === 'moderation') && (
         <form className="admin-management-filters" onSubmit={(event) => { event.preventDefault(); setOffset(0) }}>
@@ -333,7 +333,7 @@ function AdminManagementPage({ section, role, userId }) {
         <option value="pending">Pending</option><option value="in_review">In review</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option><option value="all">All reports</option>
       </select></div>}
 
-      {loading ? <div className="admin-management-loading" role="status"><LoaderCircle className="spinner" size={20} />Loading secure recordsâ€¦</div> : (
+      {loading ? <div className="admin-management-loading" role="status"><LoaderCircle className="spinner" size={20} />Loading secure records…</div> : (
         <>
           {section === 'users' && (
             <div className="admin-management-list">
@@ -343,9 +343,9 @@ function AdminManagementPage({ section, role, userId }) {
                     <span className="admin-management-avatar">{(account.display_name || account.email || '?').slice(0, 1).toUpperCase()}</span>
                     <div className="admin-management-user">
                       <strong>{account.display_name || account.username || 'QORVEXA member'}</strong>
-                      <span>@{account.username || 'no-username'} Â· {account.email || 'No email'}</span>
+                      <span>@{account.username || 'no-username'} · {account.email || 'No email'}</span>
                       <small>{account.id}</small>
-                      <small>Joined {dateLabel(account.created_at)} Â· Last active {dateLabel(account.last_active_at)}</small>
+                      <small>Joined {dateLabel(account.created_at)} · Last active {dateLabel(account.last_active_at)}</small>
                       {account.admin_role && <em>Staff role: {account.admin_role.replace('_', ' ')}</em>}
                     </div>
                   </div>
@@ -358,7 +358,7 @@ function AdminManagementPage({ section, role, userId }) {
                     <div className="admin-active-restrictions">
                       {account.active_restrictions.map((restriction) => (
                         <div className="admin-restriction-item" key={restriction.id}>
-                          <span><strong>{restriction.type.replace('_', ' ')}</strong> Â· {restriction.reason} Â· {restriction.expires_at ? `until ${dateLabel(restriction.expires_at)}` : 'permanent'}</span>
+                          <span><strong>{restriction.type.replace('_', ' ')}</strong> · {restriction.reason} · {restriction.expires_at ? `until ${dateLabel(restriction.expires_at)}` : 'permanent'}</span>
                           {role !== 'support' && <button type="button" onClick={() => revokeRestriction(restriction)} disabled={working === restriction.id}>Restore</button>}
                         </div>
                       ))}
@@ -373,7 +373,7 @@ function AdminManagementPage({ section, role, userId }) {
             <div className="admin-management-list">
               {!reports.length ? <div className="admin-management-empty"><ShieldAlert size={22} /><strong>No reports in this view</strong><span>New community reports will appear here.</span></div> : reports.map((report) => (
                 <article className="admin-report-card" key={report.id}>
-                  <div className="admin-report-meta"><span className={`admin-report-severity admin-report-severity--${report.severity}`}>{report.severity}</span><span>{report.category.replace('_', ' ')}</span><span>{report.target_type} Â· {report.target_id}</span><time><Clock3 size={13} />{dateLabel(report.created_at)}</time></div>
+                  <div className="admin-report-meta"><span className={`admin-report-severity admin-report-severity--${report.severity}`}>{report.severity}</span><span>{report.category.replace('_', ' ')}</span><span>{report.target_type} · {report.target_id}</span><time><Clock3 size={13} />{dateLabel(report.created_at)}</time></div>
                   <p>{report.description}</p>
                   <div className="admin-report-parties"><span>Reported account: <strong>{report.reported_display_name || report.reported_username || report.reported_user_id}</strong></span><span>Reporter: <strong>{report.reporter_display_name || report.reporter_username || report.reporter_id}</strong></span>{report.assignee_username && <span>Assigned to @{report.assignee_username}</span>}</div>
                   {report.resolution && <p className="admin-report-resolution">Internal note: {report.resolution}</p>}
@@ -408,7 +408,7 @@ function AdminManagementPage({ section, role, userId }) {
                 <article className="admin-audit-card" key={entry.id}>
                   <div><strong>{entry.action}</strong><time>{dateLabel(entry.created_at)}</time></div>
                   <p>{entry.reason}</p>
-                  <small>{entry.actor_username ? `@${entry.actor_username}` : entry.actor_id} Â· {entry.target_type || 'system'} {entry.target_id || ''}</small>
+                  <small>{entry.actor_username ? `@${entry.actor_username}` : entry.actor_id} · {entry.target_type || 'system'} {entry.target_id || ''}</small>
                   {Object.keys(entry.details || {}).length > 0 && <details><summary>Action details</summary><pre>{JSON.stringify(entry.details, null, 2)}</pre></details>}
                 </article>
               ))}
@@ -444,7 +444,7 @@ function AdminManagementPage({ section, role, userId }) {
                 </label>
                 <button className="admin-button admin-button--secondary" type="submit" disabled={roleCandidateLoading || roleCandidateSearch.trim().length < 2}>
                   {roleCandidateLoading ? <LoaderCircle size={15} className="spinner" /> : <Search size={15} />}
-                  {roleCandidateLoading ? 'Searchingâ€¦' : 'Find member'}
+                  {roleCandidateLoading ? 'Searching…' : 'Find member'}
                 </button>
               </form>}
               {role === 'super_admin' && roleCandidates.map((candidate) => (
@@ -453,20 +453,20 @@ function AdminManagementPage({ section, role, userId }) {
                     <span className="admin-management-avatar">{(candidate.display_name || candidate.email || '?').slice(0, 1).toUpperCase()}</span>
                     <div className="admin-management-user">
                       <strong>{candidate.display_name || candidate.username || 'QORVEXA member'}</strong>
-                      <span>@{candidate.username || 'no-username'} Â· {candidate.email}</span>
+                      <span>@{candidate.username || 'no-username'} · {candidate.email}</span>
                       <small>{candidate.user_id}</small>
                     </div>
                   </div>
                   <div className="admin-management-card-actions">
                     <button className="admin-button admin-button--primary" type="button" disabled={Boolean(working)} onClick={() => grantRole(candidate)}>
-                      <UserRoundPlus size={14} />{working === candidate.user_id ? 'Grantingâ€¦' : `Grant ${newStaffRole.replace('_', ' ')}`}
+                      <UserRoundPlus size={14} />{working === candidate.user_id ? 'Granting…' : `Grant ${newStaffRole.replace('_', ' ')}`}
                     </button>
                   </div>
                 </article>
               ))}
               {roles.map((target) => (
                 <article className="admin-management-card" key={target.user_id}>
-                  <div className="admin-management-card-main"><span className="admin-management-avatar"><ShieldCheck size={18} /></span><div className="admin-management-user"><strong>{target.display_name || target.username || target.user_id}</strong><span>@{target.username || 'no-username'} Â· {target.role.replace('_', ' ')}</span><small>{target.user_id}</small></div></div>
+                  <div className="admin-management-card-main"><span className="admin-management-avatar"><ShieldCheck size={18} /></span><div className="admin-management-user"><strong>{target.display_name || target.username || target.user_id}</strong><span>@{target.username || 'no-username'} · {target.role.replace('_', ' ')}</span><small>{target.user_id}</small></div></div>
                   {target.role !== 'super_admin' && <div className="admin-management-card-actions">
                     <select aria-label={`Change role for ${target.username || target.user_id}`} value={target.role} disabled={working === target.user_id} onChange={(event) => updateRole(target, event.target.value)}>
                       <option value="admin">Admin</option><option value="moderator">Moderator</option><option value="support">Support (read only)</option><option value="none">Remove access</option>
@@ -481,14 +481,14 @@ function AdminManagementPage({ section, role, userId }) {
       )}
 
       {section !== 'roles' && <div className="admin-management-pagination">
-        <span>{total ? `${offset + 1}â€“${Math.min(offset + pageSize, total)} of ${total}` : '0 records'}</span>
+        <span>{total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : '0 records'}</span>
         <div><button type="button" aria-label="Previous page" disabled={offset === 0 || loading} onClick={() => setOffset((value) => Math.max(0, value - pageSize))}><ChevronLeft size={17} /></button><button type="button" aria-label="Next page" disabled={offset + pageSize >= total || loading} onClick={() => setOffset((value) => value + pageSize)}><ChevronRight size={17} /></button></div>
       </div>}
 
       {restrictionTarget && (
         <div className="admin-modal-overlay" role="presentation" onClick={() => setRestrictionTarget(null)}>
           <form className="admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-restriction-title" onSubmit={applyRestriction} onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="admin-modal-close" onClick={() => setRestrictionTarget(null)} aria-label="Close dialog">Ã—</button>
+            <button type="button" className="admin-modal-close" onClick={() => setRestrictionTarget(null)} aria-label="Close dialog">×</button>
             <h2 id="admin-restriction-title">Apply account restriction</h2>
             <p>{restrictionTarget.display_name || restrictionTarget.email || restrictionTarget.id}</p>
             <p>Restrictions block the selected actions only. They do not disable sign-in or read access.</p>
@@ -496,7 +496,7 @@ function AdminManagementPage({ section, role, userId }) {
             <label>Duration<select value={restrictionDuration} onChange={(event) => setRestrictionDuration(event.target.value)}><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="3d">3 days</option><option value="7d">7 days</option>{role !== 'moderator' && <><option value="30d">30 days</option><option value="permanent">Permanent</option></>}</select></label>
             <label>Reason<textarea required minLength={3} maxLength={1000} value={restrictionReason} onChange={(event) => setRestrictionReason(event.target.value)} rows={4} /></label>
             {error && <p className="admin-modal-error" role="alert">{error}</p>}
-            <div className="admin-modal-actions"><button className="admin-button admin-button--secondary" type="button" onClick={() => setRestrictionTarget(null)}>Cancel</button><button className="admin-button admin-button--primary" type="submit" disabled={Boolean(working)}><UserRoundX size={14} />{working ? 'Savingâ€¦' : 'Confirm restriction'}</button></div>
+            <div className="admin-modal-actions"><button className="admin-button admin-button--secondary" type="button" onClick={() => setRestrictionTarget(null)}>Cancel</button><button className="admin-button admin-button--primary" type="submit" disabled={Boolean(working)}><UserRoundX size={14} />{working ? 'Saving…' : 'Confirm restriction'}</button></div>
           </form>
         </div>
       )}

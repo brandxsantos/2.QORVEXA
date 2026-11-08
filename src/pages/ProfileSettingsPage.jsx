@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
-import DatePicker from '../components/DatePicker.jsx'
+﻿import { useEffect, useState } from 'react'
 import { AlertCircle, LoaderCircle, Save, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/useAuth.js'
+import { useTheme } from '../context/ThemeContext.jsx'
 import { getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import BrandMark from '../components/BrandMark.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 import AccountMenu from '../components/AccountMenu.jsx'
+import CustomSelect from '../components/CustomSelect.jsx'
 
 const usernamePattern = /^[a-z0-9_]{3,24}$/
 const maxAvatarBytes = 8 * 1024 * 1024
@@ -16,6 +17,7 @@ const availabilityEvent = 'qorvexa:availability-change'
 
 function ProfileSettingsPage() {
   const { user } = useAuth()
+  const { themePreference, setThemePreference } = useTheme()
   const [profile, setProfile] = useState(null)
   const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
@@ -165,7 +167,7 @@ if (cleanPhoneNumber && !/^[+]?[\d\s().-]{7,32}$/.test(cleanPhoneNumber)) {
       return
     }
     if (!usernamePattern.test(cleanUsername)) {
-      setError('Username must be 3–24 lowercase letters, numbers, or underscores.')
+      setError('Username must be 3-24 lowercase letters, numbers, or underscores.')
       return
     }
     if (cleanBio.length > 280) {
@@ -315,7 +317,7 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
         <p className="eyebrow">YOUR ACCOUNT</p>
         <h1 id="profile-settings-heading">Edit your profile</h1>
         <p className="settings-intro">Choose how you appear to other QORVEXA members and control what they can see.</p>
-        {status === 'loading' ? <div className="member-feed-state" role="status"><LoaderCircle className="spinner" size={19} />Loading profile…</div> : null}
+        {status === 'loading' ? <div className="member-feed-state" role="status"><LoaderCircle className="spinner" size={19} />Loading profile...</div> : null}
         {error && <div className="settings-message settings-message--error" role="alert"><AlertCircle size={16} />{error}</div>}
         {notice && <p className="settings-message settings-message--success" role="status">{notice}</p>}
         {status === 'ready' && (
@@ -328,7 +330,7 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
                     ? <ProtectedMediaImage path={profile.avatar_url} alt="Current profile avatar" fallback={(profile.display_name || profile.username || '?').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()} />
                     : <UserRound size={25} aria-hidden="true" />}
               </span>
-              <span><strong>Profile picture</strong><small>JPG, PNG, WebP, or GIF · up to 8 MB</small></span>
+              <span><strong>Profile picture</strong><small>JPG, PNG, WebP, or GIF | up to 8 MB</small></span>
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
@@ -348,7 +350,7 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
                     ? <ProtectedMediaImage path={profile.cover_photo_path} alt="Current profile cover" />
                     : <span>QORVEXA cover</span>}
               </span>
-              <span><strong>Cover photo</strong><small>JPG, PNG, WebP, or GIF · up to 8 MB</small></span>
+              <span><strong>Cover photo</strong><small>JPG, PNG, WebP, or GIF | up to 8 MB</small></span>
               <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => {
                 const file = event.target.files?.[0] || null
                 setCoverFile(file)
@@ -356,18 +358,24 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
               }} />
             </label>
             <label>Display name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={60} required /></label>
-            <label>Username<input value={username} onChange={(event) => setUsername(event.target.value.toLowerCase())} minLength={3} maxLength={24} pattern="[a-z0-9_]{3,24}" required /><small>3–24 lowercase letters, numbers, or underscores.</small></label>
-            <label>Bio<textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={280} rows={4} placeholder="A little about you…" /><small>{bio.length}/280</small></label>
+            <label>Username<input value={username} onChange={(event) => setUsername(event.target.value.toLowerCase())} minLength={3} maxLength={24} pattern="[a-z0-9_]{3,24}" required /><small>3-24 lowercase letters, numbers, or underscores.</small></label>
+            <label>Bio<textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={280} rows={4} placeholder="A little about you..." /><small>{bio.length}/280</small></label>
             <label>
   Gender
-  <select className="profile-detail-control" value={gender} onChange={(event) => setGender(event.target.value)}>
-    <option value="">Prefer not to specify</option>
-    <option value="Male">Male</option>
-    <option value="Female">Female</option>
-    <option value="Non-binary">Non-binary</option>
-    <option value="self_describe">Self-describe</option>
-    <option value="Prefer not to say">Prefer not to say</option>
-  </select>
+ <CustomSelect
+  value={gender}
+  onChange={setGender}
+  className="profile-detail-control"
+  ariaLabel="Gender"
+  options={[
+    { value: '', label: 'Prefer not to specify' },
+    { value: 'Male', label: 'Male' },
+    { value: 'Female', label: 'Female' },
+    { value: 'Non-binary', label: 'Non-binary' },
+    { value: 'self_describe', label: 'Self-describe' },
+    { value: 'Prefer not to say', label: 'Prefer not to say' },
+  ]}
+/>
 </label>
 
 {gender === 'self_describe' && (
@@ -384,21 +392,159 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
 
 <label>
   Gender visibility
-  <select className="profile-detail-control" value={genderVisibility} onChange={(event) => setGenderVisibility(event.target.value)}>
-    <option value="public">Everyone</option>
-    <option value="friends">Friends only</option>
-    <option value="only_me">Only me</option>
-  </select>
-</label>
-
-<label>
-  Birthdate
-  <DatePicker value={birthdate} onChange={setBirthdate} />
+  <CustomSelect
+    value={genderVisibility}
+    onChange={setGenderVisibility}
+    ariaLabel="Gender visibility"
+    options={[
+      { value: 'public', label: 'Everyone' },
+      { value: 'friends', label: 'Friends only' },
+      { value: 'only_me', label: 'Only me' },
+    ]}
+  />
 </label>
 
 <label>
   Birthdate visibility
-  <select className="profile-detail-control" value={birthdateVisibility} onChange={(event) => setBirthdateVisibility(event.target.value)}>
+  <CustomSelect
+    value={birthdateVisibility}
+    onChange={setBirthdateVisibility}
+    ariaLabel="Birthdate visibility"
+    options={[
+      { value: 'public', label: 'Everyone' },
+      { value: 'friends', label: 'Friends only' },
+      { value: 'only_me', label: 'Only me' },
+    ]}
+  />
+</label>
+
+<label>
+  Phone number visibility
+  <CustomSelect
+    value={phoneVisibility}
+    onChange={setPhoneVisibility}
+    ariaLabel="Phone number visibility"
+    options={[
+      { value: 'public', label: 'Everyone' },
+      { value: 'friends', label: 'Friends only' },
+      { value: 'only_me', label: 'Only me' },
+    ]}
+  />
+</label>
+
+<label>
+  Location visibility
+  <CustomSelect
+    value={locationVisibility}
+    onChange={setLocationVisibility}
+    ariaLabel="Location visibility"
+    options={[
+      { value: 'public', label: 'Everyone' },
+      { value: 'friends', label: 'Friends only' },
+      { value: 'only_me', label: 'Only me' },
+    ]}
+  />
+</label>
+
+<label>
+  Website visibility
+  <CustomSelect
+    value={websiteVisibility}
+    onChange={setWebsiteVisibility}
+    ariaLabel="Website visibility"
+    options={[
+      { value: 'public', label: 'Everyone' },
+      { value: 'friends', label: 'Friends only' },
+      { value: 'only_me', label: 'Only me' },
+    ]}
+  />
+</label>
+
+<label>
+  Education visibility
+  <CustomSelect
+    value={educationVisibility}
+    onChange={setEducationVisibility}
+    ariaLabel="Education visibility"
+    options={[
+      { value: 'public', label: 'Everyone' },
+      { value: 'friends', label: 'Friends only' },
+      { value: 'only_me', label: 'Only me' },
+    ]}
+  />
+</label>
+
+<label>
+  Workplace visibility
+  <CustomSelect
+    value={workplaceVisibility}
+    onChange={setWorkplaceVisibility}
+    ariaLabel="Workplace visibility"
+    options={[
+      { value: 'public', label: 'Everyone' },
+      { value: 'friends', label: 'Friends only' },
+      { value: 'only_me', label: 'Only me' },
+    ]}
+  />
+</label>
+
+<label>
+  Profile visibility
+  <CustomSelect
+    value={profileVisibility}
+    onChange={setProfileVisibility}
+    ariaLabel="Profile visibility"
+    options={[
+      { value: 'public', label: 'Public' },
+      { value: 'friends', label: 'Friends only' },
+      { value: 'private', label: 'Private' },
+    ]}
+  />
+  <small>Controls who can view your profile and its posts.</small>
+</label>
+
+<label>
+  Friends list visibility
+  <CustomSelect
+    value={friendsVisibility}
+    onChange={setFriendsVisibility}
+    ariaLabel="Friends list visibility"
+    options={[
+      { value: 'everyone', label: 'Everyone' },
+      { value: 'friends', label: 'Friends only' },
+      { value: 'only_me', label: 'Only me' },
+    ]}
+  />
+</label>
+
+<label>
+  Online status visibility
+  <CustomSelect
+    value={onlineStatusVisibility}
+    onChange={setOnlineStatusVisibility}
+    ariaLabel="Online status visibility"
+    options={[
+      { value: 'everyone', label: 'Everyone' },
+      { value: 'friends', label: 'Friends only' },
+      { value: 'nobody', label: 'Nobody' },
+    ]}
+  />
+</label>
+
+<label>
+  Birthdate
+  <input
+  className="profile-detail-control"
+  type="date"
+  value={birthdate}
+  max={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)}
+  onChange={(event) => setBirthdate(event.target.value)}
+/>
+</label>
+
+<label>
+  Birthdate visibility
+<select className="profile-detail-control" value={birthdateVisibility} onChange={(event) => setBirthdateVisibility(event.target.value)}>
     <option value="public">Everyone</option>
     <option value="friends">Friends only</option>
     <option value="only_me">Only me</option>
@@ -436,11 +582,38 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
             <label>Profile visibility<select value={profileVisibility} onChange={(event) => setProfileVisibility(event.target.value)}><option value="public">Public</option><option value="friends">Friends only</option><option value="private">Private</option></select><small>Controls who can view your profile and its posts.</small></label>
             <label>Friends list visibility<select value={friendsVisibility} onChange={(event) => setFriendsVisibility(event.target.value)}><option value="everyone">Everyone</option><option value="friends">Friends only</option><option value="only_me">Only me</option></select></label>
             <label>Online status visibility<select value={onlineStatusVisibility} onChange={(event) => setOnlineStatusVisibility(event.target.value)}><option value="everyone">Everyone</option><option value="friends">Friends only</option><option value="nobody">Nobody</option></select></label>
-            <label>Availability<select value={availabilityStatus} onChange={(event) => setAvailabilityStatus(event.target.value)}><option value="online">Online</option><option value="busy">Busy</option><option value="offline">Appear offline</option></select><small>Your availability is shown only when your online-status privacy settings allow it.</small></label>
+          <label>
+  Availability
+  <CustomSelect
+    value={availabilityStatus}
+    onChange={setAvailabilityStatus}
+    ariaLabel="Availability"
+    options={[
+      { value: 'online', label: 'Online' },
+      { value: 'busy', label: 'Busy' },
+      { value: 'offline', label: 'Appear offline' },
+    ]}
+  />
+  <small>Your availability is shown only when your online-status privacy settings allow it.</small>
+</label>
+
+<label>
+  Appearance
+  <CustomSelect
+    value={themePreference}
+    onChange={setThemePreference}
+    ariaLabel="Appearance"
+    options={[
+      { value: 'dark', label: 'Dark theme' },
+      { value: 'light', label: 'Light theme' },
+    ]}
+  />
+  <small>Choose how QORVEXA looks across your account.</small>
+</label>
             <Link className="network-nav-link" to={`/profile/${encodeURIComponent(username)}`}>View your public profile</Link>
             <button className="member-publish-button" type="submit" disabled={saving}>
               {saving ? <LoaderCircle className="spinner" size={16} /> : <Save size={16} />}
-              {saving ? 'Saving…' : 'Save profile'}
+              {saving ? 'Saving...' : 'Save profile'}
             </button>
           </form>
         )}
@@ -451,3 +624,10 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
 }
 
 export default ProfileSettingsPage
+
+
+
+
+
+
+

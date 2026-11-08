@@ -3,6 +3,7 @@ import {
   AlertCircle,
   Bell,
   Clock3,
+  Compass,
   CornerDownRight,
   Flag,
   LoaderCircle,
@@ -14,6 +15,7 @@ import {
   Trash2,
   Users,
   UserPlus,
+  UserRound,
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
@@ -80,6 +82,7 @@ function MemberPage() {
   const [commentsByPost, setCommentsByPost] = useState({})
   const [commentsOpen, setCommentsOpen] = useState({})
   const commentsOpenRef = useRef(commentsOpen)
+  const currentFeedLoaderRef = useRef(null)
   const [commentsStatus, setCommentsStatus] = useState({})
   const [commentDrafts, setCommentDrafts] = useState({})
   const [replyDrafts, setReplyDrafts] = useState({})
@@ -145,7 +148,7 @@ function MemberPage() {
     }
   }
   const name = memberProfile?.display_name || user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
-  const username = memberProfile?.username
+  const username = memberProfile?.username || user.user_metadata?.username || ''
 
   useEffect(() => { commentsOpenRef.current = commentsOpen }, [commentsOpen])
 
@@ -172,29 +175,51 @@ function MemberPage() {
     return () => { active = false }
   }, [user.id])
 
-  const loadPosts = useCallback(async () => {
-    const { data, error: queryError } = await getSupabaseClient()
+
+  const loadPosts = useCallback(async (authorIds = null, publicOnly = false) => {
+    if (authorIds !== null && authorIds.length === 0) {
+      setLikeCounts({})
+      setLikedPostIds(new Set())
+      setPostReactions({})
+      setBookmarkedPostIds(new Set())
+      return []
+    }
+
+    const client = getSupabaseClient()
+    let query = client
       .from('posts')
       .select(postSelection)
       .order('created_at', { ascending: false })
-      .limit(50)
+
+    if (authorIds !== null) {
+      query = query.in('author_id', authorIds)
+    }
+
+    if (publicOnly) {
+      query = query.eq('post_visibility', 'public')
+    }
+
+    const { data, error: queryError } = await query.limit(50)
 
     if (queryError) throw queryError
     const postRows = data || []
     const postIds = postRows.map((post) => post.id)
+
     if (postIds.length) {
-      const client = getSupabaseClient()
       const [likesResult, likedResult, bookmarksResult] = await Promise.all([
         client.rpc('get_visible_post_like_counts', { target_post_ids: postIds }),
         client.from('post_likes').select('post_id,reaction_type').eq('user_id', user.id).in('post_id', postIds),
         client.from('post_bookmarks').select('post_id').eq('user_id', user.id).in('post_id', postIds),
       ])
+
       if (likesResult.error) throw likesResult.error
       if (likedResult.error) throw likedResult.error
       if (bookmarksResult.error) throw bookmarksResult.error
+
       const counts = Object.fromEntries((likesResult.data || []).map((like) => [like.post_id, Number(like.like_count)]))
       const likedIds = new Set((likedResult.data || []).map((like) => like.post_id))
       const reactions = Object.fromEntries((likedResult.data || []).map((like) => [like.post_id, like.reaction_type]))
+
       setLikeCounts(counts)
       setLikedPostIds(likedIds)
       setPostReactions(reactions)
@@ -205,8 +230,10 @@ function MemberPage() {
       setPostReactions({})
       setBookmarkedPostIds(new Set())
     }
+
     return postRows
   }, [user.id])
+
 
   const loadFeedRelationships = useCallback(async () => {
     const client = getSupabaseClient()
@@ -237,6 +264,19 @@ function MemberPage() {
     setFriendIds(nextFriendIds)
     setFollowingIds(nextFollowingIds)
   }, [user.id])
+    const loadCurrentFeedPosts = useCallback(() => {
+    if (feedFilter === 'following') {
+      return loadPosts([...followingIds], true)
+    }
+
+    if (feedFilter === 'friends') {
+      return loadPosts([...friendIds], false)
+    }
+
+    return loadPosts()
+  }, [feedFilter, followingIds, friendIds, loadPosts])
+
+  currentFeedLoaderRef.current = loadCurrentFeedPosts
 
   useEffect(() => {
     let active = true
@@ -244,6 +284,7 @@ function MemberPage() {
     loadFeedRelationships().catch((loadError) => {
       if (active) setError(loadError.message || 'Your feed relationships could not be loaded.')
     })
+  
 
     return () => { active = false }
   }, [loadFeedRelationships])
@@ -282,11 +323,14 @@ function MemberPage() {
     }
   }, [])
 
+ 
   useEffect(() => {
     let active = true
 
+    setFeedStatus('loading')
+
     const timer = window.setTimeout(() => {
-      loadPosts()
+      loadCurrentFeedPosts()
         .then((data) => {
           if (!active) return
           setPosts(data)
@@ -304,7 +348,8 @@ function MemberPage() {
       active = false
       window.clearTimeout(timer)
     }
-  }, [loadPosts])
+  }, [loadCurrentFeedPosts])
+
 
   useEffect(() => {
     let active = true
@@ -317,7 +362,7 @@ function MemberPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
         window.clearTimeout(refreshTimer)
         refreshTimer = window.setTimeout(() => {
-          loadPosts()
+          currentFeedLoaderRef.current?.()
             .then((data) => { if (active) setPosts(data) })
             .catch((loadError) => { if (active) setError(loadError.message || 'The feed could not be updated.') })
         }, 80)
@@ -360,7 +405,7 @@ function MemberPage() {
       window.clearTimeout(badgeLoadTimer)
       client.removeChannel(channel)
     }
-  }, [loadComments, loadMemberBadges, loadPosts, user.id])
+  }, [loadComments, loadMemberBadges, user.id])
 
   async function handlePostReaction(post, nextType) {
     if (postActionId) return
@@ -437,7 +482,7 @@ function MemberPage() {
     setFeedStatus('loading')
 
     try {
-      setPosts(await loadPosts())
+      setPosts(await loadCurrentFeedPosts())
       setFeedStatus('ready')
     } catch (loadError) {
       setError(loadError.message || 'The feed could not be refreshed.')
@@ -558,11 +603,12 @@ function MemberPage() {
         <Link className="brand-link" to="/app" aria-label="QORVEXA feed"><BrandMark /></Link>
         <nav className="network-nav" aria-label="Community navigation">
           <span className="network-nav-link is-active"><Rss size={15} aria-hidden="true" />Feed</span>
+          <Link to="/app/explore" className="network-nav-link"><Compass size={15} aria-hidden="true" />Explore</Link>
           <Link to="/app/discover" className="network-nav-link"><UserPlus size={15} aria-hidden="true" />Discover</Link>
           <Link to="/app/friends" className="network-nav-link"><Users size={15} aria-hidden="true" />Friends</Link>
           <Link to="/app/notifications" className="network-nav-link"><Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}</Link>
           <Link to="/app/messages" className="network-nav-link"><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessageCount > 0 && <span className="network-badge">{unreadMessageCount}</span>}</Link>
-      {username && <Link to={`/profile/${encodeURIComponent(username)}`} className="network-nav-link"><Users size={15} aria-hidden="true" />Profile</Link>}
+          {username && <Link to={`/profile/${encodeURIComponent(username)}`} className="network-nav-link"><UserRound size={15} aria-hidden="true" />My profile</Link>}
 <AccountMenu menuRef={accountMenuRef} onSignOut={handleSignOut} signingOut={signingOut} />
         </nav>
    
@@ -862,3 +908,4 @@ function MemberPage() {
 }
 
 export default MemberPage
+

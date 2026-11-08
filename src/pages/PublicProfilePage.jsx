@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import {
   AlertCircle,
+  Compass,
+  Rss,
   ArrowLeft,
   BookOpen,
   BriefcaseBusiness,
@@ -802,9 +804,9 @@ function PublicProfilePage() {
         <Link className="brand-link" to={user ? '/app' : '/'} aria-label="QORVEXA home"><BrandMark /></Link>
        <nav className="network-nav" aria-label="Community navigation">
   {user ? <>
-    <Link className="network-nav-link" to="/app">Feed</Link>
-    <Link className="network-nav-link" to="/app/discover">Discover</Link>
-    <Link className="network-nav-link" to="/app/friends">Friends</Link>
+    <Link className="network-nav-link" to="/app"><Rss size={15} aria-hidden="true" />Feed</Link>
+    <Link className="network-nav-link" to="/app/discover"><UserPlus size={15} aria-hidden="true" />Discover</Link>
+    <Link className="network-nav-link" to="/app/friends"><Users size={15} aria-hidden="true" />Friends</Link>
     <Link className="network-nav-link" to="/app/notifications"><Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}</Link>
     <Link className="network-nav-link" to="/app/messages"><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessageCount > 0 && <span className="network-badge">{unreadMessageCount}</span>}</Link>
     <AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />

@@ -5,6 +5,7 @@ import { useAuth } from '../context/useAuth.js'
 import AdminRoutes from './AdminRoutes.jsx'
 import AuthPage from './AuthPage.jsx'
 import MemberPage from './MemberPage.jsx'
+import ExplorePage from './ExplorePage.jsx'
 import NetworkPage from './NetworkPage.jsx'
 import ProfileSettingsPage from './ProfileSettingsPage.jsx'
 import BookmarksPage from './BookmarksPage.jsx'
@@ -20,7 +21,7 @@ function ProtectedRoute({ children }) {
     return (
       <div className="auth-loading" role="status">
         <LoaderCircle size={22} className="spinner" aria-hidden="true" />
-        Checking your session…
+        Checking your sessionâ€¦
       </div>
     )
   }
@@ -36,6 +37,8 @@ function AuthRoutes() {
       ? <HashtagPage />
     : pathname === '/app'
       ? <MemberPage />
+      : pathname === '/app/explore'
+      ? <ExplorePage />
       : pathname === '/app/profile'
       ? <ProfileSettingsPage />
       : pathname === '/app/bookmarks'

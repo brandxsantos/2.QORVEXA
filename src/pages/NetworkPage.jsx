@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -7,6 +7,8 @@ import {
   Check,
   CheckCheck,
   Clock3,
+  Compass,
+  Rss,
   LoaderCircle,
   LogOut,
   MessageCircle,
@@ -803,13 +805,14 @@ function NetworkPage() {
       <header className="member-header member-feed-header">
         <Link className="brand-link" to="/app" aria-label="QORVEXA feed"><BrandMark /></Link>
         <nav className="network-nav" aria-label="Community navigation">
-          <Link to="/app" className="network-nav-link">Feed</Link>
+          <Link to="/app" className="network-nav-link"><Rss size={15} aria-hidden="true" />Feed</Link>
+          <Link to="/app/explore" className={`network-nav-link${activeSection === 'explore' ? ' is-active' : ''}`}><Compass size={15} aria-hidden="true" />Explore</Link>
           <Link to="/app/discover" className={`network-nav-link${activeSection === 'discover' ? ' is-active' : ''}`}><UserPlus size={15} aria-hidden="true" />Discover</Link>
           <Link to="/app/friends" className={`network-nav-link${activeSection === 'friends' ? ' is-active' : ''}`}><Users size={15} aria-hidden="true" />Friends</Link>
           <Link to="/app/notifications" className={`network-nav-link${activeSection === 'notifications' ? ' is-active' : ''}`}>
           <Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}
           </Link>
-          <Link to="/app/messages" className={`network-nav-link${activeSection === 'messages' ? ' is-active' : ''}`}><MessageSquare size={15} aria-hidden="true" />Messages{unreadMessages > 0 && <span className="network-badge">{unreadMessages}</span>}</Link>
+          <Link to="/app/messages" className={`network-nav-link${activeSection === 'messages' ? ' is-active' : ''}`}><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessages > 0 && <span className="network-badge">{unreadMessages}</span>}</Link>
       
    {ownUsername && <Link to={`/profile/${encodeURIComponent(ownUsername)}`} className="network-nav-link"><UserRound size={15} aria-hidden="true" />My profile</Link>}
 <AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
@@ -986,7 +989,7 @@ function NetworkPage() {
                       {!notification.is_read && <span className="network-unread-dot" aria-label="Unread" />}
                     </article>
                   )
-                }) : <div className="network-empty"><Bell size={21} /><h2>{notifications.length ? 'No matching notifications' : 'You"™re all caught up'}</h2><p>{notifications.length ? 'Choose another category to see more activity.' : 'Friend requests, messages, reactions, and comments will appear here.'}</p></div>}
+                }) : <div className="network-empty"><Bell size={21} /><h2>{notifications.length ? 'No matching notifications' : "You're all caught up"}</h2><p>{notifications.length ? 'Choose another category to see more activity.' : 'Friend requests, messages, reactions, and comments will appear here.'}</p></div>}
               </section>
             )}
 
@@ -1089,3 +1092,7 @@ function NetworkPage() {
 }
 
 export default NetworkPage
+
+
+
+
