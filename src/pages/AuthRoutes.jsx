@@ -34,7 +34,7 @@ function ProtectedRoute({ children }) {
 
 function AuthRoutes() {
   const { pathname } = useLocation()
-  const memberPage = pathname.startsWith('/profile/')
+  const memberPage = pathname.startsWith('/profile/') || pathname.startsWith('/post/')
     ? <PublicProfilePage />
     : pathname.startsWith('/hashtag/')
       ? <HashtagPage />
@@ -49,7 +49,7 @@ function AuthRoutes() {
         : pathname === '/app/privacy'
           ? <PrivacyPage />
           : <NetworkPage />
-  const page = pathname.startsWith('/profile/') || pathname.startsWith('/hashtag/')
+  const page = pathname.startsWith('/profile/') || pathname.startsWith('/post/') || pathname.startsWith('/hashtag/')
     ? memberPage
     : pathname.startsWith('/app')
       ? <ProtectedRoute>{memberPage}</ProtectedRoute>
@@ -62,6 +62,7 @@ function AuthRoutes() {
   const showFloatingChatDock =
     pathname.startsWith('/app') ||
     pathname.startsWith('/profile/') ||
+    pathname.startsWith('/post/') ||
     pathname.startsWith('/hashtag/')
   return (
     <AuthProvider>

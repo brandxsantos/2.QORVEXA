@@ -5,6 +5,7 @@ import {
   AlertCircle,
   Compass,
   Rss,
+  Repeat2,
   ArrowLeft,
   BookOpen,
   BriefcaseBusiness,
@@ -13,6 +14,7 @@ import {
   Check,
   Clock3,
   Bell,
+  ExternalLink,
   Flag,
   Globe,
   GraduationCap,
@@ -36,6 +38,8 @@ import NotificationToast from '../components/NotificationToast.jsx'
 import notificationToastText from '../lib/notificationToastText.js'
 import PostComposer from '../components/PostComposer.jsx'
 import PostReactionButton from '../components/PostReactionButton.jsx'
+import PostShareButton from '../components/PostShareButton.jsx'
+import PostActionMenu from '../components/PostActionMenu.jsx'
 import EmojiPicker from '../components/EmojiPicker.jsx'
 import SmartTextInput from '../components/social/SmartTextInput.jsx'
 import LinkedText from '../components/social/LinkedText.jsx'
@@ -69,18 +73,21 @@ function profileInitials(profile) {
 }
 
 function PublicProfilePage() {
-  const { username: routeUsername = '' } = useParams()
-  const username = routeUsername.toLowerCase()
+  const { username: routeUsername = '', postId: routePostId = '' } = useParams()
+  const [directPostUsername, setDirectPostUsername] = useState('')
+  const username = (routeUsername || directPostUsername).toLowerCase()
   const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const selectedPostId = searchParams.get('post')
+  const selectedPostId = searchParams.get('post') || routePostId
   const selectedCommentId = searchParams.get('comment')
   const previewRequested = searchParams.get('view') === 'public'
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
   const [postCount, setPostCount] = useState(0)
   const [loadedPostCount, setLoadedPostCount] = useState(0)
+  const [loadedAuthoredPostCount, setLoadedAuthoredPostCount] = useState(0)
+  const [loadedRepostCount, setLoadedRepostCount] = useState(0)
   const [loadingMorePosts, setLoadingMorePosts] = useState(false)
   const [friends, setFriends] = useState([])
   const [friendSearch, setFriendSearch] = useState('')
@@ -165,15 +172,34 @@ function PublicProfilePage() {
       if (!member) {
         setPostCount(0)
         setLoadedPostCount(0)
+        setLoadedAuthoredPostCount(0)
+        setLoadedRepostCount(0)
         setFriends([])
         setFollowStats({ followerCount: 0, followingCount: 0, isFollowing: false })
         return
       }
 
-      let postsQuery = client.from('posts').select(postFields, { count: 'exact' }).eq('author_id', member.id).order('created_at', { ascending: false }).limit(50)
-      if (previewRequested && user?.id === member.id) postsQuery = postsQuery.eq('post_visibility', 'public')
-      const [postResult, friendListResult, requestResult, ownFriendsResult, followStatsResult] = await Promise.all([
+      let postsQuery = client.from('posts')
+        .select(postFields, { count: 'exact' })
+        .eq('author_id', member.id)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (previewRequested && user?.id === member.id) {
+        postsQuery = postsQuery.eq('post_visibility', 'public')
+      }
+
+      let repostQuery = client.from('post_reposts')
+        .select('id, post_id, user_id, created_at, profiles!post_reposts_user_id_fkey(username, display_name, avatar_url), posts!post_reposts_post_id_fkey!inner(id, author_id, content, media_path, media_type, post_visibility, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url))', { count: 'exact' })
+        .eq('user_id', member.id)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (previewRequested && user?.id === member.id) {
+        repostQuery = repostQuery.eq('posts.post_visibility', 'public')
+      }
+
+      const [postResult, repostResult, friendListResult, requestResult, ownFriendsResult, followStatsResult] = await Promise.all([
         postsQuery,
+        repostQuery,
         client.rpc('get_profile_friends', { target_user_id: member.id }),
         user && user.id !== member.id
           ? client.from('friend_requests').select('id, sender_id, receiver_id, status, created_at')
@@ -185,20 +211,67 @@ function PublicProfilePage() {
         client.rpc('get_profile_follow_stats', { target_user_id: member.id }),
       ])
       if (loadId !== profileLoadIdRef.current) return
-      for (const result of [postResult, friendListResult, requestResult, ownFriendsResult, followStatsResult]) {
+      for (const result of [postResult, repostResult, friendListResult, requestResult, ownFriendsResult, followStatsResult]) {
         if (result.error) throw result.error
       }
 
-      let profilePosts = postResult.data || []
+      const authoredPosts = (postResult.data || []).map((post) => ({
+        ...post,
+        feed_entry_id: `post:${post.id}`,
+        feed_created_at: post.created_at,
+        is_repost: false,
+      }))
+      const repostEntries = (repostResult.data || [])
+        .filter((repost) => repost.posts)
+        .map((repost) => ({
+          ...repost.posts,
+          feed_entry_id: `repost:${repost.id}`,
+          feed_created_at: repost.created_at,
+          reposted_by: repost.profiles,
+          is_repost: true,
+        }))
+
+      let profilePosts = [...authoredPosts, ...repostEntries]
+        .sort((a, b) => new Date(b.feed_created_at).getTime() - new Date(a.feed_created_at).getTime())
+
       if (selectedPostId && !profilePosts.some((post) => post.id === selectedPostId)) {
         let selectedPostQuery = client.from('posts')
           .select(postFields)
           .eq('id', selectedPostId)
           .eq('author_id', member.id)
-        if (previewRequested && user?.id === member.id) selectedPostQuery = selectedPostQuery.eq('post_visibility', 'public')
+        if (previewRequested && user?.id === member.id) {
+          selectedPostQuery = selectedPostQuery.eq('post_visibility', 'public')
+        }
         const { data: selectedPost, error: selectedPostError } = await selectedPostQuery.maybeSingle()
         if (selectedPostError) throw selectedPostError
-        if (selectedPost) profilePosts = [selectedPost, ...profilePosts]
+
+        if (selectedPost) {
+          profilePosts = [{
+            ...selectedPost,
+            feed_entry_id: `post:${selectedPost.id}`,
+            feed_created_at: selectedPost.created_at,
+            is_repost: false,
+          }, ...profilePosts]
+        } else {
+          let selectedRepostQuery = client.from('post_reposts')
+            .select('id, post_id, user_id, created_at, profiles!post_reposts_user_id_fkey(username, display_name, avatar_url), posts!post_reposts_post_id_fkey!inner(id, author_id, content, media_path, media_type, post_visibility, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url))')
+            .eq('user_id', member.id)
+            .eq('post_id', selectedPostId)
+          if (previewRequested && user?.id === member.id) {
+            selectedRepostQuery = selectedRepostQuery.eq('posts.post_visibility', 'public')
+          }
+          const { data: selectedRepost, error: selectedRepostError } = await selectedRepostQuery.maybeSingle()
+          if (selectedRepostError) throw selectedRepostError
+          if (selectedRepost?.posts) {
+            profilePosts = [{
+              ...selectedRepost.posts,
+              feed_entry_id: `repost:${selectedRepost.id}`,
+              feed_created_at: selectedRepost.created_at,
+              reposted_by: selectedRepost.profiles,
+              is_repost: true,
+            }, ...profilePosts]
+          }
+        }
       }
 
       const requestRows = requestResult.data || []
@@ -216,8 +289,10 @@ function PublicProfilePage() {
 
       setProfile(member)
       setPosts(profilePosts)
-      setPostCount(postResult.count || profilePosts.length)
-      setLoadedPostCount((postResult.data || []).length)
+      setPostCount(Number(postResult.count ?? (postResult.data || []).length) + Number(repostResult.count ?? (repostResult.data || []).length))
+      setLoadedAuthoredPostCount((postResult.data || []).length)
+      setLoadedRepostCount((repostResult.data || []).length)
+      setLoadedPostCount((postResult.data || []).length + (repostResult.data || []).length)
       setFriends(profileFriends)
       setFriendship({ accepted: isFriend, outgoing, incoming })
       const followRow = followStatsResult.data?.[0]
@@ -277,22 +352,69 @@ function PublicProfilePage() {
   }, [previewRequested, selectedPostId, user, username])
 
   useEffect(() => {
+    if (!routePostId) return undefined
+
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    setDirectPostUsername('')
+
+    async function resolveDirectPost() {
+      try {
+        const { data, error: postError } = await getSupabaseClient()
+          .from('posts')
+          .select('id, profiles!posts_author_id_fkey(username)')
+          .eq('id', routePostId)
+          .maybeSingle()
+
+        if (postError) throw postError
+        if (cancelled) return
+
+        const authorUsername = data?.profiles?.username
+        if (!authorUsername) {
+          setProfile(null)
+          setPosts([])
+          setError("This post is unavailable or you don't have permission to view it.")
+          setLoading(false)
+          return
+        }
+
+        setDirectPostUsername(authorUsername)
+      } catch {
+        if (!cancelled) {
+          setProfile(null)
+          setPosts([])
+          setError("This post is unavailable or you don't have permission to view it.")
+          setLoading(false)
+        }
+      }
+    }
+
+    void resolveDirectPost()
+    return () => { cancelled = true }
+  }, [routePostId])
+
+  useEffect(() => {
+    if (routePostId && !directPostUsername) return undefined
     const timer = window.setTimeout(() => { void loadProfile() }, 0)
     return () => window.clearTimeout(timer)
-  }, [loadProfile])
+  }, [loadProfile, routePostId, directPostUsername])
   useEffect(() => {
-    if (!selectedPostId || !selectedCommentId) return undefined
+    if (!selectedPostId) return undefined
 
-    const postComments = commentsByPost[selectedPostId]
-    if (!postComments) return undefined
+    if (!posts.some((post) => post.id === selectedPostId)) return undefined
 
-    setCommentsOpen((current) => {
-      if (current.has(selectedPostId)) return current
-      return new Set([...current, selectedPostId])
-    })
+    if (selectedCommentId) {
+      const postComments = commentsByPost[selectedPostId]
+      if (!postComments) return undefined
 
+      setCommentsOpen((current) => {
+        if (current.has(selectedPostId)) return current
+        return new Set([...current, selectedPostId])
+      })
+    }
     const timer = window.setTimeout(() => {
-      const target = document.getElementById(`post-comment-${selectedCommentId}`)
+      const target = (selectedCommentId ? document.getElementById(`post-comment-${selectedCommentId}`) : null)
         || document.getElementById(`post-${selectedPostId}`)
 
       target?.scrollIntoView({
@@ -302,7 +424,7 @@ function PublicProfilePage() {
     }, 300)
 
     return () => window.clearTimeout(timer)
-  }, [selectedPostId, selectedCommentId, commentsByPost])
+  }, [selectedPostId, selectedCommentId, commentsByPost, posts])
   useEffect(() => {
     if (!profile?.id) return undefined
 
@@ -329,6 +451,9 @@ function PublicProfilePage() {
         schema: 'public',
         table: 'post_likes',
       }, (payload) => {
+        const reactionUserId = payload.new?.user_id || payload.old?.user_id
+        if (reactionUserId && reactionUserId === user?.id) return
+
         const postId = payload.new?.post_id || payload.old?.post_id
         if (postId && postsRef.current.some((post) => post.id === postId)) {
           scheduleProfileRefresh()
@@ -359,7 +484,7 @@ function PublicProfilePage() {
       window.clearTimeout(refreshTimer)
       client.removeChannel(channel)
     }
-  }, [loadProfile, profile?.id])
+  }, [loadProfile, profile?.id, user?.id])
 
   useEffect(() => {
     if (!notificationToast) return undefined
@@ -546,18 +671,47 @@ function PublicProfilePage() {
     setError('')
     try {
       const client = getSupabaseClient()
-      const start = loadedPostCount
+      const authoredStart = loadedAuthoredPostCount
+      const repostStart = loadedRepostCount
+      const isPublicPreview = searchParams.get('view') === 'public' && user?.id === profile.id
+
       let postsQuery = client.from('posts')
         .select(postFields)
         .eq('author_id', profile.id)
         .order('created_at', { ascending: false })
-        .range(start, start + 49)
-      const isPublicPreview = searchParams.get('view') === 'public' && user?.id === profile.id
+        .range(authoredStart, authoredStart + 49)
       if (isPublicPreview) postsQuery = postsQuery.eq('post_visibility', 'public')
-      const { data, error: postsError } = await postsQuery
-      if (postsError) throw postsError
-      const newPosts = data || []
-      const postIds = newPosts.map((post) => post.id)
+
+      let repostQuery = client.from('post_reposts')
+        .select('id, post_id, user_id, created_at, profiles!post_reposts_user_id_fkey(username, display_name, avatar_url), posts!post_reposts_post_id_fkey!inner(id, author_id, content, media_path, media_type, post_visibility, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url))')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .range(repostStart, repostStart + 49)
+      if (isPublicPreview) repostQuery = repostQuery.eq('posts.post_visibility', 'public')
+
+      const [postsResult, repostsResult] = await Promise.all([postsQuery, repostQuery])
+      if (postsResult.error) throw postsResult.error
+      if (repostsResult.error) throw repostsResult.error
+
+      const newAuthoredPosts = (postsResult.data || []).map((post) => ({
+        ...post,
+        feed_entry_id: `post:${post.id}`,
+        feed_created_at: post.created_at,
+        is_repost: false,
+      }))
+      const newReposts = (repostsResult.data || [])
+        .filter((repost) => repost.posts)
+        .map((repost) => ({
+          ...repost.posts,
+          feed_entry_id: `repost:${repost.id}`,
+          feed_created_at: repost.created_at,
+          reposted_by: repost.profiles,
+          is_repost: true,
+        }))
+      const newEntries = [...newAuthoredPosts, ...newReposts]
+        .sort((a, b) => new Date(b.feed_created_at).getTime() - new Date(a.feed_created_at).getTime())
+
+      const postIds = [...new Set(newEntries.map((post) => post.id))]
       if (postIds.length) {
         const [likesResult, likedResult, commentsResult] = await Promise.all([
           client.rpc('get_visible_post_like_counts', { target_post_ids: postIds }),
@@ -578,15 +732,25 @@ function PublicProfilePage() {
           ...Object.fromEntries((likesResult.data || []).map((like) => [like.post_id, Number(like.like_count)])),
         }))
         setLikedPostIds((current) => new Set([...current, ...(likedResult.data || []).map((like) => like.post_id)]))
-        setPostReactions((current) => ({ ...current, ...Object.fromEntries((likedResult.data || []).map((like) => [like.post_id, like.reaction_type])) }))
-        const groupedComments = Object.fromEntries(postIds.map((id) => [id, (commentsResult.data || []).filter((comment) => comment.post_id === id)]))
+        setPostReactions((current) => ({
+          ...current,
+          ...Object.fromEntries((likedResult.data || []).map((like) => [like.post_id, like.reaction_type])),
+        }))
+        const groupedComments = Object.fromEntries(postIds.map((id) => [
+          id,
+          (commentsResult.data || []).filter((comment) => comment.post_id === id),
+        ]))
         setCommentsByPost((current) => ({ ...current, ...groupedComments }))
       }
+
       setPosts((current) => {
-        const existingIds = new Set(current.map((post) => post.id))
-        return [...current, ...newPosts.filter((post) => !existingIds.has(post.id))]
+        const existingIds = new Set(current.map((post) => post.feed_entry_id || `post:${post.id}`))
+        return [...current, ...newEntries.filter((post) => !existingIds.has(post.feed_entry_id))]
+          .sort((a, b) => new Date(b.feed_created_at || b.created_at).getTime() - new Date(a.feed_created_at || a.created_at).getTime())
       })
-      setLoadedPostCount(start + newPosts.length)
+      setLoadedAuthoredPostCount(authoredStart + newAuthoredPosts.length)
+      setLoadedRepostCount(repostStart + (repostsResult.data || []).length)
+      setLoadedPostCount((current) => current + newEntries.length)
     } catch (loadError) {
       setError(loadError.message || 'More profile posts could not be loaded.')
     } finally {
@@ -597,6 +761,7 @@ function PublicProfilePage() {
   const isProfileOwner = user?.id === profile?.id
   const isPublicPreview = previewRequested && isProfileOwner
   const isOwner = isProfileOwner && !isPublicPreview
+  const isPostDetail = Boolean(routePostId)
   const canSeeOnline = (isPublicPreview
     ? profile?.profile_visibility === 'public' && profile?.online_status_visibility === 'everyone'
     : isProfileOwner)
@@ -828,6 +993,7 @@ function PublicProfilePage() {
           </div>
         ) : (
           <>
+            {!isPostDetail && (
             <section className="public-profile-card" aria-label={`${profile.display_name}'s profile`}>
               <div className="public-profile-cover">
                 {profile.cover_photo_path && <ProtectedMediaImage path={profile.cover_photo_path} alt="" className="public-profile-cover-image" />}
@@ -885,55 +1051,106 @@ function PublicProfilePage() {
                 ))}
               </nav>
             </section>
+            )}
 
             {error && <div className="settings-message settings-message--error public-profile-message" role="alert"><AlertCircle size={16} />{error}</div>}
             {notice && <p className="settings-message settings-message--success public-profile-message" role="status">{notice}</p>}
 
-            {isOwner && (
+            {!isPostDetail && isOwner && (
               <PostComposer
                 userId={user.id}
                 idPrefix="profile-post"
                 onPublished={(post) => {
-                  setPosts((current) => [post, ...current.filter((item) => item.id !== post.id)])
+                  const profilePost = { ...post, feed_entry_id: `post:${post.id}`, feed_created_at: post.created_at, is_repost: false }
+                  setPosts((current) => [profilePost, ...current.filter((item) => item.id !== post.id)].sort((a, b) => new Date(b.feed_created_at || b.created_at).getTime() - new Date(a.feed_created_at || a.created_at).getTime()))
                   setPostCount((count) => count + 1)
                   setLoadedPostCount((count) => count + 1)
+                  setLoadedAuthoredPostCount((count) => count + 1)
                   if (selectedPostId) navigate(`/profile/${encodeURIComponent(profile.username)}`, { replace: true })
                 }}
                 onError={setError}
               />
             )}
 
-            {activeTab === 'posts' && (
+            {(isPostDetail || activeTab === 'posts') && (
               <section className="public-profile-content" aria-label="Profile posts">
-                {selectedPostId && <Link className="public-profile-back" to={`/profile/${encodeURIComponent(profile.username)}`}><ArrowLeft size={14} />All posts</Link>}
+                {selectedPostId && <Link className="public-profile-back" to={`/profile/${encodeURIComponent(profile.username)}`}><ArrowLeft size={14} />{isPostDetail ? 'View profile' : 'All posts'}</Link>}
                 {!visiblePosts.length
                   ? <div className="member-feed-empty"><span><MessageSquare size={20} /></span><h2>No visible posts yet</h2><p>Posts shared with you will appear here.</p></div>
-                  : visiblePosts.map((post) => (
-                    <article id={`post-${post.id}`} className={`member-post public-profile-post${selectedPostId ? ' is-detail' : ''}`} key={post.id}>
+                  : visiblePosts.map((post) => {
+                    const postAuthor = post.profiles || profile
+                    const postAuthorUrl = postAuthor?.username
+                      ? `/profile/${encodeURIComponent(postAuthor.username)}`
+                      : `/profile/${encodeURIComponent(profile.username)}`
+                    return (
+                    <article id={`post-${post.id}`} className={`member-post public-profile-post${selectedPostId ? ' is-detail' : ''}`} key={post.feed_entry_id || post.id}>
                       <div className="member-post-avatar">
-                        {profile.avatar_url ? <ProtectedMediaImage path={profile.avatar_url} alt="" fallback={profileInitials(profile)} /> : profileInitials(profile)}
+                        {postAuthor.avatar_url ? <ProtectedMediaImage path={postAuthor.avatar_url} alt="" fallback={profileInitials(postAuthor)} /> : profileInitials(postAuthor)}
                       </div>
                       <div className="member-post-body">
-                        <div className="member-post-meta">
-                          <div><Link to={`/profile/${encodeURIComponent(profile.username)}`}><strong>{profile.display_name}</strong></Link><Link to={`/profile/${encodeURIComponent(profile.username)}`} className="member-post-username">@{profile.username}</Link></div>
-                          <Link className="member-post-permalink" to={`/profile/${encodeURIComponent(profile.username)}?post=${post.id}`}><Clock3 size={13} />{formatDate(post.created_at)}</Link>
+                        {post.is_repost && <div className="member-post-meta member-post-repost-banner"><Repeat2 size={14} aria-hidden="true" /><span><Link to={`/profile/${encodeURIComponent(profile.username)}`}><strong>{profile.display_name || profile.username}</strong></Link> reposted</span></div>}
+                        <div className="member-post-header">
+                          <div className="member-post-header-author">
+                            <div className="member-post-author-name">
+                              <Link to={postAuthorUrl}><strong>{postAuthor.display_name || postAuthor.username}</strong></Link>
+                            </div>
+                            <div className="member-post-author-sub">
+                              {postAuthor?.username && <Link to={postAuthorUrl} className="member-post-username">@{postAuthor.username}</Link>}
+                              {postAuthor?.username && <span className="member-post-author-dot" aria-hidden="true">·</span>}
+                              <Link className="member-post-permalink" to={`/post/${post.id}`}>
+                                <Clock3 size={12} aria-hidden="true" />
+                                <span>{formatDate(post.is_repost ? post.feed_created_at : post.created_at)}</span>
+                              </Link>
+                            </div>
+                          </div>
+                          <div className="member-post-header-actions">
+                            <PostActionMenu
+                              items={[
+                                {
+                                  id: 'comments',
+                                  label: commentsOpen.has(post.id) ? 'Hide comments' : 'View comments',
+                                  icon: MessageCircle,
+                                  onClick: () => setCommentsOpen((current) => {
+                                    const next = new Set(current)
+                                    if (next.has(post.id)) next.delete(post.id)
+                                    else next.add(post.id)
+                                    return next
+                                  }),
+                                },
+                                {
+                                  id: 'open-post',
+                                  label: 'Open post',
+                                  icon: ExternalLink,
+                                  to: `/post/${post.id}`,
+                                },
+                                user && post.author_id !== user.id && !(isPublicPreview && isProfileOwner) && {
+                                  id: 'report',
+                                  label: 'Report post',
+                                  icon: Flag,
+                                  danger: true,
+                                  onClick: () => setReportTarget({ reportedUserId: post.author_id, type: 'post', id: post.id }),
+                                },
+                              ]}
+                            />
+                          </div>
                         </div>
-                        {isOwner && <span className="public-post-audience"><Shield size={12} />{post.post_visibility === 'only_me' ? 'Only me' : post.post_visibility === 'friends' ? 'Friends' : 'Public'}</span>}
+                        {isOwner && !post.is_repost && <span className="public-post-audience"><Shield size={12} />{post.post_visibility === 'only_me' ? 'Only me' : post.post_visibility === 'friends' ? 'Friends' : 'Public'}</span>}
                         {post.content && <p className="member-post-content"><LinkedText text={post.content} /></p>}
                         {post.media_path && <button className="public-profile-photo-button" type="button" onClick={() => setSelectedPhoto(post.media_path)}><ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to post" loading="lazy" /></button>}
-                        <div className="member-post-footer">
+                        <div className="member-post-footer member-post-action-bar">
                           <PostReactionButton
                             reaction={postReactions[post.id]}
                             count={likeCounts[post.id] || 0}
                             disabled={working || (isPublicPreview && isProfileOwner)}
                             onReact={(type) => handlePostReaction(post, type)}
                           />
-                          <button className="member-comments-toggle" type="button" onClick={() => setCommentsOpen((current) => {
+                          <button className={`member-comments-toggle${commentsOpen.has(post.id) ? ' is-active' : ''}`} type="button" onClick={() => setCommentsOpen((current) => {
                             const next = new Set(current)
                             if (next.has(post.id)) next.delete(post.id)
                             else next.add(post.id)
                             return next
-                          })} aria-expanded={commentsOpen.has(post.id)}><MessageCircle size={14} />{commentsByPost[post.id]?.length || 0} comments</button>
+                          })} aria-expanded={commentsOpen.has(post.id)}><MessageCircle size={14} /><span>{commentsByPost[post.id]?.length || 0} comments</span></button>
+                          <PostShareButton url={`/post/${post.id}`} />
                           {!user && <Link className="member-comments-toggle" to="/login">Sign in to interact</Link>}
                         </div>
                         {commentsOpen.has(post.id) && <div className="public-profile-comments">
@@ -977,7 +1194,8 @@ function PublicProfilePage() {
                         </div>}
                       </div>
                     </article>
-                  ))}
+                    )
+                  })}
               </section>
             )}
             {['posts', 'photos', 'activity'].includes(activeTab) && loadedPostCount < postCount && (
@@ -986,7 +1204,7 @@ function PublicProfilePage() {
               </button>
             )}
 
-            {activeTab === 'about' && (
+            {!isPostDetail && activeTab === 'about' && (
               <section className="public-profile-about public-profile-content" aria-label="About">
                 <h2>About {profile.display_name}</h2>
                 <p className="public-profile-about-bio">{profile.bio || 'This member has not added a bio yet.'}</p>
@@ -1057,7 +1275,7 @@ function PublicProfilePage() {
               </section>
             )}
 
-            {activeTab === 'friends' && (
+            {!isPostDetail && activeTab === 'friends' && (
               <section className="public-profile-content" aria-label="Friends">
                 {!friendListVisible
                   ? <div className="member-feed-empty"><span><Users size={20} /></span><h2>Friends list is private</h2><p>{profile.display_name} has limited who can see this list.</p></div>
@@ -1076,7 +1294,7 @@ function PublicProfilePage() {
               </section>
             )}
 
-            {activeTab === 'photos' && (
+            {!isPostDetail && activeTab === 'photos' && (
               <section className="public-profile-content" aria-label="Photos">
                 {photos.length
                   ? <div className="public-profile-photo-grid">{photos.map((post) => <button type="button" key={post.id} onClick={() => setSelectedPhoto(post.media_path)} aria-label={`Open photo from ${formatDate(post.created_at)}`}><ProtectedMediaImage path={post.media_path} alt="Photo from a profile post" loading="lazy" /></button>)}</div>
@@ -1084,7 +1302,7 @@ function PublicProfilePage() {
               </section>
             )}
 
-            {activeTab === 'activity' && (
+            {!isPostDetail && activeTab === 'activity' && (
               <section className="public-profile-content" aria-label="Public activity">
                 <h2>Recent public activity</h2>
                 <p className="public-profile-activity-note">Only posts visible to you are included. Private messages and account activity are never shown.</p>

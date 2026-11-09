@@ -156,16 +156,16 @@ function PostComposer({ userId, onPublished, onError, idPrefix = 'post' }) {
                     type="button"
                     role="option"
                     aria-selected={selected}
-                    className={`audience-option${selected ? ' is-selected' : ''}`}
+                                className={`audience-option${selected ? ' is-selected' : ''}`}
+                    title={option.description}
                     onClick={() => {
                       setVisibility(option.value)
                       setVisibilityOpen(false)
                     }}
                   >
                     <span className="audience-option-icon"><Icon size={18} /></span>
-                    <span className="audience-option-copy">
+                                        <span className="audience-option-copy">
                       <strong>{option.label}</strong>
-                      <small>{option.description}</small>
                     </span>
                     {selected && <Check size={17} className="audience-check" />}
                   </button>

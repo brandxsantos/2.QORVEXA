@@ -38,6 +38,7 @@ function App() {
       <Route path="/forgot-password" element={<AccountAccess />} />
       <Route path="/reset-password" element={<AccountAccess />} />
       <Route path="/profile/:username" element={<AccountAccess />} />
+      <Route path="/post/:postId" element={<AccountAccess />} />
       <Route path="/hashtag/:tag" element={<AccountAccess />} />
       <Route path="/app" element={<AccountAccess />} />
       <Route path="/app/messages/:conversationId" element={<AccountAccess />} />

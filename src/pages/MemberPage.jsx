@@ -5,12 +5,14 @@ import {
   Clock3,
   Compass,
   CornerDownRight,
+  ExternalLink,
   Flag,
   LoaderCircle,
   LogOut,
   Bookmark,
   MessageCircle,
   Rss,
+  Repeat2,
   ShieldCheck,
   Trash2,
   Users,
@@ -26,6 +28,8 @@ import NotificationToast from '../components/NotificationToast.jsx'
 import notificationToastText from '../lib/notificationToastText.js'
 import PostComposer from '../components/PostComposer.jsx'
 import PostReactionButton from '../components/PostReactionButton.jsx'
+import PostShareButton from '../components/PostShareButton.jsx'
+import PostActionMenu from '../components/PostActionMenu.jsx'
 import EmojiPicker from '../components/EmojiPicker.jsx'
 import SmartTextInput from '../components/social/SmartTextInput.jsx'
 import LinkedText from '../components/social/LinkedText.jsx'
@@ -38,6 +42,7 @@ const postSelection = 'id, author_id, content, media_path, media_type, post_visi
 function isPostsSetupError(error) {
   return ['42P01', '42703', 'PGRST204', 'PGRST205'].includes(error.code)
     || error.message?.includes('public.posts')
+    || error.message?.includes('public.post_reposts')
 }
 
 function isCommentsSetupError(error) {
@@ -78,6 +83,8 @@ function MemberPage() {
   const [likedPostIds, setLikedPostIds] = useState(() => new Set())
   const [postReactions, setPostReactions] = useState({})
   const [bookmarkedPostIds, setBookmarkedPostIds] = useState(() => new Set())
+  const [repostCounts, setRepostCounts] = useState({})
+  const [repostedPostIds, setRepostedPostIds] = useState(() => new Set())
   const [postActionId, setPostActionId] = useState('')
   const [commentsByPost, setCommentsByPost] = useState({})
   const [commentsOpen, setCommentsOpen] = useState({})
@@ -182,6 +189,8 @@ function MemberPage() {
       setLikedPostIds(new Set())
       setPostReactions({})
       setBookmarkedPostIds(new Set())
+      setRepostCounts({})
+      setRepostedPostIds(new Set())
       return []
     }
 
@@ -203,35 +212,86 @@ function MemberPage() {
 
     if (queryError) throw queryError
     const postRows = data || []
-    const postIds = postRows.map((post) => post.id)
+    let repostQuery = client
+      .from('post_reposts')
+      .select('id, post_id, user_id, created_at, profiles!post_reposts_user_id_fkey(username, display_name, avatar_url), posts!post_reposts_post_id_fkey!inner(id, author_id, content, media_path, media_type, post_visibility, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url))')
+      .order('created_at', { ascending: false })
+
+    if (authorIds !== null) {
+      repostQuery = repostQuery.in('user_id', authorIds)
+    }
+
+    if (publicOnly) {
+      repostQuery = repostQuery.eq('posts.post_visibility', 'public')
+    }
+
+    const { data: repostRows, error: repostQueryError } = await repostQuery.limit(50)
+    if (repostQueryError) throw repostQueryError
+
+    const repostEntries = (repostRows || [])
+      .filter((repost) => repost.posts)
+      .map((repost) => ({
+        ...repost.posts,
+        feed_entry_id: `repost:${repost.id}`,
+        feed_author_id: repost.user_id,
+        feed_created_at: repost.created_at,
+        reposted_by: repost.profiles,
+        is_repost: true,
+      }))
+
+    const feedEntries = [
+      ...postRows.map((post) => ({
+        ...post,
+        feed_entry_id: `post:${post.id}`,
+        feed_author_id: post.author_id,
+        feed_created_at: post.created_at,
+        is_repost: false,
+      })),
+      ...repostEntries,
+    ]
+
+    const postIds = [...new Set(feedEntries.map((post) => post.id))]
 
     if (postIds.length) {
-      const [likesResult, likedResult, bookmarksResult] = await Promise.all([
+      const [likesResult, likedResult, bookmarksResult, repostsResult] = await Promise.all([
         client.rpc('get_visible_post_like_counts', { target_post_ids: postIds }),
         client.from('post_likes').select('post_id,reaction_type').eq('user_id', user.id).in('post_id', postIds),
         client.from('post_bookmarks').select('post_id').eq('user_id', user.id).in('post_id', postIds),
+        client.from('post_reposts').select('post_id,user_id').in('post_id', postIds),
       ])
 
       if (likesResult.error) throw likesResult.error
       if (likedResult.error) throw likedResult.error
       if (bookmarksResult.error) throw bookmarksResult.error
+      if (repostsResult.error) throw repostsResult.error
 
       const counts = Object.fromEntries((likesResult.data || []).map((like) => [like.post_id, Number(like.like_count)]))
       const likedIds = new Set((likedResult.data || []).map((like) => like.post_id))
       const reactions = Object.fromEntries((likedResult.data || []).map((like) => [like.post_id, like.reaction_type]))
+      const repostCounts = (repostsResult.data || []).reduce((counts, repost) => {
+        counts[repost.post_id] = (counts[repost.post_id] || 0) + 1
+        return counts
+      }, {})
+      const repostedIds = new Set((repostsResult.data || [])
+        .filter((repost) => repost.user_id === user.id)
+        .map((repost) => repost.post_id))
 
       setLikeCounts(counts)
       setLikedPostIds(likedIds)
       setPostReactions(reactions)
       setBookmarkedPostIds(new Set((bookmarksResult.data || []).map((bookmark) => bookmark.post_id)))
+      setRepostCounts(repostCounts)
+      setRepostedPostIds(repostedIds)
     } else {
       setLikeCounts({})
       setLikedPostIds(new Set())
       setPostReactions({})
       setBookmarkedPostIds(new Set())
+      setRepostCounts({})
+      setRepostedPostIds(new Set())
     }
 
-    return postRows
+    return feedEntries
   }, [user.id])
 
 
@@ -375,6 +435,14 @@ function MemberPage() {
             .catch((loadError) => { if (active) setError(loadError.message || 'Reaction updates could not be loaded.') })
         }, 80)
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_reposts' }, () => {
+        window.clearTimeout(refreshTimer)
+        refreshTimer = window.setTimeout(() => {
+          currentFeedLoaderRef.current?.()
+            .then((data) => { if (active) setPosts(data) })
+            .catch((loadError) => { if (active) setError(loadError.message || 'Repost updates could not be loaded.') })
+        }, 80)
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, (payload) => {
         const postId = payload.new?.post_id || payload.old?.post_id
         if (postId && commentsOpenRef.current[postId]) {
@@ -477,6 +545,30 @@ function MemberPage() {
     }
   }
 
+  async function toggleRepost(post) {
+    if (postActionId || post.author_id === user.id) return
+
+    const isReposted = repostedPostIds.has(post.id)
+    setPostActionId(post.id)
+    setError('')
+
+    try {
+      const query = getSupabaseClient().from('post_reposts')
+      const result = isReposted
+        ? await query.delete().eq('post_id', post.id).eq('user_id', user.id)
+        : await query.insert({ post_id: post.id, user_id: user.id })
+
+      if (result.error) throw result.error
+
+      const updatedPosts = await currentFeedLoaderRef.current?.()
+      if (updatedPosts) setPosts(updatedPosts)
+    } catch (repostError) {
+      setError(repostError.message || 'Your repost could not be updated.')
+    } finally {
+      setPostActionId('')
+    }
+  }
+
   async function handleRefresh() {
     setError('')
     setFeedStatus('loading')
@@ -573,11 +665,11 @@ function MemberPage() {
   const visiblePosts = [...posts]
     .filter((post) => {
       if (feedFilter === 'following') {
-        return followingIds.has(post.author_id) && post.post_visibility === 'public'
+        return followingIds.has(post.feed_author_id || post.author_id) && post.post_visibility === 'public'
       }
 
       if (feedFilter === 'friends') {
-        return friendIds.has(post.author_id)
+        return friendIds.has(post.feed_author_id || post.author_id)
       }
 
       return true
@@ -585,14 +677,14 @@ function MemberPage() {
     .sort((a, b) => {
       if (feedFilter === 'for-you') {
         const score = (post) => (
-          (friendIds.has(post.author_id) ? 2 : 0)
-          + (followingIds.has(post.author_id) ? 1 : 0)
+          (friendIds.has(post.feed_author_id || post.author_id) ? 2 : 0)
+          + (followingIds.has(post.feed_author_id || post.author_id) ? 1 : 0)
         )
         const priorityDifference = score(b) - score(a)
         if (priorityDifference !== 0) return priorityDifference
       }
 
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      return new Date(b.feed_created_at || b.created_at).getTime() - new Date(a.feed_created_at || a.created_at).getTime()
     })
   return (
     <main className="member-page member-feed-page">
@@ -698,7 +790,7 @@ function MemberPage() {
                   ? 'Apply the community features migration in Supabase SQL Editor, then refresh this page.'
                   : error}</span>
                 {feedStatus === 'setup'
-                  ? <><code>supabase/migrations/20261107030000_community_features.sql</code><code>supabase/migrations/20261107032000_public_profiles.sql</code></>
+                  ? <><code>supabase/migrations/20261107030000_community_features.sql</code><code>supabase/migrations/20261107032000_public_profiles.sql</code><code>supabase/migrations/20261110010000_post_reposts.sql</code></>
                   : <button type="button" onClick={handleRefresh}>Try again</button>}
               </div>
             </div>
@@ -735,41 +827,102 @@ function MemberPage() {
                 const authorName = author?.display_name || author?.username || 'QORVEXA member'
                 const authorProfile = author?.username ? `/profile/${encodeURIComponent(author.username)}` : ''
                 return (
-                  <article className="member-post" key={post.id}>
+                  <article className="member-post" key={post.feed_entry_id || post.id}>
                     {authorProfile
                       ? <Link to={authorProfile} className="member-post-avatar" aria-label={`View ${authorName}'s profile`}>
                         {author?.avatar_url ? <ProtectedMediaImage path={author.avatar_url} alt="" fallback={getInitials(authorName)} /> : getInitials(authorName)}
                       </Link>
                       : <div className="member-post-avatar" aria-hidden="true">{getInitials(authorName)}</div>}
                     <div className="member-post-body">
-                      <div className="member-post-meta">
-                        <div>
-                          {authorProfile ? <Link to={authorProfile}><strong>{authorName}</strong></Link> : <strong>{authorName}</strong>}
-                          {author?.username && <Link to={authorProfile} className="member-post-username">@{author.username}</Link>}
+                      {post.is_repost && (
+                        <div className="member-post-meta member-post-repost-banner">
+                          <Repeat2 size={14} aria-hidden="true" />
+                          {post.reposted_by?.username
+                            ? <span><Link to={`/profile/${encodeURIComponent(post.reposted_by.username)}`}><strong>{post.reposted_by.display_name || post.reposted_by.username}</strong></Link> reposted</span>
+                            : <span>A QORVEXA member reposted</span>}
                         </div>
-                        <Link className="member-post-permalink" to={`/profile/${encodeURIComponent(author?.username || username || '')}?post=${post.id}`} aria-label={`Open post from ${formatPostDate(post.created_at)}`}>
-                          <Clock3 size={13} aria-hidden="true" />{formatPostDate(post.created_at)}
-                        </Link>
+                      )}
+                      <div className="member-post-header">
+                        <div className="member-post-header-author">
+                          <div className="member-post-author-name">
+                            {authorProfile ? <Link to={authorProfile}><strong>{authorName}</strong></Link> : <strong>{authorName}</strong>}
+                          </div>
+                          <div className="member-post-author-sub">
+                            {author?.username && <Link to={authorProfile} className="member-post-username">@{author.username}</Link>}
+                            {author?.username && <span className="member-post-author-dot" aria-hidden="true">·</span>}
+                            <Link className="member-post-permalink" to={`/post/${post.id}`} aria-label={`Open post from ${formatPostDate(post.feed_created_at || post.created_at)}`}>
+                              <Clock3 size={12} aria-hidden="true" />
+                              <span>{formatPostDate(post.feed_created_at || post.created_at)}</span>
+                            </Link>
+                          </div>
+                        </div>
+                        <div className="member-post-header-actions">
+                          <PostActionMenu
+                            items={[
+                              {
+                                id: 'bookmark',
+                                label: bookmarkedPostIds.has(post.id) ? 'Saved' : 'Save post',
+                                icon: Bookmark,
+                                active: bookmarkedPostIds.has(post.id),
+                                disabled: postActionId === post.id,
+                                onClick: () => toggleBookmark(post),
+                              },
+                              {
+                                id: 'comments',
+                                label: commentsOpen[post.id] ? 'Hide comments' : 'View comments',
+                                icon: MessageCircle,
+                                onClick: () => toggleComments(post.id),
+                              },
+                              {
+                                id: 'open-post',
+                                label: 'Open post',
+                                icon: ExternalLink,
+                                to: `/post/${post.id}`,
+                              },
+                              post.author_id !== user.id && {
+                                id: 'report',
+                                label: 'Report post',
+                                icon: Flag,
+                                danger: true,
+                                onClick: () => setReportTarget({ reportedUserId: post.author_id, type: 'post', id: post.id }),
+                              },
+                            ]}
+                          />
+                        </div>
                       </div>
                       {post.author_id === user.id && <span className="public-post-audience"><ShieldCheck size={12} />{post.post_visibility === 'only_me' ? 'Only me' : post.post_visibility === 'friends' ? 'Friends' : 'Public'}</span>}
                       {post.content && <p className="member-post-content"><LinkedText text={post.content} /></p>}
-                      {post.media_path && <Link to={`/profile/${encodeURIComponent(author?.username || username || '')}?post=${post.id}`} className="member-post-media-link"><ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to post" loading="lazy" /></Link>}
-                      <div className="member-post-footer">
+                      {post.media_path && <Link to={`/post/${post.id}`} className="member-post-media-link"><ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to post" loading="lazy" /></Link>}
+                      <div className="member-post-footer member-post-action-bar">
                         <PostReactionButton
                           reaction={postReactions[post.id]}
                           count={likeCounts[post.id] || 0}
                           disabled={postActionId === post.id}
                           onReact={(type) => handlePostReaction(post, type)}
                         />
-                        <button className={`member-comments-toggle${bookmarkedPostIds.has(post.id) ? ' is-active' : ''}`} type="button" onClick={() => toggleBookmark(post)} disabled={postActionId === post.id} aria-pressed={bookmarkedPostIds.has(post.id)}>
-                          <Bookmark size={14} aria-hidden="true" /><span>{bookmarkedPostIds.has(post.id) ? 'Saved' : 'Save'}</span>
-                        </button>
-                        <button className="member-comments-toggle" type="button" onClick={() => toggleComments(post.id)} aria-expanded={Boolean(commentsOpen[post.id])}>
+                        <button
+                          className={`member-comments-toggle${commentsOpen[post.id] ? ' is-active' : ''}`}
+                          type="button"
+                          onClick={() => toggleComments(post.id)}
+                          aria-expanded={Boolean(commentsOpen[post.id])}
+                        >
                           <MessageCircle size={14} aria-hidden="true" />
-                          <span>{commentsByPost[post.id] ? `${commentsByPost[post.id].length} comments` : 'View comments'}</span>
+                          <span>{commentsByPost[post.id]?.length ? `${commentsByPost[post.id].length} comments` : 'Comment'}</span>
                         </button>
-                        <Link className="member-comments-toggle" to={`/profile/${encodeURIComponent(author?.username || username || '')}?post=${post.id}`}>Open post</Link>
-                        {post.author_id !== user.id && <button className="member-comments-toggle" type="button" onClick={() => setReportTarget({ reportedUserId: post.author_id, type: 'post', id: post.id })}><Flag size={13} aria-hidden="true" /><span>Report</span></button>}
+                        {post.author_id !== user.id && (
+                          <button
+                            className={`member-comments-toggle${repostedPostIds.has(post.id) ? ' is-active' : ''}`}
+                            type="button"
+                            onClick={() => toggleRepost(post)}
+                            disabled={Boolean(postActionId)}
+                            aria-pressed={repostedPostIds.has(post.id)}
+                          >
+                            <Repeat2 size={14} aria-hidden="true" />
+                            <span>{repostedPostIds.has(post.id) ? 'Undo repost' : 'Repost'}</span>
+                            {repostCounts[post.id] > 0 && <span>{repostCounts[post.id]}</span>}
+                          </button>
+                        )}
+                        <PostShareButton url={`/post/${post.id}`} />
                       </div>
                       {commentsOpen[post.id] && (
                         <section className="member-comments" aria-label="Comments">
@@ -907,4 +1060,3 @@ function MemberPage() {
 }
 
 export default MemberPage
-
