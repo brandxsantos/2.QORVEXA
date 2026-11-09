@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import CustomSelect from '../components/CustomSelect.jsx'
+import DatePicker from '../components/DatePicker.jsx'
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import AuthLayout from '../components/auth/AuthLayout.jsx'
@@ -288,11 +289,7 @@ if (data.session) {
 
             <label className="form-field">
               <span>Birthdate <small>(Optional)</small></span>
-              <input
-                type="date"
-                name="birthdate"
-                max={new Date().toLocaleDateString('en-CA')}
-              />
+              <DatePicker name="birthdate" />
             </label>
 
             <label className="form-field">
@@ -370,7 +367,7 @@ if (data.session) {
                 <input type="checkbox" name="terms" required />
                <span>
   I agree to the <Link to="/terms">Terms of Service</Link> and{' '}
-  <Link to="/#privacy">Privacy Policy</Link>.
+  <Link to="/privacy">Privacy Policy</Link>.
 </span>
               </label>
             )}

@@ -677,3 +677,159 @@
 .floating-chat-message {
   font-size: 0.9rem;
 }
+
+/* QORVEXA floating chat replies and reactions */
+.floating-chat-message {
+  overflow: visible;
+}
+
+.floating-chat-message .qv-message-interactions {
+  gap: 0.35rem;
+}
+
+.floating-chat-message .qv-message-content {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.floating-chat-message .qv-message-reply-preview {
+  background: rgb(0 0 0 / 15%);
+}
+
+.floating-chat-message .qv-message-reaction,
+.floating-chat-message .qv-message-actions button {
+  color: inherit;
+}
+
+.floating-chat-message .qv-message-reaction-picker {
+  background: #202b3b;
+  color: #f8fafc;
+}
+
+.floating-chat-compose {
+  flex-wrap: wrap;
+}
+
+.floating-chat-replying {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex: 1 0 100%;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  border-left: 3px solid #60a5fa;
+  border-radius: 7px;
+  background: rgb(96 165 250 / 10%);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+}
+
+.floating-chat-replying span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.floating-chat-replying button {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.floating-chat-replying button:hover {
+  background: rgb(255 255 255 / 12%);
+}
+
+/* Floating chat: separate outer row from the visual bubble */
+.floating-chat-message-row {
+  width: 100%;
+  max-width: 100%;
+  align-self: stretch;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  color: inherit;
+  white-space: normal;
+}
+
+.floating-chat-message-row .qv-message-layout {
+  max-width: 84%;
+}
+
+.floating-chat-message-row.is-own-message .qv-message-layout {
+  margin-left: auto;
+}
+
+.floating-chat-message-row .floating-chat-message-bubble {
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  border-radius: 13px 13px 13px 4px;
+  background: #26354b;
+  color: #f1f5f9;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.floating-chat-message-row.is-own-message .floating-chat-message-bubble {
+  border-radius: 13px 13px 4px 13px;
+  background: #2563eb;
+  color: white;
+}
+
+.floating-chat-message-row .qv-message-content {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.floating-chat-message-row .qv-message-reaction {
+  color: #f1f5f9;
+}
+
+.floating-chat-message-row .qv-message-side-actions > button {
+  color: #94a3b8;
+}
+
+.floating-chat-message-row .qv-message-reaction-picker {
+  background: #202b3b;
+  color: #f8fafc;
+}
+
+@media (max-width: 480px) {
+  .floating-chat-message-row .qv-message-layout {
+    max-width: 94%;
+  }
+}
+
+/* Keep reaction picker in one horizontal row */
+.qv-message-side-actions .qv-message-reaction-picker {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  width: max-content;
+  max-width: none;
+  white-space: nowrap;
+  gap: 0.25rem;
+  padding: 0.35rem;
+}
+
+.qv-message-side-actions .qv-message-reaction-picker > button {
+  display: inline-flex;
+  flex: 0 0 30px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  white-space: nowrap;
+  font-size: 1rem;
+}

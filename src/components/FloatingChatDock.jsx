@@ -1,16 +1,19 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MessageCircle, Minus, Phone, Search, Send, Video, X } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
 import { useCall } from '../context/useCall.js'
 import { getSupabaseClient, authorizeRealtimeSession } from '../lib/supabase.js'
-import ProtectedMediaImage from './ProtectedMediaImage.jsx'
+import ProtectedMediaImage from './ProtectedMediaImage.jsx'
+
 import CallReceipt from './CallReceipt.jsx'
 import EmojiPicker from './EmojiPicker.jsx'
+import MessageInteractions from './MessageInteractions.jsx'
+import { loadMessageInteractions, toggleMessageReaction } from '../lib/messageInteractions.js'
 import './FloatingChatDock.css'
 
 const profileFields = 'id, username, display_name, avatar_url, online_status_visibility'
-const messageFields = 'id, conversation_id, sender_id, content, created_at'
+const messageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, created_at'
 
 function displayName(profile) {
   return profile?.display_name || profile?.username || 'QORVEXA member'
@@ -28,7 +31,15 @@ function FloatingChatDock() {
   const [friends, setFriends] = useState([])
   const [openIds, setOpenIds] = useState([])
   const [hiddenIds, setHiddenIds] = useState([])
-  const [messagesByConversation, setMessagesByConversation] = useState({})
+  const [messagesByConversation, setMessagesByConversation] = useState({})
+
+  const messagesByConversationRef = useRef(messagesByConversation)
+  messagesByConversationRef.current = messagesByConversation
+  const [replyMessagesByConversation, setReplyMessagesByConversation] = useState({})
+  const [reactionsByConversation, setReactionsByConversation] = useState({})
+  const [replyingToByConversation, setReplyingToByConversation] = useState({})
+  const [reactionWorkingIds, setReactionWorkingIds] = useState([])
+
   const [callReceiptsByConversation, setCallReceiptsByConversation] = useState({})
   const messageContainerRefs = useRef({})
   const [drafts, setDrafts] = useState({})
@@ -131,7 +142,7 @@ function FloatingChatDock() {
   const loadMessages = useCallback(async (conversationId) => {
     if (!conversationId) return
 
-    
+
 setLoadingIds((current) => current.includes(conversationId)
       ? current
       : [...current, conversationId])
@@ -146,9 +157,20 @@ setLoadingIds((current) => current.includes(conversationId)
 
       if (queryError) throw queryError
 
+      const loadedMessages = (data || []).reverse()
       setMessagesByConversation((current) => ({
         ...current,
-        [conversationId]: (data || []).reverse(),
+        [conversationId]: loadedMessages,
+      }))
+
+      const interactionData = await loadMessageInteractions(client, loadedMessages)
+      setReplyMessagesByConversation((current) => ({
+        ...current,
+        [conversationId]: interactionData.replyMessagesById,
+      }))
+      setReactionsByConversation((current) => ({
+        ...current,
+        [conversationId]: interactionData.reactionsByMessageId,
       }))
 
       const { error: notificationError } = await client.from('notifications')
@@ -245,6 +267,21 @@ setLoadingIds((current) => current.includes(conversationId)
             })
           })
           .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'message_reactions',
+          }, (payload) => {
+            const messageId = payload.new?.message_id || payload.old?.message_id
+            if (!messageId) return
+
+            for (const conversationId of openIdsRef.current) {
+              const rows = messagesByConversationRef.current[conversationId] || []
+              if (rows.some((message) => message.id === messageId)) {
+                refreshFloatingInteractionsRef.current(conversationId)
+                  .catch((loadError) => setError(loadError.message))
+              }
+            }
+          })          .on('postgres_changes', {
             event: '*',
             schema: 'public',
             table: 'call_sessions',
@@ -382,6 +419,42 @@ setLoadingIds((current) => current.includes(conversationId)
       : [...current, conversationId])
   }
 
+  const refreshFloatingInteractions = useCallback(async (conversationId) => {
+    const rows = messagesByConversationRef.current[conversationId] || []
+    const result = await loadMessageInteractions(getSupabaseClient(), rows)
+
+    setReplyMessagesByConversation((current) => ({
+      ...current,
+      [conversationId]: result.replyMessagesById,
+    }))
+    setReactionsByConversation((current) => ({
+      ...current,
+      [conversationId]: result.reactionsByMessageId,
+    }))
+  }, [])
+
+  const refreshFloatingInteractionsRef = useRef(refreshFloatingInteractions)
+  refreshFloatingInteractionsRef.current = refreshFloatingInteractions
+
+  async function handleFloatingReaction(conversationId, message, reactionType) {
+    const workingKey = `${conversationId}:${message.id}`
+    if (reactionWorkingIds.includes(workingKey)) return
+
+    setReactionWorkingIds((current) => [...current, workingKey])
+    try {
+      await toggleMessageReaction(getSupabaseClient(), message.id, user.id, reactionType)
+      await refreshFloatingInteractionsRef.current(conversationId)
+    } catch (reactionError) {
+      setError(reactionError.message || 'Reaction could not be saved.')
+    } finally {
+      setReactionWorkingIds((current) => current.filter((id) => id !== workingKey))
+    }
+  }
+
+  function jumpToFloatingMessage(conversationId, messageId) {
+    document.getElementById(`floating-chat-message-${messageId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
   function minimizeChat(conversationId) {
     setOpenIds((current) => current.filter((id) => id !== conversationId))
   }
@@ -409,6 +482,7 @@ setLoadingIds((current) => current.includes(conversationId)
           conversation_id: conversationId,
           sender_id: user.id,
           content,
+          reply_to_message_id: replyingToByConversation[conversationId]?.id || null,
         })
         .select(messageFields)
         .single()
@@ -424,6 +498,7 @@ setLoadingIds((current) => current.includes(conversationId)
       }))
 
       setDrafts((current) => ({ ...current, [conversationId]: '' }))
+      setReplyingToByConversation((current) => ({ ...current, [conversationId]: null }))
       await loadConversations()
     } catch (sendError) {
       setError(sendError.message || 'Message could not be sent.')
@@ -525,15 +600,40 @@ setLoadingIds((current) => current.includes(conversationId)
                   )
                   : (
                     <div
-                      className={`floating-chat-message${item.sender_id === user.id ? ' is-own-message' : ''}`}
+                      id={`floating-chat-message-${item.id}`}
+                      className={`floating-chat-message-row${item.sender_id === user.id ? ' is-own-message' : ''}`}
                       key={item.id}
                     >
-                      {item.content}
+                      <MessageInteractions
+                        bubbleClassName="floating-chat-message-bubble"
+                        message={item}
+                        replyMessage={replyMessagesByConversation[conversationId]?.[item.reply_to_message_id]}
+                        reactions={reactionsByConversation[conversationId]?.[item.id] || []}
+                        currentUserId={user.id}
+                        onReply={(message) => setReplyingToByConversation((current) => ({
+                          ...current,
+                          [conversationId]: message,
+                        }))}
+                        onReact={(message, type) => handleFloatingReaction(conversationId, message, type)}
+                        onJump={(messageId) => jumpToFloatingMessage(conversationId, messageId)}
+                      />
                     </div>
                   ))}
               </div>
 
               <form className="floating-chat-compose" onSubmit={(event) => sendMessage(event, conversation)}>
+                {replyingToByConversation[conversationId] && (
+                  <div className="floating-chat-replying">
+                    <span>Replying to {replyingToByConversation[conversationId].sender_id === user.id ? 'yourself' : name}: {replyingToByConversation[conversationId].content}</span>
+                    <button
+                      type="button"
+                      aria-label="Cancel reply"
+                      onClick={() => setReplyingToByConversation((current) => ({ ...current, [conversationId]: null }))}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
                 <textarea
                   aria-label={`Message ${name}`}
                   rows={1}
@@ -800,8 +900,3 @@ setLoadingIds((current) => current.includes(conversationId)
 }
 
 export default FloatingChatDock
-
-
-
-
-

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -37,10 +37,12 @@ import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 import AccountMenu from '../components/AccountMenu.jsx'
 import EmojiPicker from '../components/EmojiPicker.jsx'
+import MessageInteractions from '../components/MessageInteractions.jsx'
+import { loadMessageInteractions, toggleMessageReaction } from '../lib/messageInteractions.js'
 
 const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility, online_status_visibility'
 const requestFields = 'id, sender_id, receiver_id, status, created_at'
-const messageFields = 'id, conversation_id, sender_id, content, created_at'
+const messageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, created_at'
 const notificationFields = 'id, user_id, actor_id, type, reference_id, post_id, conversation_id, preview, is_read, created_at, profiles!notifications_actor_id_fkey(username, display_name, avatar_url)'
 const notificationFilters = [
   ['all', 'All notifications'],
@@ -120,6 +122,12 @@ function NetworkPage() {
   const [notificationFilter, setNotificationFilter] = useState('all')
   const [conversations, setConversations] = useState([])
   const [messages, setMessages] = useState([])
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
+  const [replyMessagesById, setReplyMessagesById] = useState({})
+  const [reactionsByMessageId, setReactionsByMessageId] = useState({})
+  const [replyingTo, setReplyingTo] = useState(null)
+  const [reactionWorkingId, setReactionWorkingId] = useState('')
   const [callReceipts, setCallReceipts] = useState([])
   const [hasMoreMessages, setHasMoreMessages] = useState(false)
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
@@ -246,6 +254,11 @@ function NetworkPage() {
     setStatus(isNetworkSetupError(loadError) ? 'setup' : 'error')
   }, [])
 
+  const refreshMessageInteractions = useCallback(async (rows) => {
+    const result = await loadMessageInteractions(getSupabaseClient(), rows || [])
+    setReplyMessagesById(result.replyMessagesById)
+    setReactionsByMessageId(result.reactionsByMessageId)
+  }, [])
   const loadMessages = useCallback(async (conversationId) => {
     if (!conversationId) {
       setMessages([])
@@ -259,7 +272,9 @@ function NetworkPage() {
       .order('created_at', { ascending: false })
       .limit(100)
     if (queryError) throw queryError
-    setMessages((data || []).reverse())
+    const loadedMessages = (data || []).reverse()
+    setMessages(loadedMessages)
+    await refreshMessageInteractions(loadedMessages)
     setHasMoreMessages((data || []).length === 100)
     const { error: notificationReadError } = await getSupabaseClient()
       .from('notifications')
@@ -273,7 +288,7 @@ function NetworkPage() {
       target_conversation_id: conversationId,
     })
     if (readError) throw readError
-  }, [user.id])
+  }, [refreshMessageInteractions, user.id])
 
   const loadCallReceipts = useCallback(async (conversationId) => {
     if (!conversationId) {
@@ -281,7 +296,7 @@ function NetworkPage() {
       return
     }
 
-    
+
     setCallReceipts([])
 
     const { data, error: queryError } = await getSupabaseClient()
@@ -425,6 +440,14 @@ function NetworkPage() {
       }, () => {
         loadCallReceipts(selectedConversationId).catch((loadError) => setError(loadError.message))
       })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'message_reactions',
+      }, () => {
+        refreshMessageInteractions(messagesRef.current)
+          .catch((loadError) => setError(loadError.message))
+      })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         if (payload?.user_id !== user.id) {
           setTypingConversationId(selectedConversationId)
@@ -444,7 +467,7 @@ function NetworkPage() {
       if (chatChannelRef.current === channel) chatChannelRef.current = null
       client.removeChannel(channel)
     }
-  }, [activeSection, handleMessageLoadError, loadCallReceipts, loadMessages, loadNetwork, selectedConversationId, status, user.id])
+  }, [activeSection, handleMessageLoadError, loadCallReceipts, loadMessages, loadNetwork, refreshMessageInteractions, selectedConversationId, status, user.id])
 
   useEffect(() => {
     if (skipNextMessageScrollRef.current) {
@@ -725,6 +748,56 @@ function NetworkPage() {
     navigate('/app/friends')
   }
 
+  async function handleReactToMessage(message, reactionType) {
+    if (!message?.id || reactionWorkingId === message.id) return
+
+    setReactionWorkingId(message.id)
+    setError('')
+
+    try {
+      await toggleMessageReaction(getSupabaseClient(), message.id, user.id, reactionType)
+      await refreshMessageInteractions(messages)
+    } catch (reactionError) {
+      setError(reactionError.message || 'Reaction could not be saved.')
+    } finally {
+      setReactionWorkingId('')
+    }
+  }
+
+  async function jumpToMessage(messageId) {
+    const target = document.getElementById(`network-message-${messageId}`)
+
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
+    try {
+      const { data, error: queryError } = await getSupabaseClient()
+        .from('messages')
+        .select(messageFields)
+        .eq('id', messageId)
+        .eq('conversation_id', selectedConversationId)
+        .maybeSingle()
+
+      if (queryError) throw queryError
+      if (!data) return
+
+      const updatedMessages = [...messages, data]
+        .filter((message, index, rows) => rows.findIndex((row) => row.id === message.id) === index)
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+
+      setMessages(updatedMessages)
+      await refreshMessageInteractions(updatedMessages)
+
+      window.requestAnimationFrame(() => {
+        document.getElementById(`network-message-${messageId}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    } catch (jumpError) {
+      setError(jumpError.message || 'Original message could not be opened.')
+    }
+  }
   async function handleSendMessage(event) {
     event.preventDefault()
     const content = draft.trim()
@@ -738,12 +811,14 @@ function NetworkPage() {
           conversation_id: activeConversation.id,
           sender_id: user.id,
           content,
+          reply_to_message_id: replyingTo?.id || null,
         })
         .select(messageFields)
         .single()
       if (insertError) throw insertError
       setMessages((current) => current.some((message) => message.id === data.id) ? current : [...current, data])
       setDraft('')
+      setReplyingTo(null)
       setTypingConversationId('')
     } catch (sendError) {
       setError(sendError.message || 'Message could not be sent.')
@@ -766,7 +841,10 @@ function NetworkPage() {
         .limit(100)
       if (queryError) throw queryError
       skipNextMessageScrollRef.current = true
-      setMessages((current) => [...(data || []).reverse(), ...current])
+      const olderMessages = (data || []).reverse()
+      const updatedMessages = [...olderMessages, ...messages]
+      setMessages(updatedMessages)
+      await refreshMessageInteractions(updatedMessages)
       setHasMoreMessages((data || []).length === 100)
     } catch (loadError) {
       setError(loadError.message || 'Older messages could not be loaded.')
@@ -1087,22 +1165,38 @@ function NetworkPage() {
                           }
                           const message = item
                           return (
-                          <article className={`network-message${message.sender_id === user.id ? ' network-message--own' : ''}`} key={message.id}>
-                            <div className="network-message-bubble">
-                              <p>{message.content}</p>
-                              <div><time dateTime={message.created_at}>{formatTime(message.created_at, true)}</time>
-                                {message.sender_id === user.id && (
-                                  <span className="network-message-receipt" title="Read status based on recipient's last opened time">
-                                    {new Date(conversationPeerReadAt(activeConversation, user.id)) >= new Date(message.created_at)
-                                      ? <CheckCheck size={12} aria-label="Read" />
-                                      : <Check size={12} aria-label="Sent" />}
-                                  </span>
-                                )}
-                                {message.sender_id === user.id && (
-                                  <button type="button" aria-label="Delete message" onClick={() => deleteMessage(message)} disabled={workingId === message.id}><Trash2 size={12} /></button>
-                                )}
-                              </div>
-                            </div>
+                          <article
+                            id={`network-message-${message.id}`}
+                            className={`network-message${message.sender_id === user.id ? ' network-message--own' : ''}`}
+                            key={message.id}
+                          >
+                            <MessageInteractions
+                                bubbleClassName="network-message-bubble"
+                                message={message}
+                                replyMessage={replyMessagesById[message.reply_to_message_id]}
+                                reactions={reactionsByMessageId[message.id] || []}
+                                currentUserId={user.id}
+                                onReply={setReplyingTo}
+                                onReact={handleReactToMessage}
+                                onJump={jumpToMessage}
+                                footer={
+                                  <>
+                                    <time dateTime={message.created_at}>{formatTime(message.created_at, true)}</time>
+                                    {message.sender_id === user.id && (
+                                      <span className="network-message-receipt" title="Read status based on recipient's last opened time">
+                                        {new Date(conversationPeerReadAt(activeConversation, user.id)) >= new Date(message.created_at)
+                                          ? <CheckCheck size={12} aria-label="Read" />
+                                          : <Check size={12} aria-label="Sent" />}
+                                      </span>
+                                    )}
+                                    {message.sender_id === user.id && (
+                                      <button type="button" aria-label="Delete message" onClick={() => deleteMessage(message)} disabled={workingId === message.id}>
+                                        <Trash2 size={12} />
+                                      </button>
+                                    )}
+                                  </>
+                                }
+                              />
                           </article>
                         )
                         })}
@@ -1111,6 +1205,17 @@ function NetworkPage() {
                         {!conversationTimeline.length && <div className="network-chat-empty">Say hello and start the conversation.</div>}
                       </div>
                       <form className="network-message-form" onSubmit={handleSendMessage}>
+                        {replyingTo && (
+                          <div className="network-replying-preview">
+                            <div>
+                              <strong>Replying to {replyingTo.sender_id === user.id ? 'yourself' : profileName(activeConversation.peer)}</strong>
+                              <span>{replyingTo.content}</span>
+                            </div>
+                            <button type="button" aria-label="Cancel reply" onClick={() => setReplyingTo(null)}>
+                              <X size={15} />
+                            </button>
+                          </div>
+                        )}
                         <textarea
                           aria-label="Message"
                           maxLength={4000}
@@ -1155,10 +1260,3 @@ function NetworkPage() {
 }
 
 export default NetworkPage
-
-
-
-
-
-
-
