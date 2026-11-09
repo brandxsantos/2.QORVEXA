@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import CallContext from '../context/callContext.js'
 import { useAuth } from '../context/useAuth.js'
 import {
   authorizeRealtimeSession,
   getSupabaseClient,
 } from '../lib/supabase.js'
+import {
+  primeCallAudio,
+  startCallTone,
+  stopCallTone,
+  playCallEndSound,
+} from '../lib/callSounds.js'
 
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -31,10 +37,46 @@ export function CallProvider({ children }) {
   const startCallInProgressRef = useRef(false)
   const acceptCallInProgressRef = useRef(false)
   const respondInProgressRef = useRef(false)
+  const endedSoundCallIdRef = useRef(null)
+
+  const playCallEndOnce = useCallback(callId => {
+    if (!callId || endedSoundCallIdRef.current === callId) return
+
+    endedSoundCallIdRef.current = callId
+    void playCallEndSound()
+  }, [])
 
   useEffect(() => {
     callRef.current = call
   }, [call])
+
+  useEffect(() => {
+    const unlock = () => {
+      void primeCallAudio()
+      window.removeEventListener('pointerdown', unlock)
+      window.removeEventListener('keydown', unlock)
+    }
+
+    window.addEventListener('pointerdown', unlock, { once: true })
+    window.addEventListener('keydown', unlock, { once: true })
+
+    return () => {
+      window.removeEventListener('pointerdown', unlock)
+      window.removeEventListener('keydown', unlock)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!call || call.status !== 'ringing') {
+      stopCallTone()
+      return undefined
+    }
+
+    const tone = call.caller_id === user?.id ? 'outgoing' : 'incoming'
+    void startCallTone(tone)
+
+    return () => stopCallTone()
+  }, [call?.id, call?.status, call?.caller_id, user?.id])
 
   const stopMedia = useCallback(() => {
     localStreamRef.current?.getTracks().forEach(track => track.stop())
@@ -61,11 +103,15 @@ export function CallProvider({ children }) {
     stopMedia()
   }, [stopMedia])
 
-  const finishRemoteCall = useCallback(async () => {
+  const finishRemoteCall = useCallback(async terminalCall => {
+    if (terminalCall?.status === 'ended') {
+      playCallEndOnce(terminalCall.id)
+    }
+
     await closeConnection()
     setCall(null)
     callRef.current = null
-  }, [closeConnection])
+  }, [closeConnection, playCallEndOnce])
 
   const sendSignal = useCallback(async (event, payload) => {
     const channel = channelRef.current
@@ -275,6 +321,7 @@ export function CallProvider({ children }) {
   const startCall = useCallback(async (conversationId, callType = 'audio') => {
     if (!user || !conversationId || callRef.current || startCallInProgressRef.current) return
 
+    void primeCallAudio()
     startCallInProgressRef.current = true
     setCallError('')
 
@@ -412,6 +459,10 @@ export function CallProvider({ children }) {
 
       if (error) throw error
 
+      if (action === 'end') {
+        playCallEndOnce(session.id)
+      }
+
       if (action === 'decline' || action === 'cancel' || action === 'end') {
         await closeConnection()
         setCall(null)
@@ -490,7 +541,7 @@ export function CallProvider({ children }) {
               })
             } else if (callRef.current?.id === row.id) {
               if (['declined', 'cancelled', 'ended', 'expired'].includes(row.status)) {
-                finishRemoteCall()
+                finishRemoteCall(row)
               } else {
                 setCall(row)
                 callRef.current = row
@@ -589,3 +640,5 @@ export function CallProvider({ children }) {
     </CallContext.Provider>
   )
 }
+
+
