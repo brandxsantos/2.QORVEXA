@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MessageCircle, Minus, Phone, Search, Send, Video, X } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
 import { useCall } from '../context/useCall.js'
 import { getSupabaseClient, authorizeRealtimeSession } from '../lib/supabase.js'
-import ProtectedMediaImage from './ProtectedMediaImage.jsx'
+import ProtectedMediaImage from './ProtectedMediaImage.jsx'
+import CallReceipt from './CallReceipt.jsx'
 import EmojiPicker from './EmojiPicker.jsx'
 import './FloatingChatDock.css'
 
@@ -27,7 +28,8 @@ function FloatingChatDock() {
   const [friends, setFriends] = useState([])
   const [openIds, setOpenIds] = useState([])
   const [hiddenIds, setHiddenIds] = useState([])
-  const [messagesByConversation, setMessagesByConversation] = useState({})
+  const [messagesByConversation, setMessagesByConversation] = useState({})
+  const [callReceiptsByConversation, setCallReceiptsByConversation] = useState({})
   const messageContainerRefs = useRef({})
   const [drafts, setDrafts] = useState({})
   const [loadingIds, setLoadingIds] = useState([])
@@ -129,7 +131,8 @@ function FloatingChatDock() {
   const loadMessages = useCallback(async (conversationId) => {
     if (!conversationId) return
 
-    setLoadingIds((current) => current.includes(conversationId)
+    
+setLoadingIds((current) => current.includes(conversationId)
       ? current
       : [...current, conversationId])
 
@@ -171,11 +174,32 @@ function FloatingChatDock() {
     }
   }, [loadConversations, user?.id])
 
+
+  const loadCallReceipts = useCallback(async (conversationId) => {
+    if (!conversationId) return
+
+    setCallReceiptsByConversation((current) => ({ ...current, [conversationId]: null }))
+
+    const { data, error: queryError } = await getSupabaseClient()
+      .from('call_sessions')
+      .select('id, conversation_id, caller_id, callee_id, call_type, status, created_at, accepted_at, ended_at')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true })
+
+    if (queryError) throw queryError
+
+    setCallReceiptsByConversation((current) => ({
+      ...current,
+      [conversationId]: data || [],
+    }))
+  }, [])
   const openIdsRef = useRef(openIds)
   openIdsRef.current = openIds
 
   const loadMessagesRef = useRef(loadMessages)
   loadMessagesRef.current = loadMessages
+  const loadCallReceiptsRef = useRef(loadCallReceipts)
+  loadCallReceiptsRef.current = loadCallReceipts
   useEffect(() => {
     openIds.forEach((conversationId) => {
       const container = messageContainerRefs.current[conversationId]
@@ -183,7 +207,7 @@ function FloatingChatDock() {
         container.scrollTop = container.scrollHeight
       }
     })
-  }, [messagesByConversation, openIds])
+  }, [messagesByConversation, callReceiptsByConversation, openIds])
 
   useEffect(() => {
     let active = true
@@ -219,6 +243,17 @@ function FloatingChatDock() {
             openIdsRef.current.forEach((conversationId) => {
               loadMessagesRef.current(conversationId)
             })
+          })
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'call_sessions',
+          }, (payload) => {
+            const conversationId = payload.new?.conversation_id || payload.old?.conversation_id
+            if (conversationId && openIdsRef.current.includes(conversationId)) {
+              loadCallReceiptsRef.current(conversationId)
+                .catch((loadError) => setError(loadError.message || 'Call receipts could not be loaded.'))
+            }
           })
           .on('postgres_changes', {
             event: '*',
@@ -260,8 +295,18 @@ function FloatingChatDock() {
       ) {
         loadMessages(conversationId)
       }
+
+      if (!Object.prototype.hasOwnProperty.call(callReceiptsByConversation, conversationId)) {
+        loadCallReceipts(conversationId).catch((loadError) => {
+          setError(loadError.message || 'Call receipts could not be loaded.')
+          setCallReceiptsByConversation((current) => ({
+            ...current,
+            [conversationId]: [],
+          }))
+        })
+      }
     })
-  }, [openIds, messagesByConversation, loadingIds, loadMessages])
+  }, [openIds, messagesByConversation, loadingIds, loadMessages, callReceiptsByConversation, loadCallReceipts])
 
   const visibleConversations = useMemo(
     () => conversations.filter((conversation) => !hiddenIds.includes(conversation.id)),
@@ -408,6 +453,11 @@ function FloatingChatDock() {
           const peer = conversation.peer
           const name = displayName(peer)
           const messages = messagesByConversation[conversationId] || []
+          const callReceipts = callReceiptsByConversation[conversationId] || []
+          const timelineItems = [
+            ...messages.map((message) => ({ ...message, timelineType: 'message' })),
+            ...callReceipts.map((session) => ({ ...session, timelineType: 'call' })),
+          ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 
           return (
             <section
@@ -457,22 +507,30 @@ function FloatingChatDock() {
               </header>
 
               <div className="floating-chat-messages" ref={(node) => { messageContainerRefs.current[conversationId] = node }}>
-                {loadingIds.includes(conversationId) && !messages.length && (
+                {loadingIds.includes(conversationId) && !messages.length && !timelineItems.length && (
                   <p className="floating-chat-status">Loading messages…</p>
                 )}
 
-                {!loadingIds.includes(conversationId) && !messages.length && (
+                {!loadingIds.includes(conversationId) && !timelineItems.length && (
                   <p className="floating-chat-status">Say hello and start the conversation.</p>
                 )}
 
-                {messages.map((message) => (
-                  <div
-                    className={`floating-chat-message${message.sender_id === user.id ? ' is-own-message' : ''}`}
-                    key={message.id}
-                  >
-                    {message.content}
-                  </div>
-                ))}
+                {timelineItems.map((item) => item.timelineType === 'call'
+                  ? (
+                    <CallReceipt
+                      key={`call-${item.id}`}
+                      session={item}
+                      currentUserId={user.id}
+                    />
+                  )
+                  : (
+                    <div
+                      className={`floating-chat-message${item.sender_id === user.id ? ' is-own-message' : ''}`}
+                      key={item.id}
+                    >
+                      {item.content}
+                    </div>
+                  ))}
               </div>
 
               <form className="floating-chat-compose" onSubmit={(event) => sendMessage(event, conversation)}>
@@ -480,7 +538,7 @@ function FloatingChatDock() {
                   aria-label={`Message ${name}`}
                   rows={1}
                   maxLength={4000}
-                  placeholder="Write a message…"
+                  placeholder="Write a messageâ€¦"
                   value={drafts[conversationId] || ''}
                   onChange={(event) => setDrafts((current) => ({
                     ...current,
@@ -604,7 +662,7 @@ function FloatingChatDock() {
                         <strong>{name}</strong>
                         <small>
                           {creatingFriendId === friend.id
-                            ? 'Opening conversation…'
+                            ? 'Opening conversationâ€¦'
                             : `@${friend.username || 'member'}`}
                         </small>
                       </span>
@@ -742,3 +800,8 @@ function FloatingChatDock() {
 }
 
 export default FloatingChatDock
+
+
+
+
+

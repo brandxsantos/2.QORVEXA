@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
+import CallReceipt from '../components/CallReceipt.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { useCall } from '../context/useCall.js'
 import { authorizeRealtimeSession, getSupabaseClient } from '../lib/supabase.js'
@@ -119,6 +120,7 @@ function NetworkPage() {
   const [notificationFilter, setNotificationFilter] = useState('all')
   const [conversations, setConversations] = useState([])
   const [messages, setMessages] = useState([])
+  const [callReceipts, setCallReceipts] = useState([])
   const [hasMoreMessages, setHasMoreMessages] = useState(false)
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
   const [query, setQuery] = useState('')
@@ -273,6 +275,25 @@ function NetworkPage() {
     if (readError) throw readError
   }, [user.id])
 
+  const loadCallReceipts = useCallback(async (conversationId) => {
+    if (!conversationId) {
+      setCallReceipts([])
+      return
+    }
+
+    
+    setCallReceipts([])
+
+    const { data, error: queryError } = await getSupabaseClient()
+      .from('call_sessions')
+      .select('id, conversation_id, caller_id, callee_id, call_type, status, created_at, accepted_at, ended_at')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true })
+
+    if (queryError) throw queryError
+    setCallReceipts(data || [])
+  }, [])
+
   const handleMessageLoadError = useCallback((loadError) => {
     setError(loadError.message || 'Messages could not be loaded.')
   }, [])
@@ -374,7 +395,7 @@ function NetworkPage() {
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
     // Surface load failures from the active conversation's asynchronous requests.
     // eslint-disable-next-line react/set-state-in-effect
-    loadMessages(selectedConversationId)
+    Promise.all([loadMessages(selectedConversationId), loadCallReceipts(selectedConversationId)])
       .then(() => active ? loadNetwork() : undefined)
       .catch((loadError) => { if (active) handleMessageLoadError(loadError) })
 
@@ -396,6 +417,14 @@ function NetworkPage() {
       }, () => {
         loadNetwork().catch((loadError) => setError(loadError.message))
       })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'call_sessions',
+        filter: `conversation_id=eq.${selectedConversationId}`,
+      }, () => {
+        loadCallReceipts(selectedConversationId).catch((loadError) => setError(loadError.message))
+      })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         if (payload?.user_id !== user.id) {
           setTypingConversationId(selectedConversationId)
@@ -415,7 +444,7 @@ function NetworkPage() {
       if (chatChannelRef.current === channel) chatChannelRef.current = null
       client.removeChannel(channel)
     }
-  }, [activeSection, handleMessageLoadError, loadMessages, loadNetwork, selectedConversationId, status, user.id])
+  }, [activeSection, handleMessageLoadError, loadCallReceipts, loadMessages, loadNetwork, selectedConversationId, status, user.id])
 
   useEffect(() => {
     if (skipNextMessageScrollRef.current) {
@@ -423,7 +452,7 @@ function NetworkPage() {
       return
     }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [messages])
+  }, [messages, callReceipts])
 
   useEffect(() => {
     const client = getSupabaseClient()
@@ -492,6 +521,10 @@ function NetworkPage() {
     .map((request) => [request.receiver_id, request]))
   const profileById = useMemo(() => Object.fromEntries(profiles.map((profile) => [profile.id, profile])), [profiles])
   const activeConversation = conversations.find((conversation) => conversation.id === selectedConversationId)
+  const conversationTimeline = useMemo(() => [
+    ...messages.map((message) => ({ ...message, timelineType: 'message' })),
+    ...callReceipts.map((session) => ({ ...session, timelineType: 'call' })),
+  ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()), [messages, callReceipts])
   const watchedPresenceIds = new Set(presenceTargetIds.split(',').filter(Boolean))
   const profileAvailability = (profile) => !profile || !watchedPresenceIds.has(profile.id)
     ? undefined
@@ -877,7 +910,7 @@ function NetworkPage() {
                             <button className="network-button" type="button" disabled={workingId === incoming.id} onClick={() => respondToRequest(incoming, false)}><X size={14} />Decline</button>
                           </>
                         ) : outgoing ? (
-                          <button className="network-button" type="button" disabled={workingId === outgoing.id} onClick={() => cancelRequest(outgoing)}>Request sent · Cancel</button>
+                          <button className="network-button" type="button" disabled={workingId === outgoing.id} onClick={() => cancelRequest(outgoing)}>Request sent Â· Cancel</button>
                         ) : (
                           <button className="network-button network-button--primary" type="button" disabled={workingId === profile.id} onClick={() => sendFriendRequest(profile)}><UserPlus size={14} />Add friend</button>
                         )}
@@ -1048,7 +1081,12 @@ function NetworkPage() {
                         </div>                      </header>
                       <div className="network-message-list">
                         {hasMoreMessages && <button className="network-load-older" type="button" onClick={loadOlderMessages} disabled={loadingOlderMessages}>{loadingOlderMessages ? 'Loading...' : 'Load older messages'}</button>}
-                        {messages.map((message) => (
+                        {conversationTimeline.map((item) => {
+                          if (item.timelineType === 'call') {
+                            return <CallReceipt key={`call-${item.id}`} session={item} currentUserId={user.id} />
+                          }
+                          const message = item
+                          return (
                           <article className={`network-message${message.sender_id === user.id ? ' network-message--own' : ''}`} key={message.id}>
                             <div className="network-message-bubble">
                               <p>{message.content}</p>
@@ -1066,10 +1104,11 @@ function NetworkPage() {
                               </div>
                             </div>
                           </article>
-                        ))}
+                        )
+                        })}
                         {typingConversationId === selectedConversationId && <div className="network-typing"><Link to={`/profile/${encodeURIComponent(activeConversation.peer?.username || '')}`}>{profileName(activeConversation.peer)}</Link> is typing...</div>}
                         <div ref={messagesEndRef} />
-                        {!messages.length && <div className="network-chat-empty">Say hello and start the conversation.</div>}
+                        {!conversationTimeline.length && <div className="network-chat-empty">Say hello and start the conversation.</div>}
                       </div>
                       <form className="network-message-form" onSubmit={handleSendMessage}>
                         <textarea
@@ -1107,7 +1146,7 @@ function NetworkPage() {
         )}
       </section>
       <footer className="member-feed-footer">
-        <span>QORVEXA <span>·</span> Connect Beyond Limits.</span>
+        <span>QORVEXA <span>Â·</span> Connect Beyond Limits.</span>
         <span>Signed in as {currentUsername ? `@${currentUsername}` : currentUserName}</span>
       </footer>
       {reportTarget && <ReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />}
@@ -1116,6 +1155,9 @@ function NetworkPage() {
 }
 
 export default NetworkPage
+
+
+
 
 
 

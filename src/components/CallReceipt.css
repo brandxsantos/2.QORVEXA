@@ -1,0 +1,57 @@
+﻿.q-call-receipt {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: 0.15rem 0;
+}
+
+.q-call-receipt-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  max-width: min(90%, 21rem);
+  padding: 0.55rem 0.9rem;
+  border: 1px solid rgb(148 163 184 / 18%);
+  border-radius: 0.85rem;
+  background: rgb(30 41 59 / 72%);
+  color: #dbeafe;
+}
+
+.q-call-receipt-icon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(14 165 233 / 16%);
+  color: #67e8f9;
+}
+
+.q-call-receipt-details {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.q-call-receipt-label {
+  overflow-wrap: anywhere;
+  color: #e2e8f0;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.q-call-receipt-time {
+  color: #94a3b8;
+  font-size: 0.66rem;
+}
+
+.floating-chat-messages .q-call-receipt-card {
+  max-width: 96%;
+  padding: 0.45rem 0.65rem;
+}
+
+.floating-chat-messages .q-call-receipt-label {
+  font-size: 0.72rem;
+}
