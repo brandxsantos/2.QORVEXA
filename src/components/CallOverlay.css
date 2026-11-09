@@ -307,3 +307,59 @@
 .q-call-inline-error .q-call-error-dismiss {
   flex: 0 0 auto;
 }
+/* WebRTC connection status on the video stage */
+.q-call-video-status {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+}
+
+.q-call-video-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #fbbf24;
+}
+
+.q-call-video-status.is-connected .q-call-video-status-dot {
+  background: #34d399;
+}
+
+.q-call-video-status.is-failed .q-call-video-status-dot {
+  background: #f87171;
+}
+
+
+
+.q-call-connection-status.is-connecting {
+  color: #fbbf24;
+}
+
+.q-call-connection-status.is-failed {
+  color: #f87171;
+}
+
+.q-call-pulse.is-connecting {
+  background: #fbbf24;
+}
+
+.q-call-pulse.is-failed {
+  background: #f87171;
+}
+
+.q-call-pulse.is-connected {
+  background: #34d399;
+}

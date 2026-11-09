@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import CallContext from '../context/callContext.js'
 import { useAuth } from '../context/useAuth.js'
 import {
@@ -12,15 +12,13 @@ import {
   playCallEndSound,
 } from '../lib/callSounds.js'
 
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-]
 
 export function CallProvider({ children }) {
   const { user } = useAuth()
   const [call, setCall] = useState(null)
   const [localStream, setLocalStream] = useState(null)
   const [remoteStream, setRemoteStream] = useState(null)
+  const [connectionState, setConnectionState] = useState('new')
   const [muted, setMuted] = useState(false)
   const [cameraOff, setCameraOff] = useState(false)
   const [callError, setCallError] = useState('')
@@ -89,6 +87,7 @@ export function CallProvider({ children }) {
   }, [])
 
   const closeConnection = useCallback(async () => {
+    setConnectionState('new')
     if (channelRef.current) {
       const channel = channelRef.current
       channelRef.current = null
@@ -150,9 +149,38 @@ export function CallProvider({ children }) {
     if (!client) return
 
     connectedCallIdRef.current = session.id
+    setConnectionState('connecting')
+    setCallError('')
     pendingIceRef.current = []
 
-    const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    let iceServers
+
+    try {
+      const { data: turnData, error: turnError } = await client.functions.invoke(
+        'turn-credentials',
+        { body: { callId: session.id } },
+      )
+
+      if (turnError) throw turnError
+
+      if (!Array.isArray(turnData?.iceServers) || turnData.iceServers.length === 0) {
+        throw new Error('The call network service returned no ICE servers.')
+      }
+
+      iceServers = turnData.iceServers
+
+      console.info('[QORVEXA WebRTC] TURN credentials loaded:', {
+        serverCount: iceServers.length,
+      })
+    } catch (error) {
+      connectedCallIdRef.current = null
+      setConnectionState('failed')
+      console.error('[QORVEXA WebRTC] Unable to load TURN credentials:', error)
+      setCallError(error.message || 'Unable to prepare the call network connection.')
+      return
+    }
+
+    const peer = new RTCPeerConnection({ iceServers })
     peerRef.current = peer
 
     const outgoingStream = localStreamRef.current
@@ -174,11 +202,22 @@ export function CallProvider({ children }) {
         streams: event.streams?.length || 0,
       })
 
-      const stream = event.streams?.[0]
-      if (stream) {
-        remoteStreamRef.current = stream
-        setRemoteStream(stream)
+      let stream = event.streams?.[0]
+
+      if (!stream) {
+        stream = remoteStreamRef.current || new MediaStream()
+
+        const trackAlreadyAdded = stream
+          .getTracks()
+          .some(track => track.id === event.track.id)
+
+        if (!trackAlreadyAdded) {
+          stream.addTrack(event.track)
+        }
       }
+
+      remoteStreamRef.current = stream
+      setRemoteStream(stream)
     }
 
     peer.onicecandidate = event => {
@@ -199,6 +238,7 @@ export function CallProvider({ children }) {
 
     peer.onconnectionstatechange = () => {
       console.info('[QORVEXA WebRTC] Peer connection state:', peer.connectionState)
+      setConnectionState(peer.connectionState)
 
       if (peer.connectionState === 'failed') {
         setCallError('The connection was interrupted. Please end the call and try again.')
@@ -624,6 +664,7 @@ export function CallProvider({ children }) {
     muted,
     cameraOff,
     callError,
+    connectionState,
     clearCallError: () => setCallError(''),
     startCall,
     acceptCall,

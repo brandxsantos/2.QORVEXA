@@ -638,7 +638,7 @@ setLoadingIds((current) => current.includes(conversationId)
                   aria-label={`Message ${name}`}
                   rows={1}
                   maxLength={4000}
-                  placeholder="Write a messageâ€¦"
+                  placeholder="Write a message…"
                   value={drafts[conversationId] || ''}
                   onChange={(event) => setDrafts((current) => ({
                     ...current,
@@ -762,7 +762,7 @@ setLoadingIds((current) => current.includes(conversationId)
                         <strong>{name}</strong>
                         <small>
                           {creatingFriendId === friend.id
-                            ? 'Opening conversationâ€¦'
+                            ? 'Opening conversation…'
                             : `@${friend.username || 'member'}`}
                         </small>
                       </span>

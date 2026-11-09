@@ -988,7 +988,7 @@ function NetworkPage() {
                             <button className="network-button" type="button" disabled={workingId === incoming.id} onClick={() => respondToRequest(incoming, false)}><X size={14} />Decline</button>
                           </>
                         ) : outgoing ? (
-                          <button className="network-button" type="button" disabled={workingId === outgoing.id} onClick={() => cancelRequest(outgoing)}>Request sent Â· Cancel</button>
+                          <button className="network-button" type="button" disabled={workingId === outgoing.id} onClick={() => cancelRequest(outgoing)}>Request sent · Cancel</button>
                         ) : (
                           <button className="network-button network-button--primary" type="button" disabled={workingId === profile.id} onClick={() => sendFriendRequest(profile)}><UserPlus size={14} />Add friend</button>
                         )}
@@ -1251,7 +1251,7 @@ function NetworkPage() {
         )}
       </section>
       <footer className="member-feed-footer">
-        <span>QORVEXA <span>Â·</span> Connect Beyond Limits.</span>
+        <span>QORVEXA <span>·</span> Connect Beyond Limits.</span>
         <span>Signed in as {currentUsername ? `@${currentUsername}` : currentUserName}</span>
       </footer>
       {reportTarget && <ReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />}

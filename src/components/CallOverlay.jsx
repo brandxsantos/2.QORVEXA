@@ -21,6 +21,7 @@ function CallOverlay() {
     muted,
     cameraOff,
     callError,
+    connectionState,
     clearCallError,
     acceptCall,
     declineCall,
@@ -51,13 +52,33 @@ function CallOverlay() {
   }, [localStream, call?.status, call?.call_type])
 
   useEffect(() => {
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = remoteStream || null
+    const remoteVideo = remoteVideoRef.current
+    const remoteAudio = remoteAudioRef.current
+
+    if (remoteVideo) {
+      remoteVideo.srcObject = remoteStream || null
     }
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = remoteStream || null
+
+    if (remoteAudio) {
+      remoteAudio.srcObject = remoteStream || null
     }
-  }, [remoteStream])
+
+    if (!remoteStream) return
+
+    const attemptPlayback = (element, label) => {
+      if (!element) return
+
+      const playAttempt = element.play()
+      if (playAttempt && typeof playAttempt.catch === 'function') {
+        playAttempt.catch((error) => {
+          console.warn(`[QORVEXA Call Debug] ${label} playback was blocked:`, error)
+        })
+      }
+    }
+
+    attemptPlayback(remoteVideo, 'Remote video')
+    attemptPlayback(remoteAudio, 'Remote audio')
+  }, [remoteStream, call?.status, call?.call_type])
 
   if (!call && !callError) return null
 
@@ -84,6 +105,7 @@ function CallOverlay() {
   const outgoing = call.status === 'ringing' && !incoming
   const videoCall = call.call_type === 'video'
   const active = call.status === 'accepted'
+  const connected = active && connectionState === 'connected'
 
   const callTitle = incoming
     ? `Incoming ${videoCall ? 'video' : 'voice'} call`
@@ -118,6 +140,10 @@ function CallOverlay() {
 
         {videoCall && active ? (
           <div className="q-call-video-stage">
+            <div className={`q-call-video-status ${connected ? 'is-connected' : connectionState === 'failed' ? 'is-failed' : ''}`}>
+              <span className="q-call-video-status-dot" />
+              {connected ? 'Connected' : connectionState === 'failed' ? 'Connection failed' : 'Connecting...'}
+            </div>
             <video
               ref={remoteVideoRef}
               className="q-call-remote-video"
@@ -128,7 +154,13 @@ function CallOverlay() {
             {!remoteStream && (
               <div className="q-call-video-waiting">
                 <Video size={34} />
-                <span>Waiting for the other person...</span>
+                <span>
+                  {connectionState === 'failed'
+                    ? 'Connection failed. Try ending the call and reconnecting.'
+                    : connected
+                      ? 'Connected. Waiting for remote media...'
+                      : 'Establishing connection...'}
+                </span>
               </div>
             )}
             <video
@@ -150,12 +182,14 @@ function CallOverlay() {
                 ? 'Someone is trying to reach you.'
                 : outgoing
                   ? 'Waiting for the other person to answer.'
-                  : 'Your call is connected.'}
+                  : connected
+                    ? 'Your call is connected.'
+                    : 'Establishing a secure connection...'}
             </p>
             {active && (
-              <div className="q-call-connection-status">
-                <span className="q-call-pulse" />
-                Connected
+              <div className={`q-call-connection-status ${connected ? 'is-connected' : connectionState === 'failed' ? 'is-failed' : 'is-connecting'}`}>
+                <span className={`q-call-pulse ${connected ? 'is-connected' : connectionState === 'failed' ? 'is-failed' : 'is-connecting'}`} />
+                {connected ? 'Connected' : connectionState === 'failed' ? 'Connection failed' : 'Connecting...'}
               </div>
             )}
             {videoCall && active && (

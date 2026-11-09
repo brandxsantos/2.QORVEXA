@@ -320,7 +320,7 @@ function ExplorePage() {
         {searchResults ? (
           <div className="explore-results">
             <div className="explore-section-heading">
-              <div><p className="eyebrow">SEARCH RESULTS</p><h2>Results for Ã¢â‚¬Å“{searchTerm.trim()}Ã¢â‚¬Â</h2></div>
+              <div><p className="eyebrow">SEARCH RESULTS</p><h2>Results for “{searchTerm.trim()}”</h2></div>
               <button type="button" onClick={() => setSearchResults(null)}>Clear results</button>
             </div>
 

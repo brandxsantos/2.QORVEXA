@@ -350,7 +350,7 @@ function PublicProfilePage() {
       })
       .subscribe((channelStatus) => {
         if (active && ['CHANNEL_ERROR', 'TIMED_OUT'].includes(channelStatus)) {
-          setError('Live profile updates are temporarily unavailable. Reconnectingâ€¦')
+          setError('Live profile updates are temporarily unavailable. Reconnecting…')
         }
       })
 
@@ -784,7 +784,7 @@ function PublicProfilePage() {
             <button className="network-button" type="button" onClick={() => respondToFriendRequest(false)} disabled={working}>Decline</button>
           </>
           : friendship.outgoing
-            ? <button className="network-button" type="button" onClick={cancelFriendRequest} disabled={working}>Request sent Â· Cancel</button>
+            ? <button className="network-button" type="button" onClick={cancelFriendRequest} disabled={working}>Request sent · Cancel</button>
             : <button className="network-button network-button--primary" type="button" onClick={sendFriendRequest} disabled={working}><UserPlus size={15} />Add Friend</button>
 
   const tabs = [

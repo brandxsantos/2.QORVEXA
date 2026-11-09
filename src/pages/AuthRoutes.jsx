@@ -24,7 +24,7 @@ function ProtectedRoute({ children }) {
     return (
       <div className="auth-loading" role="status">
         <LoaderCircle size={22} className="spinner" aria-hidden="true" />
-        Checking your sessionÃ¢â‚¬Â¦
+        Checking your session…
       </div>
     )
   }
