@@ -58,9 +58,11 @@ async function validateImageFile(file) {
 function loadImageElement(src) {
   return new Promise((resolve, reject) => {
     const img = new Image()
-    img.crossOrigin = 'anonymous'
+    if (!src.startsWith('blob:') && !src.startsWith('data:')) {
+      img.crossOrigin = 'anonymous'
+    }
     img.onload = () => resolve(img)
-    img.onerror = (err) => reject(err)
+    img.onerror = () => reject(new Error('Failed to load image for cropping.'))
     img.src = src
   })
 }
@@ -83,12 +85,21 @@ async function getCroppedImageBlob(imageSrc, pixelCrop, targetSize = TARGET_SIZE
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
+  const naturalWidth = image.naturalWidth || image.width
+  const naturalHeight = image.naturalHeight || image.height
+
+  // Safe integer clamped crop box
+  const cropX = Math.max(0, Math.min(naturalWidth - 1, Math.round(pixelCrop?.x || 0)))
+  const cropY = Math.max(0, Math.min(naturalHeight - 1, Math.round(pixelCrop?.y || 0)))
+  const cropWidth = Math.max(1, Math.min(naturalWidth - cropX, Math.round(pixelCrop?.width || naturalWidth)))
+  const cropHeight = Math.max(1, Math.min(naturalHeight - cropY, Math.round(pixelCrop?.height || naturalHeight)))
+
   ctx.drawImage(
     image,
-    pixelCrop.x,
-    pixelCrop.y,
-    pixelCrop.width,
-    pixelCrop.height,
+    cropX,
+    cropY,
+    cropWidth,
+    cropHeight,
     0,
     0,
     targetSize,
@@ -99,23 +110,12 @@ async function getCroppedImageBlob(imageSrc, pixelCrop, targetSize = TARGET_SIZE
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          // Fallback to JPEG if WebP export is unsupported
-          canvas.toBlob(
-            (jpegBlob) => {
-              if (!jpegBlob) {
-                reject(new Error('Failed to export cropped image.'))
-                return
-              }
-              resolve({ blob: jpegBlob, type: 'image/jpeg' })
-            },
-            'image/jpeg',
-            0.92
-          )
+          reject(new Error('Failed to export cropped image from canvas.'))
           return
         }
-        resolve({ blob, type: 'image/webp' })
+        resolve({ blob, type: 'image/jpeg' })
       },
-      'image/webp',
+      'image/jpeg',
       0.92
     )
   })
@@ -243,13 +243,8 @@ export default function ProfilePhotoCropModal({
   }
 
   const handleSave = async () => {
-    if (!imageSrc || !croppedAreaPixels) {
-      setError('Please select and position an image before saving.')
-      return
-    }
-
-    if (!userId) {
-      setError('You must be signed in to update your profile photo.')
+    if (!imageSrc) {
+      setError('Please select an image before saving.')
       return
     }
 
@@ -260,41 +255,68 @@ export default function ProfilePhotoCropModal({
     const client = getSupabaseClient()
 
     try {
-      // 1. Process crop to a high-quality 512x512 WebP/JPEG blob
-      const { blob, type } = await getCroppedImageBlob(imageSrc, croppedAreaPixels, TARGET_SIZE)
+      // 1. Resolve session & user ID
+      const { data: sessionData, error: sessionError } = await client.auth.getSession()
+      if (sessionError) throw sessionError
 
-      // 2. Upload to qorvexa-media storage bucket under authenticated user's avatars folder
+      const effectiveUserId = userId || sessionData?.session?.user?.id
+      if (!effectiveUserId) {
+        throw new Error('Your session has expired. Please sign in again.')
+      }
+
+      // 2. Process crop with fallback to center square if onCropComplete hasn't fired yet
+      let cropCoords = croppedAreaPixels
+      if (!cropCoords) {
+        const img = await loadImageElement(imageSrc)
+        const size = Math.min(img.naturalWidth || img.width, img.naturalHeight || img.height)
+        cropCoords = {
+          x: Math.round(((img.naturalWidth || img.width) - size) / 2),
+          y: Math.round(((img.naturalHeight || img.height) - size) / 2),
+          width: size,
+          height: size,
+        }
+      }
+
+      const { blob, type } = await getCroppedImageBlob(imageSrc, cropCoords, TARGET_SIZE)
+
+      // 3. Upload to qorvexa-media storage bucket under authenticated user's avatars folder
+      // Matching existing path convention: ${effectiveUserId}/avatars/${uuid}
       const filename = crypto.randomUUID()
-      const ext = type === 'image/webp' ? 'webp' : 'jpg'
-      uploadedPath = `${userId}/avatars/${filename}.${ext}`
+      uploadedPath = `${effectiveUserId}/avatars/${filename}`
+
+      const fileToUpload = new File([blob], filename, { type })
 
       const { error: uploadError } = await client.storage
         .from('qorvexa-media')
-        .upload(uploadedPath, blob, {
+        .upload(uploadedPath, fileToUpload, {
           contentType: type,
           upsert: false,
         })
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('[QORVEXA] Storage upload error:', uploadError)
+        throw new Error(uploadError.message || uploadError.error || 'Failed to upload image to storage.')
+      }
 
-      // 3. Update the user's profile record in Supabase
+      // 4. Update the user's profile record in Supabase
       const { error: updateError } = await client
         .from('profiles')
         .update({ avatar_url: uploadedPath })
-        .eq('id', userId)
+        .eq('id', effectiveUserId)
 
       if (updateError) {
+        console.error('[QORVEXA] Profile update error:', updateError)
         // Rollback: delete the newly uploaded file to avoid orphaned storage objects
         await client.storage.from('qorvexa-media').remove([uploadedPath])
-        throw updateError
+        throw new Error(updateError.message || updateError.error || 'Failed to update profile avatar.')
       }
 
-      // 4. Dispatch a global profile-updated event so all parts of the app update live
+      // 5. Dispatch a global profile-updated event so all parts of the app update live
       window.dispatchEvent(
         new CustomEvent('qorvexa:profile-updated', {
           detail: {
             avatar_url: uploadedPath,
-            userId,
+            userId: effectiveUserId,
           },
         })
       )
@@ -303,7 +325,13 @@ export default function ProfilePhotoCropModal({
       onClose?.()
     } catch (err) {
       console.error('[QORVEXA] Error saving profile photo:', err)
-      setError(err.message || 'Failed to save profile photo. Please try again.')
+      const message =
+        err?.message ||
+        err?.error_description ||
+        (typeof err?.error === 'string' ? err.error : err?.error?.message) ||
+        (typeof err === 'string' ? err : '') ||
+        'Failed to save profile photo. Please try again.'
+      setError(message)
     } finally {
       setLoading(false)
     }
