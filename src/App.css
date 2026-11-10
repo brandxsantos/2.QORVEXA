@@ -8943,6 +8943,8 @@
   font: inherit;
   font-size: 0.72rem;
   cursor: pointer;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .qv-message-reaction.is-active {
@@ -9067,7 +9069,7 @@
 .qv-message-bubble-content {
   grid-row: 1;
   grid-column: 1;
-  min-width: 0;
+  min-width: 52px;
   max-width: 100%;
   padding: 0.6rem 0.75rem 0.4rem;
   border: 1px solid rgb(148 163 184 / 12%);
@@ -9076,6 +9078,11 @@
   color: #dce6f1;
   overflow-wrap: anywhere;
   white-space: normal;
+  box-sizing: border-box;
+}
+
+.qv-message-layout.has-reactions .qv-message-bubble-content {
+  min-width: 68px;
 }
 
 .qv-message-layout.is-own .qv-message-bubble-content {
@@ -9127,13 +9134,21 @@
   grid-row: 2;
   grid-column: 1;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
   justify-self: start;
   gap: 0.25rem;
+  max-width: 100%;
+  margin-top: -0.15rem;
+  z-index: 2;
+  box-sizing: border-box;
 }
 
 .qv-message-layout.is-own .qv-message-reaction-list {
   grid-column: 2;
+  justify-content: flex-end;
   justify-self: end;
+  margin-left: auto;
 }
 
 .qv-message-side-actions .qv-message-reaction-picker {
@@ -9957,6 +9972,24 @@
 
 :root[data-theme="light"] .network-message-bubble p {
   color: #252A32 !important;
+}
+
+:root[data-theme="light"] .qv-message-reaction {
+  background: #FFFFFF !important;
+  border-color: #DFE2E6 !important;
+  color: #252A32 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+
+:root[data-theme="light"] .qv-message-reaction:hover {
+  background: #F4F5F6 !important;
+  border-color: #CBD0D7 !important;
+}
+
+:root[data-theme="light"] .qv-message-reaction.is-active {
+  background: #EFF6FF !important;
+  border-color: #3B82F6 !important;
+  color: #1D4ED8 !important;
 }
 
 :root[data-theme="light"] .network-message--own .network-message-bubble {

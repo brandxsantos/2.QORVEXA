@@ -106,7 +106,7 @@ export default function MessageInteractions({
   }
 
   return (
-    <div className={`qv-message-layout${isOwn ? ' is-own' : ' is-incoming'}`}>
+    <div className={`qv-message-layout${isOwn ? ' is-own' : ' is-incoming'}${groupedReactions.length > 0 ? ' has-reactions' : ''}`}>
       <div className={`qv-message-bubble-content ${bubbleClassName}`.trim()}>
         {replyMessage && (
           <button

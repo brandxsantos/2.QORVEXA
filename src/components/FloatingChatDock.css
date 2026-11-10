@@ -1055,7 +1055,13 @@
 }
 
 .floating-chat-message-row .qv-message-reaction {
-  color: #f1f5f9;
+  color: inherit;
+}
+
+:root[data-theme="light"] .floating-chat-message-row .qv-message-reaction {
+  color: #252A32 !important;
+  background: #FFFFFF !important;
+  border-color: #DFE2E6 !important;
 }
 
 .floating-chat-message-row .qv-message-side-actions > button {
