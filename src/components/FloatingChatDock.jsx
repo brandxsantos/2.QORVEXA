@@ -10,6 +10,7 @@ import CallReceipt from './CallReceipt.jsx'
 import EmojiPicker from './EmojiPicker.jsx'
 import MessageInteractions from './MessageInteractions.jsx'
 import { loadMessageInteractions, toggleMessageReaction } from '../lib/messageInteractions.js'
+import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
 import './FloatingChatDock.css'
 
 const profileFields = 'id, username, display_name, avatar_url, online_status_visibility'
@@ -78,7 +79,7 @@ function FloatingChatDock() {
 
     const client = getSupabaseClient()
 
-    const [friendshipsResult, conversationsResult, summariesResult, blocksResult] = await Promise.all([
+    const [friendshipsResult, conversationsResult, summariesResult, blocksResult, callsResult] = await Promise.all([
       client.from('friendships')
         .select('user_low, user_high')
         .or(`user_low.eq.${user.id},user_high.eq.${user.id}`)
@@ -95,6 +96,12 @@ function FloatingChatDock() {
       client.from('blocked_users')
         .select('blocked_id')
         .eq('blocker_id', user.id),
+
+      client.from('call_sessions')
+        .select('id, conversation_id, caller_id, callee_id, call_type, status, created_at, accepted_at, ended_at')
+        .or(`caller_id.eq.${user.id},callee_id.eq.${user.id}`)
+        .order('created_at', { ascending: false })
+        .limit(200),
     ])
 
     if (friendshipsResult.error) throw friendshipsResult.error
@@ -139,26 +146,15 @@ function FloatingChatDock() {
       (summariesResult.data || []).map((summary) => [summary.conversation_id, summary]),
     )
 
-    setConversations(rows.map((conversation) => {
-      const peerId = conversation.user_low === user.id
-        ? conversation.user_high
-        : conversation.user_low
-      const summary = summariesById[conversation.id]
+    const updatedConversations = applyCallReceiptsToConversations(
+      rows,
+      summariesById,
+      callsResult.data || [],
+      user.id,
+      profileById
+    )
 
-      return {
-        ...conversation,
-        peer: profileById[peerId],
-        lastMessage: summary?.last_message_id
-          ? {
-              id: summary.last_message_id,
-              content: summary.last_message_content,
-              sender_id: summary.last_message_sender_id,
-              created_at: summary.last_message_created_at,
-            }
-          : null,
-        unreadCount: Number(summary?.unread_count || 0),
-      }
-    }))
+    setConversations(updatedConversations)
   }, [user?.id])
 
   const loadMessages = useCallback(async (conversationId) => {
@@ -308,6 +304,7 @@ setLoadingIds((current) => current.includes(conversationId)
             schema: 'public',
             table: 'call_sessions',
           }, (payload) => {
+            loadConversations().catch((loadError) => setError(loadError.message))
             const conversationId = payload.new?.conversation_id || payload.old?.conversation_id
             if (conversationId && openIdsRef.current.includes(conversationId)) {
               loadCallReceiptsRef.current(conversationId)
@@ -340,8 +337,14 @@ setLoadingIds((current) => current.includes(conversationId)
         }
       })
 
+    const handleCallSessionUpdate = () => {
+      loadConversations().catch((loadError) => setError(loadError.message))
+    }
+    window.addEventListener('qorvexa:call-session-updated', handleCallSessionUpdate)
+
     return () => {
       active = false
+      window.removeEventListener('qorvexa:call-session-updated', handleCallSessionUpdate)
       if (channel) client.removeChannel(channel)
     }
   }, [loadConversations, user?.id])
@@ -1032,7 +1035,7 @@ setLoadingIds((current) => current.includes(conversationId)
                 const peer = conversation.peer
                 const name = displayName(peer)
                 const preview = conversation.lastMessage?.content || 'Start a conversation'
-                const isOwnMessage = conversation.lastMessage?.sender_id === user.id
+                const isOwnMessage = conversation.lastMessage?.sender_id === user.id && !conversation.lastMessage?.isCall
 
                 return (
                   <button

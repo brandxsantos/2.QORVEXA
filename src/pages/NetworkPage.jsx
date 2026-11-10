@@ -39,6 +39,7 @@ import AccountMenu from '../components/AccountMenu.jsx'
 import EmojiPicker from '../components/EmojiPicker.jsx'
 import MessageInteractions from '../components/MessageInteractions.jsx'
 import { loadMessageInteractions, toggleMessageReaction } from '../lib/messageInteractions.js'
+import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
 
 const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility, online_status_visibility'
 const requestFields = 'id, sender_id, receiver_id, status, created_at'
@@ -174,7 +175,7 @@ function NetworkPage() {
 
   const loadNetwork = useCallback(async () => {
     const client = getSupabaseClient()
-    const [profilesResult, ownProfileResult, ownSettingsResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult] = await Promise.all([
+    const [profilesResult, ownProfileResult, ownSettingsResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult, callsResult] = await Promise.all([
       client.from('profiles').select(profileFields).neq('id', user.id).order('created_at', { ascending: false }).range(0, 199),
       client.from('profiles').select('username').eq('id', user.id).maybeSingle(),
       client.rpc('get_own_profile_settings'),
@@ -185,9 +186,14 @@ function NetworkPage() {
       client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
       client.rpc('get_conversation_summaries'),
       client.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
+      client.from('call_sessions')
+        .select('id, conversation_id, caller_id, callee_id, call_type, status, created_at, accepted_at, ended_at')
+        .or(`caller_id.eq.${user.id},callee_id.eq.${user.id}`)
+        .order('created_at', { ascending: false })
+        .limit(200),
     ])
 
-    for (const result of [profilesResult, ownProfileResult, ownSettingsResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult]) {
+    for (const result of [profilesResult, ownProfileResult, ownSettingsResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult, callsResult]) {
       if (result.error) throw result.error
     }
 
@@ -230,22 +236,18 @@ function NetworkPage() {
     const acceptedFriendIds = new Set((friendshipsResult.data || []).map((friendship) => (
       friendship.user_low === user.id ? friendship.user_high : friendship.user_low
     )))
-    setConversations(conversationRows.filter((conversation) => {
+    const activeFriendConversations = conversationRows.filter((conversation) => {
       const peerId = conversation.user_low === user.id ? conversation.user_high : conversation.user_low
       return acceptedFriendIds.has(peerId)
-    }).map((conversation) => {
-      const peerId = conversation.user_low === user.id ? conversation.user_high : conversation.user_low
-      const summary = summariesByConversationId[conversation.id]
-      const lastMessage = summary?.last_message_id
-        ? {
-            id: summary.last_message_id,
-            content: summary.last_message_content,
-            sender_id: summary.last_message_sender_id,
-            created_at: summary.last_message_created_at,
-          }
-        : null
-      return { ...conversation, peerId, peer: profileById[peerId], lastMessage, unreadCount: Number(summary?.unread_count || 0) }
-    }))
+    })
+    const updatedConversations = applyCallReceiptsToConversations(
+      activeFriendConversations,
+      summariesByConversationId,
+      callsResult.data || [],
+      user.id,
+      profileById
+    )
+    setConversations(updatedConversations)
     setStatus('ready')
   }, [user.id])
 
@@ -439,6 +441,7 @@ function NetworkPage() {
         filter: `conversation_id=eq.${selectedConversationId}`,
       }, () => {
         loadCallReceipts(selectedConversationId).catch((loadError) => setError(loadError.message))
+        loadNetwork().catch((loadError) => setError(loadError.message))
       })
       .on('postgres_changes', {
         event: '*',
@@ -527,12 +530,27 @@ function NetworkPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
         loadNetwork().catch((loadError) => setError(loadError.message))
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'call_sessions' }, () => {
+        loadNetwork().catch((loadError) => setError(loadError.message))
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+        loadNetwork().catch((loadError) => setError(loadError.message))
+      })
       .subscribe((channelStatus) => {
         if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
           setError('Live network updates are temporarily unavailable. Reconnecting...')
         }
       })
-    return () => { client.removeChannel(channel) }
+
+    const handleCallSessionUpdate = () => {
+      loadNetwork().catch((loadError) => setError(loadError.message))
+    }
+    window.addEventListener('qorvexa:call-session-updated', handleCallSessionUpdate)
+
+    return () => {
+      window.removeEventListener('qorvexa:call-session-updated', handleCallSessionUpdate)
+      client.removeChannel(channel)
+    }
   }, [loadNetwork, user.id])
 
   const friendIds = useMemo(() => new Set(friendships.map((friendship) => (

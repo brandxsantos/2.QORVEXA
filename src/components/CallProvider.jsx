@@ -119,6 +119,7 @@ export function CallProvider({ children }) {
     await closeConnection()
     setCall(null)
     callRef.current = null
+    window.dispatchEvent(new CustomEvent('qorvexa:call-session-updated', { detail: terminalCall || {} }))
   }, [closeConnection, playCallEndOnce])
 
   const sendSignal = useCallback(async (event, payload = {}) => {
@@ -570,6 +571,7 @@ export function CallProvider({ children }) {
         await closeConnection()
         setCall(null)
         callRef.current = null
+        window.dispatchEvent(new CustomEvent('qorvexa:call-session-updated', { detail: { action, session } }))
       }
     } catch (error) {
       setCallError(error.message || 'Unable to update the call.')
