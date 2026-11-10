@@ -641,45 +641,66 @@
 
 /* Light Theme for Instants Bar & Modals */
 :root[data-theme="light"] .instants-bar-container {
-  background-color: #ffffff;
-  border-bottom-color: rgba(203, 213, 225, 0.8);
+  background-color: #FAFAFB;
+  border-bottom-color: #DFE2E6;
 }
 
 :root[data-theme="light"] .instant-bubble-label {
-  color: #334155;
+  color: #69717D;
 }
 
 :root[data-theme="light"] .instant-modal-card {
-  background: #ffffff;
-  border-color: #cbd5e1;
-  color: #0f172a;
-  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.15);
+  background: #FFFFFF;
+  border-color: #DFE2E6;
+  color: #252A32;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.1);
 }
 
 :root[data-theme="light"] .instant-modal-header h3 {
-  color: #0f172a;
+  color: #252A32;
 }
 
 :root[data-theme="light"] .instant-modal-header p {
-  color: #64748b;
+  color: #69717D;
+}
+
+.close-friends-search {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 8px 12px 8px 36px;
+  color: #ffffff;
+  font-size: 0.88rem;
+  box-sizing: border-box;
 }
 
 :root[data-theme="light"] .close-friends-search {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #0f172a;
+  background: #F4F5F6;
+  border: 1px solid #DFE2E6;
+  color: #252A32;
+}
+
+:root[data-theme="light"] .close-friends-search::placeholder {
+  color: #8A92A0;
+}
+
+:root[data-theme="light"] .close-friends-search:focus {
+  background: #FFFFFF;
+  border-color: #0284c7;
+  outline: none;
 }
 
 :root[data-theme="light"] .instant-cf-item {
-  border-bottom-color: #f1f5f9;
+  border-bottom-color: #F1F2F4;
 }
 
 :root[data-theme="light"] .instant-cf-user span:first-child {
-  color: #0f172a;
+  color: #252A32;
 }
 
 :root[data-theme="light"] .instant-toggle-btn:not(.is-active) {
-  border-color: #cbd5e1;
-  color: #475569;
+  border-color: #DFE2E6;
+  color: #69717D;
 }
 

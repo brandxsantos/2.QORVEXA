@@ -109,16 +109,7 @@ export default function CloseFriendsModal({ isOpen, onClose, user }) {
               placeholder="Search accepted friends…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{
-                width: '100%',
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                borderRadius: 20,
-                padding: '8px 12px 8px 36px',
-                color: '#ffffff',
-                fontSize: '0.88rem',
-                boxSizing: 'border-box',
-              }}
+              className="close-friends-search"
             />
           </div>
         </div>

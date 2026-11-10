@@ -67,15 +67,15 @@
 
 /* Light Theme */
 :root[data-theme="light"] .q-call-receipt-card {
-  background: #f8fafc;
-  border-color: #e2e8f0;
-  color: #1e293b;
+  background: #F4F5F6;
+  border-color: #DFE2E6;
+  color: #252A32;
 }
 
 :root[data-theme="light"] .q-call-receipt-label {
-  color: #1e293b;
+  color: #252A32;
 }
 
 :root[data-theme="light"] .q-call-receipt-time {
-  color: #64748b;
+  color: #69717D;
 }

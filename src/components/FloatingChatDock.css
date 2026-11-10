@@ -1103,144 +1103,148 @@
    FLOATING CHAT DOCK - LIGHT THEME SUPPORT
    ========================================================================== */
 :root[data-theme="light"] .floating-chat-window {
-  background: #ffffff;
-  color: #1e293b;
-  border-color: #e2e8f0;
-  box-shadow: 0 12px 35px rgba(15, 23, 42, 0.1);
+  background: #FFFFFF;
+  color: #252A32;
+  border-color: #DFE2E6;
+  box-shadow: 0 12px 35px rgba(15, 23, 42, 0.08);
 }
 
 :root[data-theme="light"] .floating-chat-header {
-  background: #f8fafc;
-  border-bottom-color: #e2e8f0;
+  background: #F4F5F6;
+  border-bottom-color: #DFE2E6;
 }
 
 :root[data-theme="light"] .floating-chat-peer-name {
-  color: #1e293b;
+  color: #252A32;
 }
 
 :root[data-theme="light"] .floating-chat-messages {
-  background: #ffffff;
+  background: #FFFFFF;
 }
 
 :root[data-theme="light"] .floating-chat-status {
-  color: #64748b;
+  color: #69717D;
 }
 
 :root[data-theme="light"] .floating-chat-message-row:not(.is-own-message) .network-message-bubble {
-  background: #f1f5f9;
-  color: #1e293b;
-  border-color: #e2e8f0;
+  background: #F4F5F6;
+  color: #252A32;
+  border-color: #DFE2E6;
 }
 
 :root[data-theme="light"] .floating-chat-message-row.is-own-message .network-message-bubble {
-  background: #e0f2fe;
-  color: #0369a1;
-  border-color: #bae6fd;
+  background: #E0F2FE;
+  color: #0369A1;
+  border-color: #BAE6FD;
 }
 
 :root[data-theme="light"] .floating-chat-compose {
-  background: #f8fafc;
-  border-top-color: #e2e8f0;
+  background: #F4F5F6;
+  border-top-color: #DFE2E6;
 }
 
 :root[data-theme="light"] .floating-chat-compose textarea {
-  background: #ffffff;
-  color: #1e293b;
-  border-color: #e2e8f0;
+  background: #FFFFFF;
+  color: #252A32;
+  border-color: #DFE2E6;
 }
 
 :root[data-theme="light"] .floating-chat-compose textarea::placeholder {
-  color: #94a3b8;
+  color: #8A92A0;
 }
 
 :root[data-theme="light"] .floating-inbox-panel {
-  background: #ffffff;
-  border-color: #e2e8f0;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+  background: #FFFFFF;
+  border-color: #DFE2E6;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.1);
 }
 
 :root[data-theme="light"] .floating-inbox-header {
-  background: #f8fafc;
-  border-bottom-color: #e2e8f0;
-  color: #1e293b;
+  background: #F4F5F6;
+  border-bottom-color: #DFE2E6;
+  color: #252A32;
 }
 
 :root[data-theme="light"] .floating-inbox-tabs {
-  background: #f1f5f9;
-  border-bottom-color: #e2e8f0;
+  background: #ECEEF1;
+  border-bottom-color: #DFE2E6;
 }
 
 :root[data-theme="light"] .floating-inbox-tabs button {
-  color: #64748b;
+  color: #69717D;
 }
 
 :root[data-theme="light"] .floating-inbox-tabs button.is-active {
-  background: #ffffff;
+  background: #FFFFFF;
   color: #0284c7;
 }
 
 :root[data-theme="light"] .floating-inbox-search {
-  background: #ffffff;
-  border-bottom-color: #e2e8f0;
+  background: #FFFFFF;
+  border-bottom-color: #DFE2E6;
 }
 
 :root[data-theme="light"] .floating-inbox-search-field {
-  background: #f8fafc;
-  border-color: #e2e8f0;
+  background: #F4F5F6;
+  border-color: #DFE2E6;
 }
 
 :root[data-theme="light"] .floating-inbox-search-field input {
-  color: #1e293b;
+  color: #252A32;
+}
+
+:root[data-theme="light"] .floating-inbox-search-field input::placeholder {
+  color: #8A92A0;
 }
 
 :root[data-theme="light"] .floating-inbox-item {
-  border-bottom-color: #f1f5f9;
+  border-bottom-color: #F1F2F4;
 }
 
 :root[data-theme="light"] .floating-inbox-item:hover {
-  background: #f8fafc;
+  background: #FAFAFB;
 }
 
 :root[data-theme="light"] .floating-inbox-item-name {
-  color: #1e293b;
+  color: #252A32;
 }
 
 :root[data-theme="light"] .floating-inbox-item-preview,
 :root[data-theme="light"] .floating-inbox-item-time {
-  color: #64748b;
+  color: #69717D;
 }
 
 :root[data-theme="light"] .floating-inbox-empty {
-  color: #64748b;
+  color: #69717D;
 }
 
 :root[data-theme="light"] .floating-inbox-view-all {
-  background: #f8fafc;
-  border-top-color: #e2e8f0;
+  background: #F4F5F6;
+  border-top-color: #DFE2E6;
   color: #0284c7;
 }
 
 :root[data-theme="light"] .floating-chat-overflow-panel {
-  background: #ffffff;
-  border-color: #e2e8f0;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+  background: #FFFFFF;
+  border-color: #DFE2E6;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.1);
 }
 
 :root[data-theme="light"] .floating-chat-overflow-header {
-  background: #f8fafc;
-  border-bottom-color: #e2e8f0;
-  color: #1e293b;
+  background: #F4F5F6;
+  border-bottom-color: #DFE2E6;
+  color: #252A32;
 }
 
 :root[data-theme="light"] .floating-overflow-item:hover {
-  background: #f8fafc;
+  background: #FAFAFB;
 }
 
 :root[data-theme="light"] .floating-overflow-item-name {
-  color: #1e293b;
+  color: #252A32;
 }
 
 :root[data-theme="light"] .floating-overflow-item-preview {
-  color: #64748b;
+  color: #69717D;
 }
 

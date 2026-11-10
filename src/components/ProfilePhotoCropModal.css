@@ -807,39 +807,39 @@
 
 /* Light Theme for Crop Modal */
 :root[data-theme="light"] .q-photo-crop-modal {
-  background: #ffffff;
-  border-color: #cbd5e1;
-  color: #0f172a;
-  box-shadow: 0 1.5rem 3.5rem rgba(15, 23, 42, 0.15);
+  background: #FFFFFF;
+  border-color: #DFE2E6;
+  color: #252A32;
+  box-shadow: 0 1.5rem 3.5rem rgba(15, 23, 42, 0.1);
 }
 
 :root[data-theme="light"] .q-photo-crop-header {
-  border-bottom-color: #e2e8f0;
+  border-bottom-color: #DFE2E6;
 }
 
 :root[data-theme="light"] .q-photo-crop-title {
-  color: #0f172a;
+  color: #252A32;
 }
 
 :root[data-theme="light"] .q-photo-crop-footer {
-  background: #f8fafc;
-  border-top-color: #e2e8f0;
+  background: #F4F5F6;
+  border-top-color: #DFE2E6;
 }
 
 :root[data-theme="light"] .q-photo-crop-caption-textarea {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #0f172a;
+  background: #F4F5F6;
+  border-color: #DFE2E6;
+  color: #252A32;
 }
 
 :root[data-theme="light"] .q-photo-crop-btn--secondary {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #334155;
+  background: #ECEEF1;
+  border-color: #DFE2E6;
+  color: #383F4A;
 }
 
 :root[data-theme="light"] .q-photo-crop-btn--secondary:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: #DFE2E6;
+  color: #252A32;
 }
 

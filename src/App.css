@@ -4468,6 +4468,13 @@
   border-radius: 0.65rem;
   background: rgb(16 23 37 / 88%);
   color: #78899e;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.network-search:focus-within {
+  border-color: rgba(0, 217, 245, 0.5);
+  box-shadow: 0 0 0 2px rgba(0, 217, 245, 0.12);
+  color: #00d9f5;
 }
 
 .network-search input {
@@ -9564,16 +9571,16 @@
 :root[data-theme="light"] .network-page,
 :root[data-theme="light"] .settings-page,
 :root[data-theme="light"] .public-profile-page {
-  background-color: #f8fafc !important;
-  color: #1e293b !important;
+  background-color: #F1F2F4 !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .ambient {
-  opacity: 0.04 !important;
+  opacity: 0.03 !important;
 }
 
 :root[data-theme="light"] .matrix-grid {
-  opacity: 0.02 !important;
+  opacity: 0.015 !important;
 }
 
 /* 2. Headers, Viewport Sticky Navigation & Footers */
@@ -9586,33 +9593,33 @@
 :root[data-theme="light"] .site-header,
 :root[data-theme="light"] .auth-header,
 :root[data-theme="light"] .terms-header {
-  background: rgba(248, 250, 252, 0.92) !important;
-  border-bottom: 1px solid #e2e8f0 !important;
+  background: rgba(241, 242, 244, 0.94) !important;
+  border-bottom: 1px solid #DFE2E6 !important;
   -webkit-backdrop-filter: blur(14px) !important;
   backdrop-filter: blur(14px) !important;
 }
 
 :root[data-theme="light"] .brand-wordmark,
 :root[data-theme="light"] .member-header-center {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .network-nav-link,
 :root[data-theme="light"] .network-account-menu > summary {
-  color: #475569 !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .network-nav-link:hover,
 :root[data-theme="light"] .network-account-menu > summary:hover,
 :root[data-theme="light"] .main-nav a:hover,
 :root[data-theme="light"] .login-link:hover {
-  background: #f1f5f9 !important;
+  background: #ECEEF1 !important;
   color: #0284c7 !important;
 }
 
 :root[data-theme="light"] .network-nav-link.is-active {
-  background: #e0f2fe !important;
-  color: #0369a1 !important;
+  background: #E0F2FE !important;
+  color: #0369A1 !important;
   font-weight: 600 !important;
 }
 
@@ -9626,15 +9633,15 @@
 :root[data-theme="light"] .auth-back-link,
 :root[data-theme="light"] .auth-footer a,
 :root[data-theme="light"] .terms-back-link {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .site-footer,
 :root[data-theme="light"] .member-feed-footer,
 :root[data-theme="light"] .auth-footer,
 :root[data-theme="light"] .terms-footer {
-  border-top: 1px solid #e2e8f0 !important;
-  color: #64748b !important;
+  border-top: 1px solid #DFE2E6 !important;
+  color: #69717D !important;
 }
 
 /* 3. Feed & Post Cards */
@@ -9644,10 +9651,10 @@
 :root[data-theme="light"] .member-feed-empty,
 :root[data-theme="light"] .bookmark-page,
 :root[data-theme="light"] .settings-card {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 4px 20px -5px rgba(15, 23, 42, 0.05) !important;
-  color: #1e293b !important;
+  background: #FFFFFF !important;
+  border: 1px solid #DFE2E6 !important;
+  box-shadow: 0 2px 12px -2px rgba(15, 23, 42, 0.04) !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .member-profile-details h1,
@@ -9655,7 +9662,7 @@
 :root[data-theme="light"] .member-post-meta strong,
 :root[data-theme="light"] .member-feed-empty h3,
 :root[data-theme="light"] .member-welcome h1 {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .member-username,
@@ -9666,45 +9673,45 @@
 :root[data-theme="light"] .member-profile-status,
 :root[data-theme="light"] .member-feed-heading p:last-child,
 :root[data-theme="light"] .member-email {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .member-profile-bio,
 :root[data-theme="light"] .member-post-content,
 :root[data-theme="light"] .member-description {
-  color: #334155 !important;
+  color: #383F4A !important;
 }
 
 :root[data-theme="light"] .member-profile-divider,
 :root[data-theme="light"] .member-post-footer {
-  border-color: #e2e8f0 !important;
-  color: #64748b !important;
+  border-color: #DFE2E6 !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .member-feed-tabs {
-  background: #f1f5f9 !important;
-  border: 1px solid #e2e8f0 !important;
+  background: #ECEEF1 !important;
+  border: 1px solid #DFE2E6 !important;
 }
 
 :root[data-theme="light"] .member-feed-tab {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .member-feed-tab:hover {
-  background: #e2e8f0 !important;
-  color: #0f172a !important;
+  background: #DFE2E6 !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .member-feed-tab.is-active {
-  background: #ffffff !important;
+  background: #FFFFFF !important;
   border-color: #0284c7 !important;
   color: #0284c7 !important;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05) !important;
 }
 
 :root[data-theme="light"] .member-comments-toggle,
 :root[data-theme="light"] .member-comment-actions button {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .member-comments-toggle:hover,
@@ -9715,89 +9722,89 @@
 
 :root[data-theme="light"] .member-avatar,
 :root[data-theme="light"] .member-post-avatar {
-  border-color: #ffffff !important;
+  border-color: #FFFFFF !important;
 }
 
 /* 4. Composer & Form Controls */
 :root[data-theme="light"] .member-composer textarea,
 :root[data-theme="light"] .settings-form textarea,
 :root[data-theme="light"] .settings-form > label input:not([type="file"]) {
-  background: #f8fafc !important;
-  border-color: #e2e8f0 !important;
-  color: #1e293b !important;
+  background: #F4F5F6 !important;
+  border-color: #DFE2E6 !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .member-composer textarea:focus,
 :root[data-theme="light"] .settings-form > label input:focus,
 :root[data-theme="light"] .settings-form textarea:focus {
-  background: #ffffff !important;
+  background: #FFFFFF !important;
   border-color: #0284c7 !important;
   box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12) !important;
 }
 
 :root[data-theme="light"] .member-composer textarea::placeholder {
-  color: #94a3b8 !important;
+  color: #8A92A0 !important;
 }
 
 :root[data-theme="light"] .member-composer-label,
 :root[data-theme="light"] .settings-form > label:not(.settings-avatar-field) {
-  color: #334155 !important;
+  color: #383F4A !important;
 }
 
 :root[data-theme="light"] .member-composer-footer,
 :root[data-theme="light"] .member-media-picker > span,
 :root[data-theme="light"] .settings-form > label small {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .member-media-preview img,
 :root[data-theme="light"] .member-post-media {
-  border-color: #e2e8f0 !important;
-  background: #f8fafc !important;
+  border-color: #DFE2E6 !important;
+  background: #F4F5F6 !important;
 }
 
 /* 5. Comments */
 :root[data-theme="light"] .member-comment-meta strong {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .member-comment-meta span,
 :root[data-theme="light"] .member-comment-meta time {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .member-comment-body > p {
-  color: #334155 !important;
+  color: #383F4A !important;
 }
 
 :root[data-theme="light"] .member-inline-comment-form input {
-  background: #f8fafc !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #1e293b !important;
+  background: #F4F5F6 !important;
+  border: 1px solid #DFE2E6 !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .member-inline-comment-form input:focus {
-  background: #ffffff !important;
+  background: #FFFFFF !important;
   border-color: #0284c7 !important;
   box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12) !important;
 }
 
 :root[data-theme="light"] .member-feed-state {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
 /* 6. Public Profile Page */
 :root[data-theme="light"] .public-profile-card,
 :root[data-theme="light"] .public-profile-content,
 :root[data-theme="light"] .public-profile-not-found {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 4px 20px -5px rgba(15, 23, 42, 0.05) !important;
-  color: #1e293b !important;
+  background: #FFFFFF !important;
+  border: 1px solid #DFE2E6 !important;
+  box-shadow: 0 2px 12px -2px rgba(15, 23, 42, 0.04) !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .public-profile-heading h1 {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .public-profile-username {
@@ -9805,15 +9812,15 @@
 }
 
 :root[data-theme="light"] .public-profile-bio {
-  color: #334155 !important;
+  color: #383F4A !important;
 }
 
 :root[data-theme="light"] .public-profile-tabs {
-  border-bottom: 1px solid #e2e8f0 !important;
+  border-bottom: 1px solid #DFE2E6 !important;
 }
 
 :root[data-theme="light"] .public-profile-tabs button {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .public-profile-tabs button.is-active {
@@ -9823,64 +9830,87 @@
 
 :root[data-theme="light"] .public-profile-about h2,
 :root[data-theme="light"] .public-profile-mutual h3 {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .public-profile-about li span {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .public-profile-about li strong {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .public-profile-friend-card {
-  background: #f8fafc !important;
-  border: 1px solid #e2e8f0 !important;
+  background: #F4F5F6 !important;
+  border: 1px solid #DFE2E6 !important;
 }
 
 :root[data-theme="light"] .public-profile-friend-card:hover {
-  background: #f1f5f9 !important;
+  background: #ECEEF1 !important;
   border-color: #0284c7 !important;
 }
 
 :root[data-theme="light"] .public-profile-friend-card strong {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .public-profile-friend-card small {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
+/* Public Profile Friend Search Box */
 :root[data-theme="light"] .public-profile-friend-search {
-  background: #f1f5f9 !important;
-  border: 1px solid #e2e8f0 !important;
+  background: #F4F5F6 !important;
+  border: 1px solid #DFE2E6 !important;
+  color: #69717D !important;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+:root[data-theme="light"] .public-profile-friend-search:hover {
+  border-color: #CBD0D7 !important;
+  background: #EFEFF1 !important;
+}
+
+:root[data-theme="light"] .public-profile-friend-search:focus-within {
+  background: #FFFFFF !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12) !important;
+  color: #0284c7 !important;
 }
 
 :root[data-theme="light"] .public-profile-friend-search input {
-  color: #1e293b !important;
+  background: transparent !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  color: #252A32 !important;
+}
+
+:root[data-theme="light"] .public-profile-friend-search input::placeholder {
+  color: #8A92A0 !important;
 }
 
 :root[data-theme="light"] .public-profile-stats span {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .public-profile-stats strong {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .public-profile-bio-textarea {
-  background: #f8fafc !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #1e293b !important;
+  background: #F4F5F6 !important;
+  border: 1px solid #DFE2E6 !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .public-profile-photo-grid button {
-  border: 1px solid #e2e8f0 !important;
+  border: 1px solid #DFE2E6 !important;
 }
 
 :root[data-theme="light"] .public-profile-avatar-wrapper .public-profile-avatar {
-  border-color: #ffffff !important;
+  border-color: #FFFFFF !important;
 }
 
 /* 7. Messages & Network */
@@ -9888,102 +9918,129 @@
 :root[data-theme="light"] .network-panel,
 :root[data-theme="light"] .network-conversation-list,
 :root[data-theme="light"] .network-chat {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 4px 20px -5px rgba(15, 23, 42, 0.05) !important;
-  color: #1e293b !important;
+  background: #FFFFFF !important;
+  border: 1px solid #DFE2E6 !important;
+  box-shadow: 0 2px 12px -2px rgba(15, 23, 42, 0.04) !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .network-panel-heading h2,
 :root[data-theme="light"] .network-conversation-heading h2 {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .network-panel-heading,
 :root[data-theme="light"] .network-conversation-heading {
-  border-bottom: 1px solid #e2e8f0 !important;
+  border-bottom: 1px solid #DFE2E6 !important;
 }
 
 :root[data-theme="light"] .network-person-row {
-  border-bottom: 1px solid #f1f5f9 !important;
+  border-bottom: 1px solid #F1F2F4 !important;
 }
 
 :root[data-theme="light"] .network-person-row:hover {
-  background: #f8fafc !important;
+  background: #FAFAFB !important;
 }
 
 :root[data-theme="light"] .network-identity strong {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .network-identity span {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .network-message-bubble {
-  background: #f1f5f9 !important;
-  border: 1px solid #e2e8f0 !important;
+  background: #F4F5F6 !important;
+  border: 1px solid #DFE2E6 !important;
 }
 
 :root[data-theme="light"] .network-message-bubble p {
-  color: #1e293b !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .network-message--own .network-message-bubble {
-  background: #e0f2fe !important;
-  border-color: #bae6fd !important;
+  background: #E0F2FE !important;
+  border-color: #BAE6FD !important;
 }
 
 :root[data-theme="light"] .network-message--own .network-message-bubble p {
-  color: #0369a1 !important;
+  color: #0369A1 !important;
 }
 
 :root[data-theme="light"] .network-message-form {
-  background: #f8fafc !important;
-  border-top: 1px solid #e2e8f0 !important;
+  background: #FAFAFB !important;
+  border-top: 1px solid #DFE2E6 !important;
 }
 
 :root[data-theme="light"] .network-message-form textarea {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #1e293b !important;
+  background: #FFFFFF !important;
+  border: 1px solid #DFE2E6 !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .network-message-form textarea::placeholder {
-  color: #94a3b8 !important;
+  color: #8A92A0 !important;
 }
 
 :root[data-theme="light"] .network-notification {
-  border-bottom: 1px solid #f1f5f9 !important;
-  color: #334155 !important;
+  border-bottom: 1px solid #F1F2F4 !important;
+  color: #383F4A !important;
 }
 
 :root[data-theme="light"] .network-notification:hover {
-  background: #f8fafc !important;
+  background: #FAFAFB !important;
 }
 
 :root[data-theme="light"] .network-notification.is-unread {
-  background: #eff6ff !important;
+  background: #EFF6FF !important;
 }
 
 :root[data-theme="light"] .network-notification strong {
-  color: #0f172a !important;
+  color: #252A32 !important;
+}
+
+/* Central Search Input System (Friends, Discover, Messages) */
+:root[data-theme="light"] .network-search {
+  background: #F4F5F6 !important;
+  border: 1px solid #DFE2E6 !important;
+  color: #69717D !important;
+  box-shadow: none !important;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+:root[data-theme="light"] .network-search:hover {
+  border-color: #CBD0D7 !important;
+  background: #EFEFF1 !important;
+}
+
+:root[data-theme="light"] .network-search:focus-within {
+  background: #FFFFFF !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12) !important;
+  color: #0284c7 !important;
 }
 
 :root[data-theme="light"] .network-search input {
-  background: #f8fafc !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #1e293b !important;
+  background: transparent !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  color: #252A32 !important;
+}
+
+:root[data-theme="light"] .network-search input::placeholder {
+  color: #8A92A0 !important;
 }
 
 :root[data-theme="light"] .network-button {
-  border: 1px solid #e2e8f0 !important;
-  background: #f8fafc !important;
-  color: #334155 !important;
+  border: 1px solid #DFE2E6 !important;
+  background: #F4F5F6 !important;
+  color: #383F4A !important;
 }
 
 :root[data-theme="light"] .network-button:hover:not(:disabled) {
-  background: #f1f5f9 !important;
+  background: #ECEEF1 !important;
   color: #0284c7 !important;
 }
 
@@ -10001,103 +10058,112 @@
 :root[data-theme="light"] .smart-mention-list,
 :root[data-theme="light"] .notification-toast,
 :root[data-theme="light"] .admin-modal {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 12px 32px -4px rgba(15, 23, 42, 0.12) !important;
-  color: #1e293b !important;
+  background: #FFFFFF !important;
+  border: 1px solid #DFE2E6 !important;
+  box-shadow: 0 12px 32px -4px rgba(15, 23, 42, 0.1) !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .network-account-menu-popover a,
 :root[data-theme="light"] .network-account-menu-popover button,
 :root[data-theme="light"] .post-action-menu-item {
-  color: #334155 !important;
+  color: #383F4A !important;
 }
 
 :root[data-theme="light"] .network-account-menu-popover a:hover,
 :root[data-theme="light"] .network-account-menu-popover a.is-active,
 :root[data-theme="light"] .network-account-menu-popover button:hover:not(:disabled),
 :root[data-theme="light"] .post-action-menu-item:hover {
-  background: #f1f5f9 !important;
+  background: #ECEEF1 !important;
   color: #0284c7 !important;
 }
 
 :root[data-theme="light"] .qv-emoji-search {
-  background: #f1f5f9 !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #1e293b !important;
+  background: #F4F5F6 !important;
+  border: 1px solid #DFE2E6 !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .smart-mention-option {
-  color: #1e293b !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .smart-mention-option:hover,
 :root[data-theme="light"] .smart-mention-option.is-active {
-  background: #f1f5f9 !important;
+  background: #ECEEF1 !important;
 }
 
 :root[data-theme="light"] .notification-toast {
-  color: #1e293b !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .admin-modal h2 {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .admin-modal p,
 :root[data-theme="light"] .admin-modal label {
-  color: #334155 !important;
+  color: #383F4A !important;
 }
 
 :root[data-theme="light"] .admin-modal select,
-:root[data-theme="light"] .admin-modal textarea {
-  background: #f8fafc !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #1e293b !important;
+:root[data-theme="light"] .admin-modal textarea,
+:root[data-theme="light"] .admin-management-search {
+  background: #F4F5F6 !important;
+  border: 1px solid #DFE2E6 !important;
+  color: #252A32 !important;
+}
+
+:root[data-theme="light"] .admin-management-search input {
+  color: #252A32 !important;
+}
+
+:root[data-theme="light"] .admin-management-search input::placeholder {
+  color: #8A92A0 !important;
 }
 
 /* 9. Auth & Legal Pages */
 :root[data-theme="light"] .auth-panel {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
+  background: #FFFFFF !important;
+  border: 1px solid #DFE2E6 !important;
   box-shadow: 0 16px 40px -10px rgba(15, 23, 42, 0.08) !important;
 }
 
 :root[data-theme="light"] .auth-panel-heading {
-  border-bottom: 1px solid #e2e8f0 !important;
-  color: #0f172a !important;
+  border-bottom: 1px solid #DFE2E6 !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .form-field,
 :root[data-theme="light"] .form-field > input,
 :root[data-theme="light"] .input-with-prefix,
 :root[data-theme="light"] .password-input {
-  background: #f8fafc !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #1e293b !important;
+  background: #F4F5F6 !important;
+  border: 1px solid #DFE2E6 !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .auth-intro h1 {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .auth-description {
-  color: #475569 !important;
+  color: #69717D !important;
 }
 
 :root[data-theme="light"] .terms-document,
 :root[data-theme="light"] .terms-content {
-  color: #334155 !important;
+  color: #383F4A !important;
 }
 
 :root[data-theme="light"] .terms-section h2,
 :root[data-theme="light"] .terms-section h3 {
-  color: #0f172a !important;
+  color: #252A32 !important;
 }
 
 :root[data-theme="light"] .terms-intro,
 :root[data-theme="light"] .terms-meta,
 :root[data-theme="light"] .terms-notice {
-  color: #64748b !important;
+  color: #69717D !important;
 }
 

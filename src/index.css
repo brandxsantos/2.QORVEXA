@@ -42,28 +42,28 @@
 }
 
 :root[data-theme="light"] {
-  /* GLOBAL LIGHT THEME (Softened, Comfortable & Premium) */
-  --bg-page: #f8fafc;
-  --bg-surface: #ffffff;
-  --bg-surface-elevated: #ffffff;
-  --bg-input: #f8fafc;
-  --bg-popover: #ffffff;
-  --bg-hover: #f1f5f9;
+  /* GLOBAL LIGHT THEME (Soft Warm Neutral Architecture) */
+  --bg-page: #F1F2F4;
+  --bg-surface: #FAFAFB;
+  --bg-surface-elevated: #FFFFFF;
+  --bg-input: #F4F5F6;
+  --bg-popover: #FFFFFF;
+  --bg-hover: #ECEEF1;
 
-  --text-primary: #1e293b;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --text-dim: #94a3b8;
+  --text-primary: #252A32;
+  --text-secondary: #69717D;
+  --text-muted: #8A92A0;
+  --text-dim: #A4ACB9;
 
-  --border-subtle: #e2e8f0;
-  --border-medium: #cbd5e1;
+  --border-subtle: #DFE2E6;
+  --border-medium: #D0D4DA;
   --border-focus: #0284c7;
 
-  --shadow-card: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
-  --shadow-popover: 0 12px 32px -4px rgba(15, 23, 42, 0.12);
+  --shadow-card: 0 2px 12px -2px rgba(15, 23, 42, 0.04);
+  --shadow-popover: 0 12px 32px -4px rgba(15, 23, 42, 0.1);
 
-  --ambient-opacity: 0.04;
-  --matrix-opacity: 0.02;
+  --ambient-opacity: 0.03;
+  --matrix-opacity: 0.015;
 
   --accent-cyan: #0284c7;
   --accent-cyan-hover: #0369a1;
