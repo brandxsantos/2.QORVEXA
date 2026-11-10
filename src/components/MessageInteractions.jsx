@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MessageCircle, Smile, FileText, Download, Play } from 'lucide-react'
 import { formatFileSize, getFileExtension } from '../lib/messageAttachments.js'
+import VoicePlayer from './VoicePlayer.jsx'
 
 const REACTIONS = [
   { type: 'like', emoji: '👍', label: 'Like' },
@@ -34,11 +35,12 @@ export default function MessageInteractions({
 
   const photos = attachments.filter((a) => a.attachment_type === 'photo')
   const videos = attachments.filter((a) => a.attachment_type === 'video')
+  const audios = attachments.filter((a) => a.attachment_type === 'audio')
   const files = attachments.filter((a) => a.attachment_type === 'file')
   const hasAttachments = attachments.length > 0
   const allMedia = [...photos, ...videos]
 
-  const isAutoFallback = hasAttachments && ['Photo', 'Video', 'Attachment'].includes(message.content?.trim())
+  const isAutoFallback = hasAttachments && ['Photo', 'Video', 'Attachment', 'Voice message', '🎙️ Voice message'].includes(message.content?.trim())
   const showContent = message.content && !isAutoFallback
 
   useLayoutEffect(() => {
@@ -186,6 +188,19 @@ export default function MessageInteractions({
                   <span className="qv-bubble-video-badge">{formatFileSize(vid.file_size)}</span>
                 </div>
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* 2.5 Voice Messages */}
+        {audios.length > 0 && (
+          <div className="qv-bubble-voice-list">
+            {audios.map((audio) => (
+              <VoicePlayer
+                key={audio.id}
+                src={audio.signedUrl}
+                isOwn={isOwn}
+              />
             ))}
           </div>
         )}

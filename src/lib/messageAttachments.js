@@ -19,17 +19,30 @@ export const VIDEO_MIME_TYPES = new Set([
   'video/x-m4v',
 ])
 
+export const AUDIO_MIME_TYPES = new Set([
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/webm',
+  'audio/ogg',
+  'audio/wav',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/aac',
+])
+
 /**
- * Categorizes an uploaded file into 'photo' | 'video' | 'file'.
+ * Categorizes an uploaded file into 'photo' | 'video' | 'audio' | 'file'.
  */
 export function detectAttachmentType(file) {
   const mime = (file.type || '').toLowerCase()
   if (PHOTO_MIME_TYPES.has(mime) || mime.startsWith('image/')) return 'photo'
   if (VIDEO_MIME_TYPES.has(mime) || mime.startsWith('video/')) return 'video'
+  if (AUDIO_MIME_TYPES.has(mime) || mime.startsWith('audio/')) return 'audio'
 
   const ext = (file.name || '').split('.').pop()?.toLowerCase() || ''
   if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif'].includes(ext)) return 'photo'
   if (['mp4', 'webm', 'mov', 'm4v', 'mkv'].includes(ext)) return 'video'
+  if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'opus', 'weba'].includes(ext)) return 'audio'
 
   return 'file'
 }
@@ -78,7 +91,7 @@ export async function uploadAttachmentFile(client, conversationIdOrOptions, send
   }
 
   const type = detectAttachmentType(targetFile)
-  const ext = (targetFile.name || '').split('.').pop()?.toLowerCase() || (type === 'photo' ? 'jpg' : type === 'video' ? 'mp4' : 'bin')
+  const ext = (targetFile.name || '').split('.').pop()?.toLowerCase() || (type === 'photo' ? 'jpg' : type === 'video' ? 'mp4' : type === 'audio' ? 'webm' : 'bin')
   const storagePath = `${targetConversationId}/${targetSenderId}/${crypto.randomUUID()}.${ext}`
 
   const { error: uploadError } = await client.storage
