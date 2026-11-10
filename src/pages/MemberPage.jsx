@@ -847,7 +847,7 @@ function MemberPage() {
                         <div className="member-post-header-author">
                           <div className="member-post-author-name">
                             {authorProfile ? <Link to={authorProfile}><strong>{authorName}</strong></Link> : <strong>{authorName}</strong>}
-                            {post.media_path?.includes('/avatars/') && (
+                            {(post.media_path?.includes('/posts/avatar-') || post.media_path?.includes('/avatars/')) && (
                               <span className="member-post-action-subtext"> updated their profile picture</span>
                             )}
                           </div>
@@ -899,10 +899,10 @@ function MemberPage() {
                       {post.media_path && (
                         <Link
                           to={`/post/${post.id}`}
-                          className={`member-post-media-link ${post.media_path.includes('/avatars/') ? 'member-post-media-link--avatar-post' : ''}`}
+                          className={`member-post-media-link ${(post.media_path.includes('/posts/avatar-') || post.media_path.includes('/avatars/')) ? 'member-post-media-link--avatar-post' : ''}`}
                         >
                           <ProtectedMediaImage
-                            className={`member-post-media ${post.media_path.includes('/avatars/') ? 'member-post-media--avatar-post' : ''}`}
+                            className={`member-post-media ${(post.media_path.includes('/posts/avatar-') || post.media_path.includes('/avatars/')) ? 'member-post-media--avatar-post' : ''}`}
                             path={post.media_path}
                             alt="Image attached to post"
                             loading="lazy"

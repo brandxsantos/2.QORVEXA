@@ -305,7 +305,8 @@ export default function ProfilePhotoCropModal({
     setLoading(true)
     setError('')
 
-    let uploadedPath = null
+    let avatarPath = null
+    let postMediaPath = null
     const previousAvatar = currentAvatarUrl || _currentAvatarUrl || null
     const client = getSupabaseClient()
 
@@ -314,7 +315,7 @@ export default function ProfilePhotoCropModal({
       const { data: sessionData, error: sessionError } = await client.auth.getSession()
       if (sessionError) throw sessionError
 
-      const effectiveUserId = userId || sessionData?.session?.user?.id
+      const effectiveUserId = sessionData?.session?.user?.id || userId
       if (!effectiveUserId) {
         throw new Error('Your session has expired. Please sign in again.')
       }
@@ -334,35 +335,41 @@ export default function ProfilePhotoCropModal({
 
       const { blob, type } = await getCroppedImageBlob(imageSrc, cropCoords, TARGET_SIZE)
 
-      // 3. Upload to qorvexa-media storage bucket under authenticated user's avatars folder
-      // Matching existing path convention: ${effectiveUserId}/avatars/${uuid}
-      const filename = crypto.randomUUID()
-      uploadedPath = `${effectiveUserId}/avatars/${filename}`
+      // 3. Upload to qorvexa-media storage bucket:
+      // A) User's profile avatar object under avatars/
+      const avatarFilename = crypto.randomUUID()
+      avatarPath = `${effectiveUserId}/avatars/${avatarFilename}`
+      const avatarFile = new File([blob], avatarFilename, { type })
 
-      const fileToUpload = new File([blob], filename, { type })
+      // B) Post media object under posts/ with avatar- prefix (conforms strictly to existing database RLS check: media_path like uid/posts/%)
+      const postFilename = `avatar-${crypto.randomUUID()}.jpg`
+      postMediaPath = `${effectiveUserId}/posts/${postFilename}`
+      const postFile = new File([blob], postFilename, { type })
 
-      const { error: uploadError } = await client.storage
-        .from('qorvexa-media')
-        .upload(uploadedPath, fileToUpload, {
-          contentType: type,
-          upsert: false,
-        })
+      const [avatarUploadResult, postUploadResult] = await Promise.all([
+        client.storage.from('qorvexa-media').upload(avatarPath, avatarFile, { contentType: type, upsert: false }),
+        client.storage.from('qorvexa-media').upload(postMediaPath, postFile, { contentType: type, upsert: false }),
+      ])
 
-      if (uploadError) {
-        console.error('[QORVEXA] Storage upload error:', uploadError)
-        throw new Error(uploadError.message || uploadError.error || 'Failed to upload image to storage.')
+      if (avatarUploadResult.error) {
+        console.error('[QORVEXA] Avatar storage upload error:', avatarUploadResult.error)
+        throw new Error(avatarUploadResult.error.message || 'Failed to upload profile photo to storage.')
+      }
+      if (postUploadResult.error) {
+        console.error('[QORVEXA] Post media upload error:', postUploadResult.error)
+        await client.storage.from('qorvexa-media').remove([avatarPath])
+        throw new Error(postUploadResult.error.message || 'Failed to upload post image to storage.')
       }
 
       // 4. Update the user's profile record in Supabase
       const { error: updateError } = await client
         .from('profiles')
-        .update({ avatar_url: uploadedPath })
+        .update({ avatar_url: avatarPath })
         .eq('id', effectiveUserId)
 
       if (updateError) {
         console.error('[QORVEXA] Profile update error:', updateError)
-        // Rollback: delete the newly uploaded file to avoid orphaned storage objects
-        await client.storage.from('qorvexa-media').remove([uploadedPath])
+        await client.storage.from('qorvexa-media').remove([avatarPath, postMediaPath])
         throw new Error(updateError.message || updateError.error || 'Failed to update profile avatar.')
       }
 
@@ -375,7 +382,7 @@ export default function ProfilePhotoCropModal({
         .insert({
           author_id: effectiveUserId,
           content: trimmedCaption,
-          media_path: uploadedPath,
+          media_path: postMediaPath,
           media_type: 'image',
           post_visibility: visibility,
         })
@@ -384,9 +391,9 @@ export default function ProfilePhotoCropModal({
 
       if (postError) {
         console.error('[QORVEXA] Post creation error on profile photo update:', postError)
-        // Rollback: restore previous avatar url in profile and remove uploaded storage file
+        // Rollback: restore previous avatar url in profile and remove uploaded storage files
         await client.from('profiles').update({ avatar_url: previousAvatar }).eq('id', effectiveUserId)
-        await client.storage.from('qorvexa-media').remove([uploadedPath])
+        await client.storage.from('qorvexa-media').remove([avatarPath, postMediaPath])
         throw new Error(postError.message || postError.error || 'Failed to post profile picture update to your timeline.')
       }
 
@@ -394,13 +401,13 @@ export default function ProfilePhotoCropModal({
       window.dispatchEvent(
         new CustomEvent('qorvexa:profile-updated', {
           detail: {
-            avatar_url: uploadedPath,
+            avatar_url: avatarPath,
             userId: effectiveUserId,
           },
         })
       )
 
-      onSuccess?.(uploadedPath, newPost)
+      onSuccess?.(avatarPath, newPost)
       onClose?.()
     } catch (err) {
       console.error('[QORVEXA] Error saving profile photo:', err)

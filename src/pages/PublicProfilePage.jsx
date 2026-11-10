@@ -1321,7 +1321,7 @@ function PublicProfilePage() {
                           <div className="member-post-header-author">
                             <div className="member-post-author-name">
                               <Link to={postAuthorUrl}><strong>{postAuthor.display_name || postAuthor.username}</strong></Link>
-                              {post.media_path?.includes('/avatars/') && (
+                              {(post.media_path?.includes('/posts/avatar-') || post.media_path?.includes('/avatars/')) && (
                                 <span className="member-post-action-subtext"> updated their profile picture</span>
                               )}
                             </div>
@@ -1369,12 +1369,12 @@ function PublicProfilePage() {
                         {post.content && <p className="member-post-content"><LinkedText text={post.content} /></p>}
                         {post.media_path && (
                           <button
-                            className={`public-profile-photo-button ${post.media_path.includes('/avatars/') ? 'member-post-media-link--avatar-post' : ''}`}
+                            className={`public-profile-photo-button ${(post.media_path.includes('/posts/avatar-') || post.media_path.includes('/avatars/')) ? 'member-post-media-link--avatar-post' : ''}`}
                             type="button"
                             onClick={() => setSelectedPhoto(post.media_path)}
                           >
                             <ProtectedMediaImage
-                              className={`member-post-media ${post.media_path.includes('/avatars/') ? 'member-post-media--avatar-post' : ''}`}
+                              className={`member-post-media ${(post.media_path.includes('/posts/avatar-') || post.media_path.includes('/avatars/')) ? 'member-post-media--avatar-post' : ''}`}
                               path={post.media_path}
                               alt="Image attached to post"
                               loading="lazy"
