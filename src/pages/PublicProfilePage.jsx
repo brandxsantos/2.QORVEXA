@@ -30,10 +30,13 @@ import {
   X,
   Phone,
 UserRound,
+  Pencil,
+  Plus,
 } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
 import { authorizeRealtimeSession, getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
+import ProfilePhotoCropModal from '../components/ProfilePhotoCropModal.jsx'
 import NotificationToast from '../components/NotificationToast.jsx'
 import notificationToastText from '../lib/notificationToastText.js'
 import PostComposer from '../components/PostComposer.jsx'
@@ -125,7 +128,66 @@ function PublicProfilePage() {
   const [notificationToast, setNotificationToast] = useState('')
   const [reportTarget, setReportTarget] = useState(null)
   const [signingOut, setSigningOut] = useState(false)
+  const [cropModalOpen, setCropModalOpen] = useState(false)
+  const [selectedCropFile, setSelectedCropFile] = useState(null)
+  const [isEditingBio, setIsEditingBio] = useState(false)
+  const [bioDraft, setBioDraft] = useState('')
+  const [savingBio, setSavingBio] = useState(false)
+  const [bioError, setBioError] = useState('')
+  const profilePicInputRef = useRef(null)
   const profileLoadIdRef = useRef(0)
+
+  // Listen to profile updates dispatched anywhere in the app
+  useEffect(() => {
+    function handleProfileUpdated(event) {
+      const { avatar_url, bio, userId } = event.detail || {}
+      if (userId && profile?.id && userId === profile.id) {
+        setProfile((curr) => {
+          if (!curr) return curr
+          const next = { ...curr }
+          if (avatar_url !== undefined) next.avatar_url = avatar_url
+          if (bio !== undefined) next.bio = bio
+          return next
+        })
+      }
+    }
+    window.addEventListener('qorvexa:profile-updated', handleProfileUpdated)
+    return () => window.removeEventListener('qorvexa:profile-updated', handleProfileUpdated)
+  }, [profile?.id])
+
+  async function handleSaveBio() {
+    const cleanBio = bioDraft.trim()
+    if (cleanBio.length > 280) {
+      setBioError('Bio must be 280 characters or fewer.')
+      return
+    }
+
+    setSavingBio(true)
+    setBioError('')
+    try {
+      const client = getSupabaseClient()
+      const { error: updateError } = await client
+        .from('profiles')
+        .update({ bio: cleanBio })
+        .eq('id', user.id)
+
+      if (updateError) throw updateError
+
+      setProfile((curr) => curr ? { ...curr, bio: cleanBio } : curr)
+      setIsEditingBio(false)
+      setNotice('Bio updated successfully.')
+
+      window.dispatchEvent(
+        new CustomEvent('qorvexa:profile-updated', {
+          detail: { bio: cleanBio, userId: user.id },
+        })
+      )
+    } catch (err) {
+      setBioError(err.message || 'Failed to update bio.')
+    } finally {
+      setSavingBio(false)
+    }
+  }
   async function handleSignOut() {
   setError('')
   setSigningOut(true)
@@ -999,16 +1061,115 @@ function PublicProfilePage() {
                 {profile.cover_photo_path && <ProtectedMediaImage path={profile.cover_photo_path} alt="" className="public-profile-cover-image" />}
               </div>
               <div className="public-profile-summary">
-                <div className="public-profile-avatar">
-                  {profile.avatar_url
-                      ? <ProtectedMediaImage path={profile.avatar_url} alt={`${profile.display_name}'s profile picture`} fallback={profileInitials(profile)} />
-                    : <span>{profileInitials(profile)}</span>}
+                <div className="public-profile-avatar-wrapper">
+                  <div className="public-profile-avatar">
+                    {profile.avatar_url
+                        ? <ProtectedMediaImage path={profile.avatar_url} alt={`${profile.display_name}'s profile picture`} fallback={profileInitials(profile)} />
+                      : <span>{profileInitials(profile)}</span>}
+                  </div>
+                  {isOwner && (
+                    <button
+                      type="button"
+                      className="public-profile-avatar-camera-btn"
+                      onClick={() => profilePicInputRef.current?.click()}
+                      title="Update profile picture"
+                      aria-label="Update profile picture"
+                    >
+                      <Camera size={16} />
+                    </button>
+                  )}
                 </div>
                 <div className="public-profile-heading">
                   <p className="eyebrow">QORVEXA MEMBER</p>
                   <h1>{profile.display_name}</h1>
                   <p className="public-profile-username">@{profile.username}</p>
-                  {profile.bio && <p className="public-profile-bio">{profile.bio}</p>}
+                  {isOwner ? (
+                    isEditingBio ? (
+                      <div className="public-profile-bio-editor">
+                        <textarea
+                          className="public-profile-bio-textarea"
+                          value={bioDraft}
+                          onChange={(e) => setBioDraft(e.target.value)}
+                          maxLength={280}
+                          rows={3}
+                          placeholder="Tell people something about yourself..."
+                          autoFocus
+                        />
+                        <div className="public-profile-bio-editor-footer">
+                          <span className="public-profile-bio-count">{bioDraft.length}/280</span>
+                          <div className="public-profile-bio-editor-actions">
+                            {bioDraft.trim() && (
+                              <button
+                                type="button"
+                                className="public-profile-bio-clear-btn"
+                                onClick={() => setBioDraft('')}
+                                disabled={savingBio}
+                              >
+                                Clear
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="network-button"
+                              onClick={() => {
+                                setIsEditingBio(false)
+                                setBioError('')
+                              }}
+                              disabled={savingBio}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              className="network-button network-button--primary"
+                              onClick={handleSaveBio}
+                              disabled={savingBio}
+                            >
+                              {savingBio ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                        {bioError && <p className="public-profile-bio-error">{bioError}</p>}
+                      </div>
+                    ) : (
+                      <div className="public-profile-bio-container">
+                        {profile.bio ? (
+                          <>
+                            <p className="public-profile-bio">{profile.bio}</p>
+                            <button
+                              type="button"
+                              className="public-profile-edit-bio-btn"
+                              onClick={() => {
+                                setBioDraft(profile.bio || '')
+                                setIsEditingBio(true)
+                                setBioError('')
+                              }}
+                              title="Edit bio"
+                              aria-label="Edit bio"
+                            >
+                              <Pencil size={12} />
+                              <span>Edit bio</span>
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="public-profile-add-bio-btn"
+                            onClick={() => {
+                              setBioDraft('')
+                              setIsEditingBio(true)
+                              setBioError('')
+                            }}
+                          >
+                            <Plus size={13} />
+                            <span>Add bio</span>
+                          </button>
+                        )}
+                      </div>
+                    )
+                  ) : (
+                    profile.bio && <p className="public-profile-bio">{profile.bio}</p>
+                  )}
                   <div className="public-profile-stats">
                     {friendListVisible && <span><strong>{friends.length}</strong> friends</span>}
                     <span><strong>{followStats.followerCount}</strong> followers</span>
@@ -1032,7 +1193,13 @@ function PublicProfilePage() {
                     </button>
                   )}
                   {isOwner && <>
-                    <Link className="network-button" to="/app/profile#profile-picture"><Camera size={15} />Edit profile picture</Link>
+                    <button
+                      type="button"
+                      className="network-button"
+                      onClick={() => profilePicInputRef.current?.click()}
+                    >
+                      <Camera size={15} />Edit profile picture
+                    </button>
                     <Link className="network-button" to="/app/profile#cover-photo"><Camera size={15} />Edit cover photo</Link>
                   </>}
                   {!isOwner && !isProfileOwner && user && <>
@@ -1051,6 +1218,48 @@ function PublicProfilePage() {
                 ))}
               </nav>
             </section>
+            )}
+
+            {isOwner && (
+              <>
+                <input
+                  ref={profilePicInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      setSelectedCropFile(file)
+                      setCropModalOpen(true)
+                    }
+                    e.target.value = ''
+                  }}
+                />
+                <ProfilePhotoCropModal
+                  isOpen={cropModalOpen}
+                  initialFile={selectedCropFile}
+                  userId={user?.id}
+                  currentAvatarUrl={profile?.avatar_url}
+                  onClose={() => {
+                    setCropModalOpen(false)
+                    setSelectedCropFile(null)
+                  }}
+                  onSuccess={(newPath) => {
+                    setProfile((curr) => curr ? { ...curr, avatar_url: newPath } : curr)
+                    setPosts((curr) => curr.map((post) => {
+                      if (post.author_id === user?.id) {
+                        return {
+                          ...post,
+                          profiles: { ...post.profiles, avatar_url: newPath },
+                        }
+                      }
+                      return post
+                    }))
+                    setNotice('Profile picture updated successfully.')
+                  }}
+                />
+              </>
             )}
 
             {error && <div className="settings-message settings-message--error public-profile-message" role="alert"><AlertCircle size={16} />{error}</div>}

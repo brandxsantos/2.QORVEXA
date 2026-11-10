@@ -1556,7 +1556,25 @@
   color: #a4b1c2;
   font-size: 0.7rem;
   line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+.member-profile-bio--empty {
+  font-style: italic;
+  opacity: 0.75;
+}
+
+.member-profile-bio--empty a {
+  color: #8da2bb;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.member-profile-bio--empty a:hover {
+  color: #00d9f5;
+  text-decoration: underline;
 }
 
 .member-profile-details h1 {
@@ -5596,6 +5614,47 @@
   padding: 0 1.5rem 1.4rem;
 }
 
+.public-profile-avatar-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 9rem;
+  height: 9rem;
+  margin-top: -4.5rem;
+  z-index: 1;
+}
+
+.public-profile-avatar-wrapper .public-profile-avatar {
+  margin-top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.public-profile-avatar-camera-btn {
+  position: absolute;
+  bottom: 0.25rem;
+  right: 0.25rem;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  border: 2.5px solid #141b29;
+  background: #0d1726;
+  color: #00d9f5;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 10px rgba(0, 217, 245, 0.25);
+  transition: all 0.15s ease;
+}
+
+.public-profile-avatar-camera-btn:hover {
+  background: #14253c;
+  color: #3ce5fc;
+  transform: scale(1.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 217, 245, 0.45);
+}
+
 .public-profile-avatar {
   display: grid;
   width: 9rem;
@@ -5656,7 +5715,142 @@
   color: #c3cedc;
   font-size: 0.83rem;
   line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+.public-profile-bio-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.public-profile-edit-bio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  padding: 0.22rem 0.55rem;
+  border: 1px solid rgba(0, 217, 245, 0.2);
+  border-radius: 0.4rem;
+  background: rgba(0, 217, 245, 0.06);
+  color: #00d9f5;
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.public-profile-edit-bio-btn:hover {
+  background: rgba(0, 217, 245, 0.14);
+  border-color: rgba(0, 217, 245, 0.45);
+}
+
+.public-profile-add-bio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  padding: 0.32rem 0.8rem;
+  border: 1px dashed rgba(0, 217, 245, 0.35);
+  border-radius: 0.45rem;
+  background: rgba(0, 217, 245, 0.05);
+  color: #00d9f5;
+  font-size: 0.76rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.public-profile-add-bio-btn:hover {
+  background: rgba(0, 217, 245, 0.12);
+  border-color: #00d9f5;
+}
+
+.public-profile-bio-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 38rem;
+  margin-top: 0.6rem;
+  padding: 0.75rem 0.85rem;
+  background: rgba(13, 21, 34, 0.95);
+  border: 1px solid rgba(0, 217, 245, 0.3);
+  border-radius: 0.7rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: qBioFadeIn 0.15s ease;
+}
+
+@keyframes qBioFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.public-profile-bio-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(5, 10, 18, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  color: #f1f5f9;
+  font-family: inherit;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+  min-height: 4.5rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.public-profile-bio-textarea:focus {
+  border-color: #00d9f5;
+  box-shadow: 0 0 10px rgba(0, 217, 245, 0.2);
+}
+
+.public-profile-bio-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.public-profile-bio-count {
+  font-size: 0.72rem;
+  color: #8da2bb;
+  font-variant-numeric: tabular-nums;
+}
+
+.public-profile-bio-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.public-profile-bio-clear-btn {
+  padding: 0.25rem 0.55rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: #ff6b81;
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.public-profile-bio-clear-btn:hover:not(:disabled) {
+  background: rgba(255, 107, 129, 0.12);
+}
+
+.public-profile-bio-error {
+  margin: 0;
+  color: #ff6b81;
+  font-size: 0.74rem;
 }
 
 .public-profile-stats {
@@ -6202,11 +6396,24 @@
     padding-inline: 1rem;
   }
 
+  .public-profile-avatar-wrapper,
   .public-profile-avatar {
     width: 6rem;
     height: 6rem;
     margin-top: -3rem;
     border-width: 4px;
+  }
+
+  .public-profile-avatar-camera-btn {
+    width: 1.85rem;
+    height: 1.85rem;
+    bottom: 0.15rem;
+    right: 0.15rem;
+  }
+
+  .public-profile-avatar-camera-btn svg {
+    width: 13px;
+    height: 13px;
   }
 
   .public-profile-heading {
@@ -6234,12 +6441,26 @@
     gap: 0.6rem;
   }
 
+  .public-profile-avatar-wrapper,
   .public-profile-avatar {
     width: 4.5rem;
     height: 4.5rem;
     margin-top: -2.25rem;
     border-width: 3px;
     font-size: 1.35rem;
+  }
+
+  .public-profile-avatar-camera-btn {
+    width: 1.55rem;
+    height: 1.55rem;
+    bottom: -0.1rem;
+    right: -0.1rem;
+    border-width: 1.5px;
+  }
+
+  .public-profile-avatar-camera-btn svg {
+    width: 11px;
+    height: 11px;
   }
 
   .public-profile-actions .network-button {

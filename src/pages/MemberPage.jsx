@@ -33,6 +33,7 @@ import PostActionMenu from '../components/PostActionMenu.jsx'
 import EmojiPicker from '../components/EmojiPicker.jsx'
 import SmartTextInput from '../components/social/SmartTextInput.jsx'
 import LinkedText from '../components/social/LinkedText.jsx'
+import ProfilePhotoCropModal from '../components/ProfilePhotoCropModal.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 import AccountMenu from '../components/AccountMenu.jsx'
@@ -101,6 +102,8 @@ function MemberPage() {
   const [deletingComment, setDeletingComment] = useState(null)
   const [reportTarget, setReportTarget] = useState(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
+  const [cropModalOpen, setCropModalOpen] = useState(false)
+  const [selectedCropFile, setSelectedCropFile] = useState(null)
   const accountMenuRef = useRef(null)
   const avatarInputRef = useRef(null)
 
@@ -110,50 +113,43 @@ function MemberPage() {
     accountMenuRef.current.querySelector('summary')?.focus()
   }
 
-  async function handleAvatarFileChange(event) {
+  function handleAvatarFileChange(event) {
     const file = event.target.files?.[0]
     if (!file) return
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-
-    if (!allowedTypes.includes(file.type) || file.size > 8 * 1024 * 1024) {
-      setError('Choose a JPG, PNG, WebP, or GIF image under 8 MB.')
-      event.target.value = ''
-      return
-    }
-
-    setAvatarUploading(true)
-    setError('')
-
-    try {
-      const client = getSupabaseClient()
-      const path = `${user.id}/avatars/${crypto.randomUUID()}`
-
-      const { error: uploadError } = await client.storage
-        .from('qorvexa-media')
-        .upload(path, file, { contentType: file.type, upsert: false })
-
-      if (uploadError) throw uploadError
-
-      const { error: updateError } = await client
-        .from('profiles')
-        .update({ avatar_url: path })
-        .eq('id', user.id)
-
-      if (updateError) {
-        await client.storage.from('qorvexa-media').remove([path])
-        throw updateError
-      }
-
-      setMemberProfile((current) => current ? { ...current, avatar_url: path } : current)
-      setNotificationToast('Profile picture updated.')
-    } catch (uploadError) {
-      setError(uploadError.message || 'Your profile picture could not be uploaded.')
-    } finally {
-      setAvatarUploading(false)
-      event.target.value = ''
-    }
+    setSelectedCropFile(file)
+    setCropModalOpen(true)
+    event.target.value = ''
   }
+
+  // Real-time synchronization for profile changes (photo, bio)
+  useEffect(() => {
+    function handleProfileUpdated(event) {
+      const { avatar_url, bio, userId } = event.detail || {}
+      if (userId && user?.id && userId === user.id) {
+        setMemberProfile((current) => {
+          if (!current) return current
+          const next = { ...current }
+          if (avatar_url !== undefined) next.avatar_url = avatar_url
+          if (bio !== undefined) next.bio = bio
+          return next
+        })
+        if (avatar_url) {
+          setPosts((currentPosts) => currentPosts.map((post) => {
+            if (post.author_id === user.id) {
+              return {
+                ...post,
+                profiles: { ...post.profiles, avatar_url },
+              }
+            }
+            return post
+          }))
+        }
+      }
+    }
+    window.addEventListener('qorvexa:profile-updated', handleProfileUpdated)
+    return () => window.removeEventListener('qorvexa:profile-updated', handleProfileUpdated)
+  }, [user?.id])
   const name = memberProfile?.display_name || user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
   const username = memberProfile?.username || user.user_metadata?.username || ''
 
@@ -717,16 +713,21 @@ function MemberPage() {
             <h1><Link to={`/profile/${encodeURIComponent(username || '')}`}>{name}</Link></h1>
             {username && <p className="member-username">@{username}</p>}
             <p className="member-profile-email">{user.email}</p>
-            {memberProfile?.bio && <p className="member-profile-bio">{memberProfile.bio}</p>}
+            {memberProfile?.bio ? (
+              <p className="member-profile-bio">{memberProfile.bio}</p>
+            ) : (
+              <p className="member-profile-bio member-profile-bio--empty">
+                <Link to={username ? `/profile/${encodeURIComponent(username)}` : '/app/profile'}>Tell people something about yourself...</Link>
+              </p>
+            )}
             <nav className="member-profile-links" aria-label="Account settings">
-                            <button type="button" className="member-home-link" onClick={openAccountMenu}>Edit Profile</button>
+              <Link to="/app/profile" className="member-home-link">Edit Profile</Link>
               <button
                 type="button"
                 className="member-home-link"
                 onClick={() => avatarInputRef.current?.click()}
-                disabled={avatarUploading}
               >
-                {avatarUploading ? 'Uploading picture...' : 'Edit Profile Picture'}
+                Edit Profile Picture
               </button>
               <input
                 ref={avatarInputRef}
@@ -1055,6 +1056,29 @@ function MemberPage() {
         <span>Posts are visible to signed-in members.</span>
       </footer>
       {reportTarget && <ReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />}
+      <ProfilePhotoCropModal
+        isOpen={cropModalOpen}
+        initialFile={selectedCropFile}
+        userId={user?.id}
+        currentAvatarUrl={memberProfile?.avatar_url}
+        onClose={() => {
+          setCropModalOpen(false)
+          setSelectedCropFile(null)
+        }}
+        onSuccess={(newPath) => {
+          setMemberProfile((current) => current ? { ...current, avatar_url: newPath } : current)
+          setPosts((currentPosts) => currentPosts.map((post) => {
+            if (post.author_id === user?.id) {
+              return {
+                ...post,
+                profiles: { ...post.profiles, avatar_url: newPath },
+              }
+            }
+            return post
+          }))
+          setNotificationToast('Profile picture updated.')
+        }}
+      />
     </main>
   )
 }

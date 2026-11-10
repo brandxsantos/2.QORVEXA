@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertCircle, LoaderCircle, Save, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/useAuth.js'
@@ -9,6 +9,7 @@ import BrandMark from '../components/BrandMark.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
 import AccountMenu from '../components/AccountMenu.jsx'
 import CustomSelect from '../components/CustomSelect.jsx'
+import ProfilePhotoCropModal from '../components/ProfilePhotoCropModal.jsx'
 
 const usernamePattern = /^[a-z0-9_]{3,24}$/
 const maxAvatarBytes = 8 * 1024 * 1024
@@ -46,10 +47,33 @@ const [phoneVisibility, setPhoneVisibility] = useState('only_me')
   const [avatarPreview, setAvatarPreview] = useState('')
   const [coverFile, setCoverFile] = useState(null)
   const [coverPreview, setCoverPreview] = useState('')
+  const [cropModalOpen, setCropModalOpen] = useState(false)
+  const [selectedCropFile, setSelectedCropFile] = useState(null)
   const [status, setStatus] = useState('loading')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    function handleProfileUpdated(event) {
+      const { avatar_url, bio: updatedBio, userId } = event.detail || {}
+      if (userId && user?.id && userId === user.id) {
+        setProfile((curr) => {
+          if (!curr) return curr
+          const next = { ...curr }
+          if (avatar_url !== undefined) next.avatar_url = avatar_url
+          if (updatedBio !== undefined) next.bio = updatedBio
+          return next
+        })
+        if (avatar_url !== undefined) {
+          setAvatarFile(null)
+          setAvatarPreview('')
+        }
+      }
+    }
+    window.addEventListener('qorvexa:profile-updated', handleProfileUpdated)
+    return () => window.removeEventListener('qorvexa:profile-updated', handleProfileUpdated)
+  }, [user?.id])
 
   useEffect(() => {
     return () => { if (avatarPreview) URL.revokeObjectURL(avatarPreview) }
@@ -283,6 +307,15 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
       setCoverFile(null)
       setCoverPreview('')
       setNotice('Your profile was updated.')
+      window.dispatchEvent(
+        new CustomEvent('qorvexa:profile-updated', {
+          detail: {
+            bio: data.bio,
+            avatar_url: data.avatar_url,
+            userId: user.id,
+          },
+        })
+      )
     } catch (saveError) {
       let message = saveError.code === '23505'
         ? 'That username is already taken.'
@@ -324,21 +357,22 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
           <form className="settings-form" onSubmit={handleSave}>
             <label id="profile-picture" className="settings-avatar-field">
               <span className="settings-avatar-preview">
-                {avatarFile
-                  ? <img src={avatarPreview} alt="Selected avatar preview" />
-                  : profile.avatar_url
-                    ? <ProtectedMediaImage path={profile.avatar_url} alt="Current profile avatar" fallback={(profile.display_name || profile.username || '?').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()} />
-                    : <UserRound size={25} aria-hidden="true" />}
+                {profile.avatar_url
+                  ? <ProtectedMediaImage path={profile.avatar_url} alt="Current profile avatar" fallback={(profile.display_name || profile.username || '?').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()} />
+                  : <UserRound size={25} aria-hidden="true" />}
               </span>
-              <span><strong>Profile picture</strong><small>JPG, PNG, WebP, or GIF | up to 8 MB</small></span>
+              <span><strong>Profile picture</strong><small>JPG, PNG, WebP, or GIF | up to 8 MB · Crop &amp; Adjust</small></span>
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 onChange={(event) => {
                   setError('')
                   const file = event.target.files?.[0] || null
-                  setAvatarFile(file)
-                  setAvatarPreview(file ? URL.createObjectURL(file) : '')
+                  if (file) {
+                    setSelectedCropFile(file)
+                    setCropModalOpen(true)
+                  }
+                  event.target.value = ''
                 }}
               />
             </label>
@@ -359,7 +393,7 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
             </label>
             <label>Display name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={60} required /></label>
             <label>Username<input value={username} onChange={(event) => setUsername(event.target.value.toLowerCase())} minLength={3} maxLength={24} pattern="[a-z0-9_]{3,24}" required /><small>3-24 lowercase letters, numbers, or underscores.</small></label>
-            <label>Bio<textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={280} rows={4} placeholder="A little about you..." /><small>{bio.length}/280</small></label>
+            <label>Description / Bio<textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={280} rows={4} placeholder="Tell people something about yourself..." /><small>{bio.length}/280 characters</small></label>
             <label>
   Gender
  <CustomSelect
@@ -619,6 +653,20 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
         )}
       </section>
       <footer className="member-feed-footer"><span>Signed in as {user.email}</span></footer>
+      <ProfilePhotoCropModal
+        isOpen={cropModalOpen}
+        initialFile={selectedCropFile}
+        userId={user?.id}
+        currentAvatarUrl={profile?.avatar_url}
+        onClose={() => {
+          setCropModalOpen(false)
+          setSelectedCropFile(null)
+        }}
+        onSuccess={(newPath) => {
+          setProfile((curr) => curr ? { ...curr, avatar_url: newPath } : curr)
+          setNotice('Profile picture updated successfully.')
+        }}
+      />
     </main>
   )
 }
