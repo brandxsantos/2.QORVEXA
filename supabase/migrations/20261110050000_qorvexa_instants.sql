@@ -341,7 +341,6 @@ begin
       and exists (
         select 1 from public.friendships f
         where ((f.user_low = least(v_sender_id, cf.friend_id) and f.user_high = greatest(v_sender_id, cf.friend_id)))
-          and f.status = 'accepted'
       )
       and not exists (
         select 1 from public.blocked_users bu
@@ -354,7 +353,6 @@ begin
            case when f.user_low = v_sender_id then f.user_high else f.user_low end as recipient_id
     from public.friendships f
     where (f.user_low = v_sender_id or f.user_high = v_sender_id)
-      and f.status = 'accepted'
       and not exists (
         select 1 from public.blocked_users bu
         where (bu.blocker_id = v_sender_id and bu.blocked_id = (case when f.user_low = v_sender_id then f.user_high else f.user_low end))
@@ -748,7 +746,6 @@ begin
     if not exists (
       select 1 from public.friendships f
       where ((f.user_low = least(v_user_id, p_friend_id) and f.user_high = greatest(v_user_id, p_friend_id)))
-        and f.status = 'accepted'
     ) then
       raise exception 'User must be an accepted friend to be added to Close Friends.';
     end if;
