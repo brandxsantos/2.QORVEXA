@@ -40,6 +40,7 @@ import EmojiPicker from '../components/EmojiPicker.jsx'
 import MessageInteractions from '../components/MessageInteractions.jsx'
 import { loadMessageInteractions, toggleMessageReaction } from '../lib/messageInteractions.js'
 import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
+import InstantsBar from '../components/instants/InstantsBar.jsx'
 
 const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility, online_status_visibility'
 const requestFields = 'id, sender_id, receiver_id, status, created_at'
@@ -679,6 +680,12 @@ function NetworkPage() {
     }
   }
 
+  function handleInstantReply({ peerId, caption }) {
+    openConversation({ id: peerId }).then(() => {
+      setDraft(caption ? `Replying to Instant ("${caption.slice(0, 35)}…"): ` : 'Replying to Instant: ')
+    })
+  }
+
   async function markNotificationRead(notification) {
     if (notification.is_read) return
     setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, is_read: true } : item))
@@ -1136,6 +1143,7 @@ function NetworkPage() {
               <div className="network-messenger">
                 <aside className={`network-conversation-list${selectedConversationId ? ' network-conversation-list--mobile-hidden' : ''}`}>
                   <div className="network-conversation-heading"><h2>Messages</h2><span>{conversations.length}</span></div>
+                  <InstantsBar user={user} onReply={handleInstantReply} />
                   <label className="network-search network-search--conversation"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations..." /></label>
                   {conversations.filter((conversation) => profileName(conversation.peer).toLowerCase().includes(query.trim().toLowerCase()) || conversation.peer?.username?.toLowerCase().includes(query.trim().toLowerCase())).map((conversation) => (
                     <div
