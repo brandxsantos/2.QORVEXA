@@ -21,55 +21,53 @@ const MAX_FILE_BYTES = 8 * 1024 * 1024 // 8 MB
 const TARGET_SIZE = 512
 
 /**
- * Validates an image file by checking MIME type, size, and decoding.
+ * Validates basic file format and size limits.
  */
-async function validateImageFile(file) {
+function validateImageFile(file) {
   if (!file) throw new Error('Please select an image file.')
   if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-    throw new Error('Unsupported file format. Please upload a JPG, PNG, WebP, or GIF image.')
+    throw new Error('Unsupported format. Please choose a JPG, PNG, WebP, or GIF image.')
   }
   if (file.size > MAX_FILE_BYTES) {
-    throw new Error('File size exceeds the 8 MB limit. Please select a smaller image.')
+    throw new Error('File size exceeds the 8 MB limit. Please choose a smaller image.')
   }
+}
 
-  // Verify that the file can actually be decoded as an image
+/**
+ * Reads a File or Blob into a Base64 data URL.
+ * Base64 data URLs never expire, never suffer from CORS issues, and cannot be revoked.
+ */
+function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file)
-    const img = new Image()
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl)
-      if (img.naturalWidth === 0 || img.naturalHeight === 0) {
-        reject(new Error('The selected image is corrupt or invalid.'))
-      } else {
-        resolve(true)
-      }
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl)
-      reject(new Error('Failed to load image. The file may be corrupt or not a valid image.'))
-    }
-    img.src = objectUrl
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(new Error('Failed to read image file from your device.'))
+    reader.readAsDataURL(file)
   })
 }
 
 /**
- * Loads an image into an HTMLImageElement for canvas drawing.
+ * Decodes an image source into an HTMLImageElement for canvas cropping.
  */
 function loadImageElement(src) {
   return new Promise((resolve, reject) => {
     const img = new Image()
-    if (!src.startsWith('blob:') && !src.startsWith('data:')) {
+    if (!src.startsWith('data:') && !src.startsWith('blob:')) {
       img.crossOrigin = 'anonymous'
     }
     img.onload = () => resolve(img)
-    img.onerror = () => reject(new Error('Failed to load image for cropping.'))
+    img.onerror = () => reject(new Error('Failed to decode image data for cropping.'))
     img.src = src
+
+    if (img.complete && img.naturalWidth > 0) {
+      resolve(img)
+    }
   })
 }
 
 /**
- * Crops the image using HTML5 Canvas to a square of targetSize x targetSize.
- * Returns { blob, type }
+ * Crops the image using an offscreen canvas to a 512x512 square image.
+ * Returns { blob, type: 'image/jpeg' }
  */
 async function getCroppedImageBlob(imageSrc, pixelCrop, targetSize = TARGET_SIZE) {
   const image = await loadImageElement(imageSrc)
@@ -125,7 +123,7 @@ export default function ProfilePhotoCropModal({
   isOpen,
   initialFile = null,
   userId,
-  currentAvatarUrl = '',
+  _currentAvatarUrl = '',
   onClose,
   onSuccess,
 }) {
@@ -135,36 +133,57 @@ export default function ProfilePhotoCropModal({
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null)
   const [previewUrl, setPreviewUrl] = useState('')
   const [previewMode, setPreviewMode] = useState(false)
+  const [generatingPreview, setGeneratingPreview] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const fileInputRef = useRef(null)
-  const previewTimerRef = useRef(null)
 
-  // Clean up object URLs
+  const loadFile = useCallback(async (file) => {
+    setError('')
+    try {
+      validateImageFile(file)
+      const dataUrl = await readFileAsDataUrl(file)
+
+      // Test decoding before proceeding
+      const img = await loadImageElement(dataUrl)
+      if (!img.naturalWidth || !img.naturalHeight) {
+        throw new Error('The selected image has invalid dimensions or is corrupted.')
+      }
+
+      setImageSrc(dataUrl)
+      setCrop({ x: 0, y: 0 })
+      setZoom(1)
+      setPreviewMode(false)
+      setPreviewUrl((prev) => {
+        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev)
+        return ''
+      })
+    } catch (err) {
+      console.error('[QORVEXA] Error loading image:', err)
+      setError(err?.message || 'Unable to process the chosen image.')
+    }
+  }, [])
+
+  // Clean up any preview object URLs when closing
   useEffect(() => {
     return () => {
-      if (imageSrc && imageSrc.startsWith('blob:')) {
-        URL.revokeObjectURL(imageSrc)
-      }
       if (previewUrl && previewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrl)
       }
-      if (previewTimerRef.current) {
-        clearTimeout(previewTimerRef.current)
-      }
     }
-  }, [imageSrc, previewUrl])
+  }, [previewUrl])
 
-  // Handle setting up an initial file or resetting
+  // Handle modal open / close lifecycle
   useEffect(() => {
     if (!isOpen) {
-      if (imageSrc && imageSrc.startsWith('blob:')) URL.revokeObjectURL(imageSrc)
-      if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl)
       setImageSrc('')
       setCrop({ x: 0, y: 0 })
       setZoom(1)
       setCroppedAreaPixels(null)
-      setPreviewUrl('')
+      setPreviewUrl((prev) => {
+        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev)
+        return ''
+      })
       setPreviewMode(false)
       setError('')
       setLoading(false)
@@ -172,9 +191,9 @@ export default function ProfilePhotoCropModal({
     }
 
     if (initialFile) {
-      validateAndLoadFile(initialFile)
+      loadFile(initialFile)
     }
-  }, [isOpen, initialFile])
+  }, [isOpen, initialFile, loadFile])
 
   // Handle escape key
   useEffect(() => {
@@ -188,27 +207,10 @@ export default function ProfilePhotoCropModal({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, loading, onClose])
 
-  const validateAndLoadFile = async (file) => {
-    setError('')
-    try {
-      await validateImageFile(file)
-      const objectUrl = URL.createObjectURL(file)
-      if (imageSrc && imageSrc.startsWith('blob:')) {
-        URL.revokeObjectURL(imageSrc)
-      }
-      setImageSrc(objectUrl)
-      setCrop({ x: 0, y: 0 })
-      setZoom(1)
-      setPreviewMode(false)
-    } catch (err) {
-      setError(err.message || 'Unable to process the chosen image.')
-    }
-  }
-
   const handleFileChange = (e) => {
     const file = e.target.files?.[0]
     if (file) {
-      validateAndLoadFile(file)
+      loadFile(file)
     }
     e.target.value = ''
   }
@@ -217,29 +219,44 @@ export default function ProfilePhotoCropModal({
     setCroppedAreaPixels(completedPixels)
   }, [])
 
-  // Generate live circular preview whenever crop coordinates or zoom change
-  useEffect(() => {
-    if (!imageSrc || !croppedAreaPixels) return
-
-    if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
-
-    previewTimerRef.current = setTimeout(async () => {
-      try {
-        const { blob } = await getCroppedImageBlob(imageSrc, croppedAreaPixels, 256)
-        const newPreviewUrl = URL.createObjectURL(blob)
-        setPreviewUrl((oldUrl) => {
-          if (oldUrl && oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl)
-          return newPreviewUrl
-        })
-      } catch {
-        // Silent catch for rapid preview generation
-      }
-    }, 150)
-  }, [imageSrc, croppedAreaPixels])
-
   const handleReset = () => {
     setCrop({ x: 0, y: 0 })
     setZoom(1)
+  }
+
+  // Generate preview on demand when toggled
+  const handleTogglePreview = async () => {
+    if (!previewMode) {
+      if (!imageSrc) return
+      setGeneratingPreview(true)
+      try {
+        let cropCoords = croppedAreaPixels
+        if (!cropCoords) {
+          const img = await loadImageElement(imageSrc)
+          const size = Math.min(img.naturalWidth || img.width, img.naturalHeight || img.height)
+          cropCoords = {
+            x: Math.round(((img.naturalWidth || img.width) - size) / 2),
+            y: Math.round(((img.naturalHeight || img.height) - size) / 2),
+            width: size,
+            height: size,
+          }
+        }
+        const { blob } = await getCroppedImageBlob(imageSrc, cropCoords, TARGET_SIZE)
+        const url = URL.createObjectURL(blob)
+        setPreviewUrl((prev) => {
+          if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev)
+          return url
+        })
+        setPreviewMode(true)
+      } catch (err) {
+        console.error('[QORVEXA] Error generating preview:', err)
+        setError(err?.message || 'Failed to generate photo preview.')
+      } finally {
+        setGeneratingPreview(false)
+      }
+    } else {
+      setPreviewMode(false)
+    }
   }
 
   const handleSave = async () => {
@@ -255,7 +272,7 @@ export default function ProfilePhotoCropModal({
     const client = getSupabaseClient()
 
     try {
-      // 1. Resolve session & user ID
+      // 1. Resolve session & authenticated user ID
       const { data: sessionData, error: sessionError } = await client.auth.getSession()
       if (sessionError) throw sessionError
 
@@ -477,7 +494,7 @@ export default function ProfilePhotoCropModal({
                     title="Reset position and zoom"
                   >
                     <RotateCcw size={14} />
-                    <span>Reset</span>
+                    <span>Reset adjustments</span>
                   </button>
 
                   <button
@@ -489,15 +506,6 @@ export default function ProfilePhotoCropModal({
                     <Upload size={14} />
                     <span>Choose another photo</span>
                   </button>
-
-                  {previewUrl && (
-                    <div className="q-photo-crop-live-pill" title="Live circular preview">
-                      <div className="q-photo-crop-live-thumbnail">
-                        <img src={previewUrl} alt="Thumbnail preview" />
-                      </div>
-                      <span>Preview</span>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -528,11 +536,20 @@ export default function ProfilePhotoCropModal({
             <button
               type="button"
               className="q-photo-crop-btn q-photo-crop-btn--preview"
-              onClick={() => setPreviewMode(!previewMode)}
-              disabled={loading}
+              onClick={handleTogglePreview}
+              disabled={loading || generatingPreview}
             >
-              <Eye size={15} />
-              <span>{previewMode ? 'Back to Crop' : 'Preview Result'}</span>
+              {generatingPreview ? (
+                <>
+                  <LoaderCircle size={15} className="q-photo-crop-spinner" />
+                  <span>Preparing preview...</span>
+                </>
+              ) : (
+                <>
+                  <Eye size={15} />
+                  <span>{previewMode ? 'Back to Crop' : 'Preview Result'}</span>
+                </>
+              )}
             </button>
           )}
 
