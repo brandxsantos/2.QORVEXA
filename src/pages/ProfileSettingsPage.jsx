@@ -254,6 +254,7 @@ function ProfileSettingsPage() {
     if (websiteVisibility !== (profile.website_visibility || 'public')) return true
     if (educationVisibility !== (profile.education_visibility || 'public')) return true
     if (workplaceVisibility !== (profile.workplace_visibility || 'public')) return true
+    if (themePreference !== (profile.theme_preference || 'dark')) return true
 
     if (coverFile) return true
     if (avatarFile) return true
@@ -261,6 +262,7 @@ function ProfileSettingsPage() {
     return false
   }, [
     profile,
+    themePreference,
     displayName,
     username,
     bio,
@@ -291,6 +293,7 @@ function ProfileSettingsPage() {
   function handleDiscard() {
     if (!profile) return
     applyLoadedData(profile)
+    setThemePreference(profile.theme_preference || 'dark')
     setCoverFile(null)
     setCoverPreview('')
     setAvatarFile(null)
@@ -459,6 +462,7 @@ function ProfileSettingsPage() {
           birthdate_visibility: birthdateVisibility,
           phone_number: cleanPhoneNumber,
           phone_visibility: phoneVisibility,
+          theme_preference: themePreference,
         })
         .eq('id', user.id)
 

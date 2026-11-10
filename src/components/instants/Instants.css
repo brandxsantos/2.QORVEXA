@@ -638,3 +638,48 @@
   border-color: #10b981;
   color: #ffffff;
 }
+
+/* Light Theme for Instants Bar & Modals */
+:root[data-theme="light"] .instants-bar-container {
+  background-color: #ffffff;
+  border-bottom-color: rgba(203, 213, 225, 0.8);
+}
+
+:root[data-theme="light"] .instant-bubble-label {
+  color: #334155;
+}
+
+:root[data-theme="light"] .instant-modal-card {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.15);
+}
+
+:root[data-theme="light"] .instant-modal-header h3 {
+  color: #0f172a;
+}
+
+:root[data-theme="light"] .instant-modal-header p {
+  color: #64748b;
+}
+
+:root[data-theme="light"] .close-friends-search {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+:root[data-theme="light"] .instant-cf-item {
+  border-bottom-color: #f1f5f9;
+}
+
+:root[data-theme="light"] .instant-cf-user span:first-child {
+  color: #0f172a;
+}
+
+:root[data-theme="light"] .instant-toggle-btn:not(.is-active) {
+  border-color: #cbd5e1;
+  color: #475569;
+}
+

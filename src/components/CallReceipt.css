@@ -64,3 +64,18 @@
 .floating-chat-messages .q-call-receipt-label {
   font-size: 0.72rem;
 }
+
+/* Light Theme */
+:root[data-theme="light"] .q-call-receipt-card {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+:root[data-theme="light"] .q-call-receipt-label {
+  color: #0f172a;
+}
+
+:root[data-theme="light"] .q-call-receipt-time {
+  color: #64748b;
+}
