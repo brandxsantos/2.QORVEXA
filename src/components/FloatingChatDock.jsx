@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MessageCircle, Minus, Phone, Search, Send, Video, X } from 'lucide-react'
+import { GripVertical, MessageCircle, Minus, Phone, Search, Send, Video, X } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
 import { useCall } from '../context/useCall.js'
 import { getSupabaseClient, authorizeRealtimeSession } from '../lib/supabase.js'
@@ -50,6 +50,28 @@ function FloatingChatDock() {
   const [inboxTab, setInboxTab] = useState('recent')
   const [searchQuery, setSearchQuery] = useState('')
   const [creatingFriendId, setCreatingFriendId] = useState('')
+
+  const [visibleSlotIds, setVisibleSlotIds] = useState([])
+  const [overflowPanelOpen, setOverflowPanelOpen] = useState(false)
+  const [dockTop, setDockTop] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qorvexa_bubble_dock_top')
+      if (saved !== null) {
+        const parsed = parseFloat(saved)
+        if (!isNaN(parsed) && parsed >= 10 && parsed < (typeof window !== 'undefined' ? window.innerHeight : 800) - 100) {
+          return parsed
+        }
+      }
+    } catch {}
+    return null
+  })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStartYRef = useRef(0)
+  const dragStartTopRef = useRef(0)
+  const hasMovedRef = useRef(false)
+  const dockRef = useRef(null)
+  const overflowPanelRef = useRef(null)
+  const overflowButtonRef = useRef(null)
 
   const loadConversations = useCallback(async () => {
     if (!user?.id) return
@@ -345,10 +367,125 @@ setLoadingIds((current) => current.includes(conversationId)
     })
   }, [openIds, messagesByConversation, loadingIds, loadMessages, callReceiptsByConversation, loadCallReceipts])
 
-  const visibleConversations = useMemo(
+  // Clamping dockTop position on window resize
+  useEffect(() => {
+    function clampPosition() {
+      if (!dockRef.current) return
+      const dockHeight = dockRef.current.offsetHeight || 260
+      const minTop = 16
+      const maxTop = Math.max(minTop, window.innerHeight - dockHeight - 16)
+
+      setDockTop((current) => {
+        if (current === null) {
+          return maxTop
+        }
+        return Math.max(minTop, Math.min(maxTop, current))
+      })
+    }
+
+    clampPosition()
+    window.addEventListener('resize', clampPosition)
+    return () => window.removeEventListener('resize', clampPosition)
+  }, [])
+
+  // Outside click and Escape listener to dismiss overflow panel
+  useEffect(() => {
+    if (!overflowPanelOpen) return
+
+    function handleOutside(e) {
+      if (
+        overflowPanelRef.current &&
+        !overflowPanelRef.current.contains(e.target) &&
+        overflowButtonRef.current &&
+        !overflowButtonRef.current.contains(e.target)
+      ) {
+        setOverflowPanelOpen(false)
+      }
+    }
+
+    function handleKey(e) {
+      if (e.key === 'Escape') {
+        setOverflowPanelOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handleOutside)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('pointerdown', handleOutside)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [overflowPanelOpen])
+
+  const activeConversations = useMemo(
     () => conversations.filter((conversation) => !hiddenIds.includes(conversation.id)),
     [conversations, hiddenIds],
   )
+
+  // Keep visible slots in sync with active conversations and currently open chats
+  useEffect(() => {
+    setVisibleSlotIds((currentSlots) => {
+      const validSlots = currentSlots.filter((id) =>
+        activeConversations.some((c) => c.id === id)
+      )
+
+      let updated = [...validSlots]
+
+      // Ensure any open chat is in visible slots (up to 3)
+      for (const openId of openIds) {
+        if (
+          activeConversations.some((c) => c.id === openId) &&
+          !updated.includes(openId)
+        ) {
+          if (updated.length < 3) {
+            updated.push(openId)
+          } else {
+            const replaceIdx = updated.findIndex((id) => !openIds.includes(id))
+            if (replaceIdx !== -1) {
+              updated[replaceIdx] = openId
+            }
+          }
+        }
+      }
+
+      // Fill remaining slots up to 3 with most recent active conversations
+      if (updated.length < 3) {
+        for (const conv of activeConversations) {
+          if (!updated.includes(conv.id)) {
+            updated.push(conv.id)
+            if (updated.length >= 3) break
+          }
+        }
+      }
+
+      if (
+        updated.length === currentSlots.length &&
+        updated.every((id, idx) => id === currentSlots[idx])
+      ) {
+        return currentSlots
+      }
+
+      return updated
+    })
+  }, [activeConversations, openIds])
+
+  const visibleBubbleConversations = useMemo(() => {
+    return visibleSlotIds
+      .map((id) => activeConversations.find((c) => c.id === id))
+      .filter(Boolean)
+      .slice(0, 3)
+  }, [visibleSlotIds, activeConversations])
+
+  const overflowConversations = useMemo(() => {
+    const visibleSet = new Set(visibleBubbleConversations.map((c) => c.id))
+    return activeConversations.filter((c) => !visibleSet.has(c.id))
+  }, [activeConversations, visibleBubbleConversations])
+
+  const overflowCount = overflowConversations.length
+
+  const overflowUnreadCount = useMemo(() => {
+    return overflowConversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)
+  }, [overflowConversations])
 
   const unreadConversations = useMemo(
     () => conversations.filter((conversation) => conversation.unreadCount > 0),
@@ -371,6 +508,34 @@ setLoadingIds((current) => current.includes(conversationId)
       })
       .sort((a, b) => displayName(a).localeCompare(displayName(b)))
   }, [friends, searchQuery])
+
+  const promoteToVisibleSlot = useCallback((conversationId) => {
+    setHiddenIds((current) => current.filter((id) => id !== conversationId))
+
+    setVisibleSlotIds((currentSlots) => {
+      if (currentSlots.includes(conversationId)) {
+        return currentSlots
+      }
+
+      if (currentSlots.length < 3) {
+        return [...currentSlots, conversationId]
+      }
+
+      // 3 slots full. Replace least recently active conversation (prioritize non-open)
+      const slotConvs = currentSlots.map((id) => conversations.find((c) => c.id === id))
+      const nonOpen = slotConvs.filter((c) => c && !openIds.includes(c.id))
+      const candidates = nonOpen.length > 0 ? nonOpen : slotConvs
+
+      candidates.sort((a, b) => {
+        const timeA = new Date(a?.lastMessage?.created_at || a?.updated_at || 0).getTime()
+        const timeB = new Date(b?.lastMessage?.created_at || b?.updated_at || 0).getTime()
+        return timeA - timeB
+      })
+
+      const demoteId = candidates[0]?.id || currentSlots[currentSlots.length - 1]
+      return currentSlots.map((id) => (id === demoteId ? conversationId : id))
+    })
+  }, [conversations, openIds])
 
   async function startFriendConversation(profile) {
     if (!profile?.id || creatingFriendId) return
@@ -413,10 +578,74 @@ setLoadingIds((current) => current.includes(conversationId)
 
   function openChat(conversationId) {
     setError('')
-    setHiddenIds((current) => current.filter((id) => id !== conversationId))
+    promoteToVisibleSlot(conversationId)
     setOpenIds((current) => current.includes(conversationId)
       ? current
       : [...current, conversationId])
+  }
+
+  function handlePromoteFromOverflow(conversationId) {
+    setOverflowPanelOpen(false)
+    openChat(conversationId)
+  }
+
+  const handlePointerDown = (e) => {
+    if (e.button !== undefined && e.button !== 0) return
+
+    if (
+      e.target.closest('.floating-chat-bubble-close') ||
+      e.target.closest('.floating-chat-overflow-panel') ||
+      e.target.closest('.floating-inbox-panel') ||
+      e.target.closest('.floating-chat-window')
+    ) {
+      return
+    }
+
+    dragStartYRef.current = e.clientY
+    dragStartTopRef.current = dockRef.current?.getBoundingClientRect().top || (dockTop || 120)
+    hasMovedRef.current = false
+
+    const handlePointerMove = (moveEvent) => {
+      const deltaY = moveEvent.clientY - dragStartYRef.current
+      if (!hasMovedRef.current && Math.abs(deltaY) > 5) {
+        hasMovedRef.current = true
+        setIsDragging(true)
+      }
+
+      if (hasMovedRef.current) {
+        const dockHeight = dockRef.current?.offsetHeight || 260
+        const minTop = 16
+        const maxTop = Math.max(minTop, window.innerHeight - dockHeight - 16)
+        const nextTop = Math.max(minTop, Math.min(maxTop, dragStartTopRef.current + deltaY))
+        setDockTop(nextTop)
+      }
+    }
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+
+      if (hasMovedRef.current) {
+        setTimeout(() => {
+          hasMovedRef.current = false
+          setIsDragging(false)
+        }, 80)
+
+        setDockTop((current) => {
+          if (current !== null) {
+            try {
+              localStorage.setItem('qorvexa_bubble_dock_top', String(current))
+            } catch {}
+          }
+          return current
+        })
+      } else {
+        setIsDragging(false)
+      }
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
   }
 
   const refreshFloatingInteractions = useCallback(async (conversationId) => {
@@ -462,6 +691,17 @@ setLoadingIds((current) => current.includes(conversationId)
   function hideChat(conversationId) {
     setOpenIds((current) => current.filter((id) => id !== conversationId))
     setHiddenIds((current) => [...new Set([...current, conversationId])])
+
+    setVisibleSlotIds((currentSlots) => {
+      const remaining = currentSlots.filter((id) => id !== conversationId)
+      const nextCandidate = activeConversations.find(
+        (c) => c.id !== conversationId && !remaining.includes(c.id)
+      )
+      if (nextCandidate && remaining.length < 3) {
+        return [...remaining, nextCandidate.id]
+      }
+      return remaining
+    })
   }
 
   async function sendMessage(event, conversation) {
@@ -510,7 +750,11 @@ setLoadingIds((current) => current.includes(conversationId)
   if (!user) return null
 
   return (
-    <div className="floating-chat-dock">
+    <div
+      ref={dockRef}
+      className={`floating-chat-dock${isDragging ? ' is-dragging' : ''}`}
+      style={dockTop !== null ? { top: `${dockTop}px`, bottom: 'auto' } : undefined}
+    >
       {error && (
         <div className="floating-chat-error" role="status">
           <span>{error}</span>
@@ -529,8 +773,12 @@ setLoadingIds((current) => current.includes(conversationId)
           const name = displayName(peer)
           const messages = messagesByConversation[conversationId] || []
           const callReceipts = callReceiptsByConversation[conversationId] || []
+          const callIds = new Set(callReceipts.map((s) => s.id))
+          const textMessages = messages.filter(
+            (m) => !(m.call_session_id && callIds.has(m.call_session_id)) && m.message_type !== 'call'
+          )
           const timelineItems = [
-            ...messages.map((message) => ({ ...message, timelineType: 'message' })),
+            ...textMessages.map((message) => ({ ...message, timelineType: 'message' })),
             ...callReceipts.map((session) => ({ ...session, timelineType: 'call' })),
           ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 
@@ -838,8 +1086,78 @@ setLoadingIds((current) => current.includes(conversationId)
           </Link>
         </section>
       )}
-      <div className="floating-chat-bubbles" aria-label="Recent conversations">
-        {visibleConversations.map((conversation) => {
+      {/* Overflow Waiting List Panel */}
+      {overflowPanelOpen && overflowConversations.length > 0 && (
+        <section
+          ref={overflowPanelRef}
+          className="floating-chat-overflow-panel"
+          aria-label="Waiting conversations"
+        >
+          <header className="floating-chat-overflow-header">
+            <div>
+              <strong>More conversations</strong>
+              <span>{overflowCount} waiting</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOverflowPanelOpen(false)}
+              aria-label="Close waiting list"
+              title="Close"
+            >
+              <X size={15} />
+            </button>
+          </header>
+          <div className="floating-chat-overflow-list">
+            {overflowConversations.map((conversation) => {
+              const peer = conversation.peer
+              if (!peer) return null
+              const name = displayName(peer)
+              const lastPreview = conversation.lastMessage?.content || `@${peer.username || 'member'}`
+
+              return (
+                <button
+                  key={conversation.id}
+                  type="button"
+                  className="floating-overflow-item"
+                  onClick={() => handlePromoteFromOverflow(conversation.id)}
+                >
+                  <span className="floating-chat-avatar floating-chat-avatar--small">
+                    <ProtectedMediaImage
+                      path={peer.avatar_url}
+                      alt=""
+                      fallback={initials(name)}
+                    />
+                  </span>
+                  <span className="floating-overflow-item-info">
+                    <strong className="floating-overflow-item-name">{name}</strong>
+                    <small className="floating-overflow-item-preview">{lastPreview}</small>
+                  </span>
+                  {conversation.unreadCount > 0 && (
+                    <span className="floating-chat-unread-inline">
+                      {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      <div
+        className="floating-chat-bubbles"
+        aria-label="Recent conversations"
+        onPointerDown={handlePointerDown}
+      >
+        <div
+          className="floating-chat-drag-handle"
+          title="Drag to reposition chat heads"
+          aria-label="Drag chat heads"
+        >
+          <GripVertical size={13} />
+        </div>
+
+        {visibleBubbleConversations.map((conversation) => {
           const peer = conversation.peer
           if (!peer) return null
 
@@ -851,7 +1169,14 @@ setLoadingIds((current) => current.includes(conversationId)
               <button
                 type="button"
                 className={`floating-chat-bubble${isOpen ? ' is-open' : ''}`}
-                onClick={() => openChat(conversation.id)}
+                onClick={(e) => {
+                  if (hasMovedRef.current) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    return
+                  }
+                  openChat(conversation.id)
+                }}
                 aria-label={`Open chat with ${name}${conversation.unreadCount ? `, ${conversation.unreadCount} unread messages` : ''}`}
                 title={name}
               >
@@ -879,10 +1204,45 @@ setLoadingIds((current) => current.includes(conversationId)
           )
         })}
 
+        {overflowCount > 0 && (
+          <div className="floating-chat-bubble-wrap floating-chat-overflow-wrap">
+            <button
+              ref={overflowButtonRef}
+              type="button"
+              className={`floating-chat-bubble floating-chat-overflow-bubble${overflowPanelOpen ? ' is-open' : ''}`}
+              onClick={(e) => {
+                if (hasMovedRef.current) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return
+                }
+                setOverflowPanelOpen((current) => !current)
+              }}
+              aria-label={`View ${overflowCount} more conversation${overflowCount === 1 ? '' : 's'}${overflowUnreadCount > 0 ? `, ${overflowUnreadCount} unread` : ''}`}
+              title={`${overflowCount} more conversation${overflowCount === 1 ? '' : 's'}`}
+              aria-expanded={overflowPanelOpen}
+            >
+              <span className="floating-chat-overflow-count">+{overflowCount}</span>
+              {overflowUnreadCount > 0 && (
+                <span className="floating-chat-unread">
+                  {overflowUnreadCount > 99 ? '99+' : overflowUnreadCount}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
         <button
           type="button"
           className={`floating-chat-empty${inboxOpen ? ' is-active' : ''}`}
-          onClick={() => setInboxOpen((current) => !current)}
+          onClick={(e) => {
+            if (hasMovedRef.current) {
+              e.preventDefault()
+              e.stopPropagation()
+              return
+            }
+            setInboxOpen((current) => !current)
+          }}
           aria-label={inboxOpen ? 'Close Messenger inbox' : 'Open Messenger inbox'}
           title="Messenger inbox"
           aria-expanded={inboxOpen}
