@@ -1,13 +1,19 @@
 ﻿
-import { Bookmark, ChevronDown, LogOut, Settings2, Shield } from 'lucide-react'
+import { Bookmark, ChevronDown, LogOut, Moon, Settings2, Shield, Sun } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
+import { useTheme } from '../context/ThemeContext.jsx'
 
 function AccountMenu({ onSignOut, signingOut, menuRef }) {
   const { pathname } = useLocation()
+  const { themePreference, setThemePreference } = useTheme()
   const profileActive = pathname === '/app/profile'
   const privacyActive = pathname === '/app/privacy'
   const bookmarksActive = pathname === '/app/bookmarks'
   const active = profileActive || privacyActive || bookmarksActive
+
+  const toggleTheme = () => {
+    setThemePreference(themePreference === 'light' ? 'dark' : 'light')
+  }
 
   return (
     <details ref={menuRef} className="network-account-menu">
@@ -32,6 +38,19 @@ function AccountMenu({ onSignOut, signingOut, menuRef }) {
           <Bookmark size={14} aria-hidden="true" />
           Saved
         </Link>
+
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={themePreference === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+        >
+          {themePreference === 'light' ? (
+            <Moon size={14} aria-hidden="true" />
+          ) : (
+            <Sun size={14} aria-hidden="true" />
+          )}
+          {themePreference === 'light' ? 'Dark Theme' : 'Light Theme'}
+        </button>
 
         <button type="button" onClick={onSignOut} disabled={signingOut}>
           <LogOut size={14} aria-hidden="true" />
