@@ -39,6 +39,15 @@ function ProtectedMediaImage({ path, alt = '', className, loading, fallback }) {
         else URL.revokeObjectURL(objectUrl)
       })
       .catch(() => {
+        try {
+          const { data: pubData } = getSupabaseClient()
+            .storage.from('qorvexa-media')
+            .getPublicUrl(objectPath)
+          if (active && pubData?.publicUrl) {
+            setResolved({ path, src: pubData.publicUrl, unavailable: false })
+            return
+          }
+        } catch (_) {}
         if (active) setResolved({ path, src: '', unavailable: true })
       })
 

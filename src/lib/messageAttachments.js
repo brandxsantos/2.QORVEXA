@@ -56,21 +56,35 @@ export function getFileExtension(filename = '') {
 
 /**
  * Uploads a single file to the private qorvexa-attachments bucket.
+ * Supports both options object: uploadAttachmentFile(client, { conversationId, senderId, file })
+ * and positional parameters: uploadAttachmentFile(client, conversationId, senderId, file)
  */
-export async function uploadAttachmentFile(client, { conversationId, senderId, file }) {
-  if (!file) throw new Error('No file provided for upload.')
-  if (file.size > MAX_ATTACHMENT_SIZE) {
-    throw new Error(`"${file.name}" exceeds the maximum allowed file size of 50 MB.`)
+export async function uploadAttachmentFile(client, conversationIdOrOptions, senderId, file) {
+  let targetConversationId, targetSenderId, targetFile
+
+  if (typeof conversationIdOrOptions === 'object' && conversationIdOrOptions !== null && !senderId) {
+    targetConversationId = conversationIdOrOptions.conversationId
+    targetSenderId = conversationIdOrOptions.senderId
+    targetFile = conversationIdOrOptions.file
+  } else {
+    targetConversationId = conversationIdOrOptions
+    targetSenderId = senderId
+    targetFile = file
   }
 
-  const type = detectAttachmentType(file)
-  const ext = (file.name || '').split('.').pop()?.toLowerCase() || (type === 'photo' ? 'jpg' : type === 'video' ? 'mp4' : 'bin')
-  const storagePath = `${conversationId}/${senderId}/${crypto.randomUUID()}.${ext}`
+  if (!targetFile) throw new Error('No file provided for upload.')
+  if (targetFile.size > MAX_ATTACHMENT_SIZE) {
+    throw new Error(`"${targetFile.name}" exceeds the maximum allowed file size of 50 MB.`)
+  }
+
+  const type = detectAttachmentType(targetFile)
+  const ext = (targetFile.name || '').split('.').pop()?.toLowerCase() || (type === 'photo' ? 'jpg' : type === 'video' ? 'mp4' : 'bin')
+  const storagePath = `${targetConversationId}/${targetSenderId}/${crypto.randomUUID()}.${ext}`
 
   const { error: uploadError } = await client.storage
     .from(ATTACHMENT_BUCKET)
-    .upload(storagePath, file, {
-      contentType: file.type || 'application/octet-stream',
+    .upload(storagePath, targetFile, {
+      contentType: targetFile.type || 'application/octet-stream',
       upsert: false,
     })
 
@@ -78,9 +92,9 @@ export async function uploadAttachmentFile(client, { conversationId, senderId, f
 
   return {
     storage_path: storagePath,
-    original_filename: file.name || `attachment.${ext}`,
-    mime_type: file.type || 'application/octet-stream',
-    file_size: file.size,
+    original_filename: targetFile.name || `attachment.${ext}`,
+    mime_type: targetFile.type || 'application/octet-stream',
+    file_size: targetFile.size,
     attachment_type: type,
     metadata: {
       client_timestamp: new Date().toISOString(),
