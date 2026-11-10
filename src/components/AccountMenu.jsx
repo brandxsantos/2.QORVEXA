@@ -1,4 +1,4 @@
-﻿
+
 import { Bookmark, ChevronDown, LogOut, Moon, Settings2, Shield, Sun } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext.jsx'

@@ -9564,8 +9564,8 @@
 :root[data-theme="light"] .network-page,
 :root[data-theme="light"] .settings-page,
 :root[data-theme="light"] .public-profile-page {
-  background-color: #f1f5f9 !important;
-  color: #0f172a !important;
+  background-color: #f8fafc !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .ambient {
@@ -9576,27 +9576,49 @@
   opacity: 0.02 !important;
 }
 
-/* 2. Headers, Navigation & Footers */
+/* 2. Headers, Viewport Sticky Navigation & Footers */
+:root[data-theme="light"] .member-header {
+  background: transparent !important;
+  border-bottom-color: transparent !important;
+}
+
+:root[data-theme="light"] .member-header::before,
 :root[data-theme="light"] .site-header,
-:root[data-theme="light"] .member-header,
 :root[data-theme="light"] .auth-header,
 :root[data-theme="light"] .terms-header {
-  background: rgba(255, 255, 255, 0.94) !important;
-  border-bottom: 1px solid rgba(203, 213, 225, 0.85) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
+  background: rgba(248, 250, 252, 0.92) !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  backdrop-filter: blur(14px) !important;
 }
 
 :root[data-theme="light"] .brand-wordmark,
-:root[data-theme="light"] .member-header-center,
-:root[data-theme="light"] .network-nav-link {
+:root[data-theme="light"] .member-header-center {
   color: #0f172a !important;
 }
 
+:root[data-theme="light"] .network-nav-link,
+:root[data-theme="light"] .network-account-menu > summary {
+  color: #475569 !important;
+}
+
 :root[data-theme="light"] .network-nav-link:hover,
+:root[data-theme="light"] .network-account-menu > summary:hover,
 :root[data-theme="light"] .main-nav a:hover,
 :root[data-theme="light"] .login-link:hover {
-  color: #0891b2 !important;
+  background: #f1f5f9 !important;
+  color: #0284c7 !important;
+}
+
+:root[data-theme="light"] .network-nav-link.is-active {
+  background: #e0f2fe !important;
+  color: #0369a1 !important;
+  font-weight: 600 !important;
+}
+
+:root[data-theme="light"] .network-badge {
+  background: #0284c7 !important;
+  color: #ffffff !important;
 }
 
 :root[data-theme="light"] .main-nav a,
@@ -9611,7 +9633,7 @@
 :root[data-theme="light"] .member-feed-footer,
 :root[data-theme="light"] .auth-footer,
 :root[data-theme="light"] .terms-footer {
-  border-top: 1px solid #cbd5e1 !important;
+  border-top: 1px solid #e2e8f0 !important;
   color: #64748b !important;
 }
 
@@ -9623,9 +9645,9 @@
 :root[data-theme="light"] .bookmark-page,
 :root[data-theme="light"] .settings-card {
   background: #ffffff !important;
-  border: 1px solid #cbd5e1 !important;
-  box-shadow: 0 4px 20px -5px rgba(15, 23, 42, 0.08) !important;
-  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 20px -5px rgba(15, 23, 42, 0.05) !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .member-profile-details h1,
@@ -9661,7 +9683,7 @@
 
 :root[data-theme="light"] .member-feed-tabs {
   background: #f1f5f9 !important;
-  border: 1px solid #cbd5e1 !important;
+  border: 1px solid #e2e8f0 !important;
 }
 
 :root[data-theme="light"] .member-feed-tab {
@@ -9675,9 +9697,9 @@
 
 :root[data-theme="light"] .member-feed-tab.is-active {
   background: #ffffff !important;
-  border-color: #0891b2 !important;
-  color: #0891b2 !important;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08) !important;
+  border-color: #0284c7 !important;
+  color: #0284c7 !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06) !important;
 }
 
 :root[data-theme="light"] .member-comments-toggle,
@@ -9688,7 +9710,7 @@
 :root[data-theme="light"] .member-comments-toggle:hover,
 :root[data-theme="light"] .member-comment-actions button:hover,
 :root[data-theme="light"] .member-comments-toggle.is-active {
-  color: #0891b2 !important;
+  color: #0284c7 !important;
 }
 
 :root[data-theme="light"] .member-avatar,
@@ -9701,16 +9723,16 @@
 :root[data-theme="light"] .settings-form textarea,
 :root[data-theme="light"] .settings-form > label input:not([type="file"]) {
   background: #f8fafc !important;
-  border-color: #cbd5e1 !important;
-  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .member-composer textarea:focus,
 :root[data-theme="light"] .settings-form > label input:focus,
 :root[data-theme="light"] .settings-form textarea:focus {
   background: #ffffff !important;
-  border-color: #0891b2 !important;
-  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.12) !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12) !important;
 }
 
 :root[data-theme="light"] .member-composer textarea::placeholder {
@@ -9730,7 +9752,7 @@
 
 :root[data-theme="light"] .member-media-preview img,
 :root[data-theme="light"] .member-post-media {
-  border-color: #cbd5e1 !important;
+  border-color: #e2e8f0 !important;
   background: #f8fafc !important;
 }
 
@@ -9750,14 +9772,14 @@
 
 :root[data-theme="light"] .member-inline-comment-form input {
   background: #f8fafc !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .member-inline-comment-form input:focus {
   background: #ffffff !important;
-  border-color: #0891b2 !important;
-  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.12) !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12) !important;
 }
 
 :root[data-theme="light"] .member-feed-state {
@@ -9769,9 +9791,9 @@
 :root[data-theme="light"] .public-profile-content,
 :root[data-theme="light"] .public-profile-not-found {
   background: #ffffff !important;
-  border: 1px solid #cbd5e1 !important;
-  box-shadow: 0 4px 20px -5px rgba(15, 23, 42, 0.08) !important;
-  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 20px -5px rgba(15, 23, 42, 0.05) !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .public-profile-heading h1 {
@@ -9779,7 +9801,7 @@
 }
 
 :root[data-theme="light"] .public-profile-username {
-  color: #0891b2 !important;
+  color: #0284c7 !important;
 }
 
 :root[data-theme="light"] .public-profile-bio {
@@ -9787,7 +9809,7 @@
 }
 
 :root[data-theme="light"] .public-profile-tabs {
-  border-bottom: 1px solid #cbd5e1 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
 }
 
 :root[data-theme="light"] .public-profile-tabs button {
@@ -9795,8 +9817,8 @@
 }
 
 :root[data-theme="light"] .public-profile-tabs button.is-active {
-  color: #0891b2 !important;
-  border-bottom-color: #0891b2 !important;
+  color: #0284c7 !important;
+  border-bottom-color: #0284c7 !important;
 }
 
 :root[data-theme="light"] .public-profile-about h2,
@@ -9814,12 +9836,12 @@
 
 :root[data-theme="light"] .public-profile-friend-card {
   background: #f8fafc !important;
-  border: 1px solid #cbd5e1 !important;
+  border: 1px solid #e2e8f0 !important;
 }
 
 :root[data-theme="light"] .public-profile-friend-card:hover {
   background: #f1f5f9 !important;
-  border-color: #0891b2 !important;
+  border-color: #0284c7 !important;
 }
 
 :root[data-theme="light"] .public-profile-friend-card strong {
@@ -9832,11 +9854,11 @@
 
 :root[data-theme="light"] .public-profile-friend-search {
   background: #f1f5f9 !important;
-  border: 1px solid #cbd5e1 !important;
+  border: 1px solid #e2e8f0 !important;
 }
 
 :root[data-theme="light"] .public-profile-friend-search input {
-  color: #0f172a !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .public-profile-stats span {
@@ -9849,12 +9871,12 @@
 
 :root[data-theme="light"] .public-profile-bio-textarea {
   background: #f8fafc !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .public-profile-photo-grid button {
-  border: 1px solid #cbd5e1 !important;
+  border: 1px solid #e2e8f0 !important;
 }
 
 :root[data-theme="light"] .public-profile-avatar-wrapper .public-profile-avatar {
@@ -9867,9 +9889,9 @@
 :root[data-theme="light"] .network-conversation-list,
 :root[data-theme="light"] .network-chat {
   background: #ffffff !important;
-  border: 1px solid #cbd5e1 !important;
-  box-shadow: 0 4px 20px -5px rgba(15, 23, 42, 0.08) !important;
-  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 20px -5px rgba(15, 23, 42, 0.05) !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .network-panel-heading h2,
@@ -9904,16 +9926,16 @@
 }
 
 :root[data-theme="light"] .network-message-bubble p {
-  color: #0f172a !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .network-message--own .network-message-bubble {
-  background: #ecfeff !important;
-  border-color: #a5f3fc !important;
+  background: #e0f2fe !important;
+  border-color: #bae6fd !important;
 }
 
 :root[data-theme="light"] .network-message--own .network-message-bubble p {
-  color: #0891b2 !important;
+  color: #0369a1 !important;
 }
 
 :root[data-theme="light"] .network-message-form {
@@ -9923,8 +9945,8 @@
 
 :root[data-theme="light"] .network-message-form textarea {
   background: #ffffff !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .network-message-form textarea::placeholder {
@@ -9950,25 +9972,25 @@
 
 :root[data-theme="light"] .network-search input {
   background: #f8fafc !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .network-button {
-  border: 1px solid #cbd5e1 !important;
+  border: 1px solid #e2e8f0 !important;
   background: #f8fafc !important;
   color: #334155 !important;
 }
 
 :root[data-theme="light"] .network-button:hover:not(:disabled) {
   background: #f1f5f9 !important;
-  color: #0f172a !important;
+  color: #0284c7 !important;
 }
 
 :root[data-theme="light"] .network-button--primary {
-  background: #0891b2 !important;
+  background: #0284c7 !important;
   color: #ffffff !important;
-  border-color: #0891b2 !important;
+  border-color: #0284c7 !important;
 }
 
 /* 8. Popovers, Menus, Modals & Dropdowns */
@@ -9980,9 +10002,9 @@
 :root[data-theme="light"] .notification-toast,
 :root[data-theme="light"] .admin-modal {
   background: #ffffff !important;
-  border: 1px solid #cbd5e1 !important;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.15) !important;
-  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 32px -4px rgba(15, 23, 42, 0.12) !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .network-account-menu-popover a,
@@ -9996,17 +10018,17 @@
 :root[data-theme="light"] .network-account-menu-popover button:hover:not(:disabled),
 :root[data-theme="light"] .post-action-menu-item:hover {
   background: #f1f5f9 !important;
-  color: #0891b2 !important;
+  color: #0284c7 !important;
 }
 
 :root[data-theme="light"] .qv-emoji-search {
   background: #f1f5f9 !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .smart-mention-option {
-  color: #0f172a !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .smart-mention-option:hover,
@@ -10015,7 +10037,7 @@
 }
 
 :root[data-theme="light"] .notification-toast {
-  color: #0f172a !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .admin-modal h2 {
@@ -10030,15 +10052,15 @@
 :root[data-theme="light"] .admin-modal select,
 :root[data-theme="light"] .admin-modal textarea {
   background: #f8fafc !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 /* 9. Auth & Legal Pages */
 :root[data-theme="light"] .auth-panel {
   background: #ffffff !important;
-  border: 1px solid #cbd5e1 !important;
-  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.1) !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 16px 40px -10px rgba(15, 23, 42, 0.08) !important;
 }
 
 :root[data-theme="light"] .auth-panel-heading {
@@ -10051,8 +10073,8 @@
 :root[data-theme="light"] .input-with-prefix,
 :root[data-theme="light"] .password-input {
   background: #f8fafc !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 :root[data-theme="light"] .auth-intro h1 {

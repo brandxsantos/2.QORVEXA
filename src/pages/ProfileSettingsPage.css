@@ -742,7 +742,7 @@
 }
 
 /* ==========================================================================
-   LIGHT THEME OVERRIDES
+   LIGHT THEME OVERRIDES (Softened, Comfortable & Premium)
    ========================================================================== */
 :root[data-theme="light"] .settings-title-group h1,
 :root[data-theme="light"] .settings-card-header h2,
@@ -750,7 +750,7 @@
 :root[data-theme="light"] .settings-privacy-text h3,
 :root[data-theme="light"] .settings-theme-copy strong,
 :root[data-theme="light"] .settings-field-group label {
-  color: #0f172a;
+  color: #1e293b;
 }
 
 :root[data-theme="light"] .settings-title-group p,
@@ -759,29 +759,29 @@
 :root[data-theme="light"] .settings-field-hint,
 :root[data-theme="light"] .settings-back-link,
 :root[data-theme="light"] .settings-nav-item {
-  color: #64748b;
+  color: #475569;
 }
 
 :root[data-theme="light"] .settings-nav-sidebar,
 :root[data-theme="light"] .settings-modern-card {
   background: #ffffff;
-  border-color: #cbd5e1;
-  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.08);
+  border-color: #e2e8f0;
+  box-shadow: 0 4px 20px -5px rgba(15, 23, 42, 0.05);
 }
 
 :root[data-theme="light"] .settings-nav-item:hover {
   background: #f1f5f9;
-  color: #0f172a;
+  color: #1e293b;
 }
 
 :root[data-theme="light"] .settings-nav-item.is-active {
-  background: #ecfeff;
-  color: #0891b2;
+  background: #e0f2fe;
+  color: #0369a1;
 }
 
 :root[data-theme="light"] .settings-nav-item.is-active::before {
-  background: #0891b2;
-  box-shadow: 0 0 8px rgba(8, 145, 178, 0.5);
+  background: #0284c7;
+  box-shadow: 0 0 8px rgba(2, 132, 199, 0.4);
 }
 
 :root[data-theme="light"] .settings-avatar-circle {
@@ -795,13 +795,13 @@
 
 :root[data-theme="light"] .settings-view-public-btn {
   background: #f8fafc;
-  border-color: #cbd5e1;
+  border-color: #e2e8f0;
   color: #334155;
 }
 
 :root[data-theme="light"] .settings-view-public-btn:hover {
   background: #f1f5f9;
-  color: #0891b2;
+  color: #0284c7;
 }
 
 :root[data-theme="light"] .settings-field-group input[type="text"],
@@ -810,15 +810,15 @@
 :root[data-theme="light"] .settings-field-group input[type="date"],
 :root[data-theme="light"] .settings-field-group textarea {
   background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #0f172a;
+  border-color: #e2e8f0;
+  color: #1e293b;
 }
 
 :root[data-theme="light"] .settings-field-group input:focus,
 :root[data-theme="light"] .settings-field-group textarea:focus {
   background: #ffffff;
-  border-color: #0891b2;
-  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.15);
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
 }
 
 :root[data-theme="light"] .settings-privacy-row {
@@ -832,8 +832,8 @@
 }
 
 :root[data-theme="light"] .settings-privacy-icon-badge {
-  background: #ecfeff;
-  color: #0891b2;
+  background: #e0f2fe;
+  color: #0284c7;
 }
 
 :root[data-theme="light"] .settings-theme-option {
@@ -847,14 +847,14 @@
 }
 
 :root[data-theme="light"] .settings-theme-option.is-selected {
-  background: #ecfeff;
-  border-color: #0891b2;
+  background: #e0f2fe;
+  border-color: #0284c7;
 }
 
 :root[data-theme="light"] .settings-sticky-save-bar {
-  background: rgba(255, 255, 255, 0.94);
-  border-color: #cbd5e1;
-  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.15);
+  background: rgba(248, 250, 252, 0.94);
+  border-color: #e2e8f0;
+  box-shadow: 0 16px 36px -8px rgba(15, 23, 42, 0.1);
 }
 
 :root[data-theme="light"] .settings-save-status {
@@ -862,13 +862,13 @@
 }
 
 :root[data-theme="light"] .settings-discard-btn {
-  border-color: #cbd5e1;
+  border-color: #e2e8f0;
   color: #475569;
 }
 
 :root[data-theme="light"] .settings-discard-btn:hover:not(:disabled) {
   background: #f1f5f9;
-  color: #0f172a;
+  color: #1e293b;
 }
 
 :root[data-theme="light"] .settings-info-callout {
