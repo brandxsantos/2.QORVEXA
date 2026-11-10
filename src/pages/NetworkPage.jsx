@@ -149,6 +149,7 @@ function NetworkPage() {
   const audioStreamRef = useRef(null)
   const audioChunksRef = useRef([])
   const recordingTimerRef = useRef(null)
+  const [ownProfile, setOwnProfile] = useState(null)
   const [replyingTo, setReplyingTo] = useState(null)
   const [reactionWorkingId, setReactionWorkingId] = useState('')
   const [callReceipts, setCallReceipts] = useState([])
@@ -199,7 +200,7 @@ function NetworkPage() {
     const client = getSupabaseClient()
     const [profilesResult, ownProfileResult, ownSettingsResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult, callsResult] = await Promise.all([
       client.from('profiles').select(profileFields).neq('id', user.id).order('created_at', { ascending: false }).range(0, 199),
-      client.from('profiles').select('username').eq('id', user.id).maybeSingle(),
+      client.from('profiles').select('id, username, display_name, avatar_url').eq('id', user.id).maybeSingle(),
       client.rpc('get_own_profile_settings'),
       client.from('friend_requests').select(requestFields).or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
       client.from('friendships').select('user_low, user_high, created_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
@@ -245,6 +246,7 @@ function NetworkPage() {
     }
 
     setProfiles(Object.values(profileById))
+    setOwnProfile(ownProfileResult.data || null)
     setOwnUsername(ownProfileResult.data?.username || '')
     setAvailabilityById((current) => ({ ...current, [user.id]: ownSettingsResult.data?.[0]?.availability_status || 'online' }))
     setDiscoveryLoadedCount(profilesResult.data?.length || 0)
@@ -1441,7 +1443,7 @@ function NetworkPage() {
               <div className="network-messenger">
                 <aside className={`network-conversation-list${selectedConversationId ? ' network-conversation-list--mobile-hidden' : ''}`}>
                   <div className="network-conversation-heading"><h2>Messages</h2><span>{conversations.length}</span></div>
-                  <InstantsBar user={user} onReply={handleInstantReply} />
+                  <InstantsBar user={user} profile={ownProfile} onReply={handleInstantReply} />
                   <label className="network-search network-search--conversation"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations..." /></label>
                   {conversations.filter((conversation) => profileName(conversation.peer).toLowerCase().includes(query.trim().toLowerCase()) || conversation.peer?.username?.toLowerCase().includes(query.trim().toLowerCase())).map((conversation) => (
                     <div

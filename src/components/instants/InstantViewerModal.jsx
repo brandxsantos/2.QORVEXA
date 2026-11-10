@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { X, MessageSquare, LoaderCircle, AlertCircle, Star } from 'lucide-react'
 import { consumeAndViewInstant, reactToInstant } from '../../lib/instants.js'
+import ProtectedMediaImage from '../ProtectedMediaImage.jsx'
 import './Instants.css'
 
 const QUICK_REACTIONS = ['❤️', '🔥', '😂', '😮', '👏']
 
-export default function InstantViewerModal({ instantId, onClose, onReply, currentUserId }) {
+export default function InstantViewerModal({ instantId, isOwn = false, ownProfile = null, onClose, onReply, currentUserId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [instantData, setInstantData] = useState(null)
@@ -20,7 +21,7 @@ export default function InstantViewerModal({ instantId, onClose, onReply, curren
       setLoading(true)
       setError('')
       try {
-        const data = await consumeAndViewInstant(instantId)
+        const data = await consumeAndViewInstant(instantId, isOwn, ownProfile)
         if (!active) return
         setInstantData(data)
         setMyReaction(data.my_reaction || null)
@@ -37,7 +38,7 @@ export default function InstantViewerModal({ instantId, onClose, onReply, curren
     return () => {
       active = false
     }
-  }, [instantId])
+  }, [instantId, isOwn, ownProfile])
 
   const handleReact = async (emoji) => {
     if (!instantId || reacting) return
@@ -67,36 +68,47 @@ export default function InstantViewerModal({ instantId, onClose, onReply, curren
 
   if (!instantId) return null
 
+  const senderAvatar = isOwn ? (ownProfile?.avatar_url || instantData?.sender?.avatar_url) : instantData?.sender?.avatar_url
+  const senderDisplayName = isOwn ? 'Your Story' : (instantData?.sender?.display_name || instantData?.sender?.username || 'Member')
+  const senderInitial = ((isOwn ? (ownProfile?.display_name || ownProfile?.username || 'Y') : senderDisplayName).trim()[0] || '?').toUpperCase()
+
   return (
     <div className="instant-viewer-overlay">
       {/* Top Bar */}
       <div className="instant-viewer-top">
-        {instantData?.sender ? (
+        {instantData ? (
           <div className="instant-viewer-sender">
             <div className="instant-avatar-inner" style={{ width: 40, height: 40 }}>
-              {instantData.sender.avatar_url ? (
-                <img
-                  src={instantData.sender.avatar_url}
-                  alt={instantData.sender.display_name}
+              {senderAvatar ? (
+                <ProtectedMediaImage
+                  path={senderAvatar}
+                  alt={senderDisplayName}
                   className="instant-avatar-img"
+                  fallback={<span>{senderInitial}</span>}
                 />
               ) : (
-                <span>{(instantData.sender.display_name || '?')[0].toUpperCase()}</span>
+                <span>{senderInitial}</span>
               )}
             </div>
             <div>
               <div className="instant-viewer-name">
-                {instantData.sender.display_name || instantData.sender.username}
+                {senderDisplayName}
               </div>
               <div className="instant-viewer-meta">
-                <span>@{instantData.sender.username}</span>
-                {instantData.audience_type === 'close_friends' && (
-                  <span className="instant-viewer-tag">
-                    <Star size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 2 }} />
-                    Close Friends
-                  </span>
+                {isOwn ? (
+                  <span>{instantData.audience_type === 'close_friends' ? 'Shared with Close Friends' : 'Shared with Friends'}</span>
+                ) : (
+                  <>
+                    <span>@{instantData.sender?.username}</span>
+                    {instantData.audience_type === 'close_friends' && (
+                      <span className="instant-viewer-tag">
+                        <Star size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 2 }} />
+                        Close Friends
+                      </span>
+                    )}
+                    <span>• View once</span>
+                  </>
                 )}
-                <span>• View once</span>
               </div>
             </div>
           </div>
@@ -154,34 +166,36 @@ export default function InstantViewerModal({ instantId, onClose, onReply, curren
             </div>
           )}
 
-          <div className="instant-viewer-interaction-bar">
-            {/* Reactions */}
-            <div className="instant-reactions-strip">
-              {QUICK_REACTIONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  className={`instant-react-btn ${myReaction === emoji ? 'is-active' : ''}`}
-                  onClick={() => handleReact(emoji)}
-                  aria-label={`React with ${emoji}`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
+          {!isOwn && (
+            <div className="instant-viewer-interaction-bar">
+              {/* Reactions */}
+              <div className="instant-reactions-strip">
+                {QUICK_REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className={`instant-react-btn ${myReaction === emoji ? 'is-active' : ''}`}
+                    onClick={() => handleReact(emoji)}
+                    aria-label={`React with ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
 
-            {/* Reply Button */}
-            {instantData.sender?.id !== currentUserId && (
-              <button
-                type="button"
-                className="instant-reply-chat-btn"
-                onClick={handleReplyClick}
-              >
-                <MessageSquare size={16} />
-                <span>Reply</span>
-              </button>
-            )}
-          </div>
+              {/* Reply Button */}
+              {instantData.sender?.id !== currentUserId && (
+                <button
+                  type="button"
+                  className="instant-reply-chat-btn"
+                  onClick={handleReplyClick}
+                >
+                  <MessageSquare size={16} />
+                  <span>Reply</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

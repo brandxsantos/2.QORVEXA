@@ -73,7 +73,7 @@ function ProtectedMediaImage({ path, alt = '', className, loading, fallback }) {
   if (resolved.path !== path || !resolved.src) {
     return resolved.path === path && resolved.unavailable
       ? <span className={fallbackClass} role="img" aria-label={`${alt || placeholder} unavailable`}>{placeholder}</span>
-      : null
+      : (fallback ? <span className={fallbackClass}>{fallback}</span> : null)
   }
   return <img
     src={resolved.src}
