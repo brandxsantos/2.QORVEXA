@@ -10,6 +10,7 @@ import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx
 import AccountMenu from '../components/AccountMenu.jsx'
 import CustomSelect from '../components/CustomSelect.jsx'
 import ProfilePhotoCropModal from '../components/ProfilePhotoCropModal.jsx'
+import { isReservedUsername, isReservedDisplayName } from '../lib/reservedNames.js'
 
 const usernamePattern = /^[a-z0-9_]{3,24}$/
 const maxAvatarBytes = 8 * 1024 * 1024
@@ -49,6 +50,7 @@ const [phoneVisibility, setPhoneVisibility] = useState('only_me')
   const [coverPreview, setCoverPreview] = useState('')
   const [cropModalOpen, setCropModalOpen] = useState(false)
   const [selectedCropFile, setSelectedCropFile] = useState(null)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [status, setStatus] = useState('loading')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -87,11 +89,18 @@ const [phoneVisibility, setPhoneVisibility] = useState('only_me')
     let active = true
     async function loadProfile() {
       try {
-        const { data: rows, error: queryError } = await getSupabaseClient().rpc('get_own_profile_settings')
-        if (queryError) throw queryError
-        const data = rows?.[0]
+        const client = getSupabaseClient()
+        const [settingsResult, roleResult] = await Promise.all([
+          client.rpc('get_own_profile_settings'),
+          client.rpc('admin_get_role'),
+        ])
+        if (settingsResult.error) throw settingsResult.error
+        const data = settingsResult.data?.[0]
         if (!data) throw new Error('Your profile settings could not be found.')
         if (!active) return
+        if (!roleResult?.error && roleResult?.data === 'super_admin') {
+          setIsSuperAdmin(true)
+        }
         setProfile(data)
         setUsername(data.username || '')
         setDisplayName(data.display_name || '')
@@ -190,8 +199,16 @@ if (cleanPhoneNumber && !/^[+]?[\d\s().-]{7,32}$/.test(cleanPhoneNumber)) {
       setError('Display name must be between 2 and 60 characters.')
       return
     }
+    if (!isSuperAdmin && isReservedDisplayName(cleanName)) {
+      setError(`The display name "${cleanName}" is reserved for platform administrators.`)
+      return
+    }
     if (!usernamePattern.test(cleanUsername)) {
       setError('Username must be 3-24 lowercase letters, numbers, or underscores.')
+      return
+    }
+    if (!isSuperAdmin && isReservedUsername(cleanUsername)) {
+      setError(`The username "@${cleanUsername}" is reserved for platform administrators.`)
       return
     }
     if (cleanBio.length > 280) {

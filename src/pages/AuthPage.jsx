@@ -6,6 +6,7 @@ import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react
 import AuthLayout from '../components/auth/AuthLayout.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { getSupabaseClient } from '../lib/supabase.js'
+import { isReservedUsername, isReservedDisplayName } from '../lib/reservedNames.js'
 
 const usernamePattern = /^[a-z0-9_]{3,24}$/
 
@@ -147,8 +148,16 @@ function AuthPage() {
           throw new Error('Use 3–24 characters for your username: lowercase letters, numbers, and underscores.')
         }
 
+        if (isReservedUsername(username)) {
+          throw new Error(`The username "@${username}" is reserved for platform administrators.`)
+        }
+
         if (displayName.length < 2 || displayName.length > 60) {
           throw new Error('Your display name must be between 2 and 60 characters.')
+        }
+
+        if (isReservedDisplayName(displayName)) {
+          throw new Error(`The display name "${displayName}" is reserved for platform administrators.`)
         }
 
         if (password.length < 8) {
