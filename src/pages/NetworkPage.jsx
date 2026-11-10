@@ -8,9 +8,7 @@ import {
   CheckCheck,
   Clock3,
   Compass,
-  Image as ImageIcon,
   Images,
-  Mic,
   Paperclip,
   Rss,
   LoaderCircle,
@@ -142,13 +140,6 @@ function NetworkPage() {
   const [lightboxMediaList, setLightboxMediaList] = useState([])
   const [showSharedMedia, setShowSharedMedia] = useState(false)
   const fileInputRef = useRef(null)
-  const photoInputRef = useRef(null)
-  const [isRecordingAudio, setIsRecordingAudio] = useState(false)
-  const [recordingDuration, setRecordingDuration] = useState(0)
-  const mediaRecorderRef = useRef(null)
-  const audioStreamRef = useRef(null)
-  const audioChunksRef = useRef([])
-  const recordingTimerRef = useRef(null)
   const [replyingTo, setReplyingTo] = useState(null)
   const [reactionWorkingId, setReactionWorkingId] = useState('')
   const [callReceipts, setCallReceipts] = useState([])
@@ -891,166 +882,6 @@ function NetworkPage() {
     })
   }
 
-  // Cleanup audio recording on unmount
-  useEffect(() => {
-    return () => {
-      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
-      if (audioStreamRef.current) {
-        audioStreamRef.current.getTracks().forEach((t) => t.stop())
-      }
-    }
-  }, [])
-
-  function formatVoiceTime(seconds) {
-    if (!seconds || isNaN(seconds) || seconds <= 0) return '0:00'
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
-  async function startAudioRecording() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      audioStreamRef.current = stream
-      audioChunksRef.current = []
-
-      let mimeType = 'audio/webm;codecs=opus'
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        if (MediaRecorder.isTypeSupported('audio/webm')) {
-          mimeType = 'audio/webm'
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4'
-        } else {
-          mimeType = ''
-        }
-      }
-
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-      mediaRecorderRef.current = recorder
-
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          audioChunksRef.current.push(e.data)
-        }
-      }
-
-      recorder.start(250)
-      setIsRecordingAudio(true)
-      setRecordingDuration(0)
-
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration((prev) => prev + 1)
-      }, 1000)
-    } catch (err) {
-      console.error('[NetworkPage] Mic access error:', err)
-      setError('Microphone permission is required to record voice messages.')
-    }
-  }
-
-  function cancelAudioRecording() {
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current)
-      recordingTimerRef.current = null
-    }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.onstop = null
-      mediaRecorderRef.current.stop()
-    }
-    if (audioStreamRef.current) {
-      audioStreamRef.current.getTracks().forEach((t) => t.stop())
-      audioStreamRef.current = null
-    }
-    audioChunksRef.current = []
-    setIsRecordingAudio(false)
-    setRecordingDuration(0)
-  }
-
-  async function stopAndSendAudioRecording() {
-    if (!mediaRecorderRef.current || !activeConversation) return
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current)
-      recordingTimerRef.current = null
-    }
-
-    const recorder = mediaRecorderRef.current
-    setIsRecordingAudio(false)
-
-    await new Promise((resolve) => {
-      recorder.onstop = resolve
-      if (recorder.state !== 'inactive') {
-        recorder.stop()
-      } else {
-        resolve()
-      }
-    })
-
-    if (audioStreamRef.current) {
-      audioStreamRef.current.getTracks().forEach((t) => t.stop())
-      audioStreamRef.current = null
-    }
-
-    const chunks = audioChunksRef.current || []
-    if (!chunks.length) {
-      setRecordingDuration(0)
-      return
-    }
-
-    const mimeType = recorder.mimeType || 'audio/webm'
-    const audioBlob = new Blob(chunks, { type: mimeType })
-    const ext = mimeType.includes('mp4') ? 'm4a' : 'webm'
-    const audioFile = new File([audioBlob], `voice-message-${Date.now()}.${ext}`, { type: audioBlob.type })
-
-    setSending(true)
-    setError('')
-    try {
-      const client = getSupabaseClient()
-      setUploadProgress({ current: 1, total: 1, percent: 50, name: 'Voice message' })
-      const uploaded = await uploadAttachmentFile(client, activeConversation.id, user.id, audioFile)
-      setUploadProgress({ current: 1, total: 1, percent: 100, name: 'Voice message' })
-
-      const { data, error: insertError } = await client
-        .from('messages')
-        .insert({
-          conversation_id: activeConversation.id,
-          sender_id: user.id,
-          content: '🎙️ Voice message',
-          reply_to_message_id: replyingTo?.id || null,
-        })
-        .select(messageFields)
-        .single()
-
-      if (insertError) throw insertError
-
-      const { error: attInsertError } = await client
-        .from('message_attachments')
-        .insert([{
-          message_id: data.id,
-          conversation_id: activeConversation.id,
-          sender_id: user.id,
-          storage_path: uploaded.storage_path,
-          original_filename: uploaded.original_filename,
-          file_size: uploaded.file_size,
-          mime_type: uploaded.mime_type,
-          attachment_type: 'audio',
-          metadata: uploaded.metadata || {},
-        }])
-
-      if (attInsertError) throw attInsertError
-
-      const updated = [...messagesRef.current.filter((m) => m.id !== data.id), data]
-      setMessages(updated)
-      setReplyingTo(null)
-      await refreshMessageInteractions(updated)
-    } catch (sendError) {
-      setError(sendError.message || 'Voice message could not be sent.')
-    } finally {
-      setSending(false)
-      setUploadProgress(null)
-      setRecordingDuration(0)
-      audioChunksRef.current = []
-    }
-  }
-
   function handleOpenMedia(attachment, list) {
     setLightboxMedia(attachment)
     setLightboxMediaList(list && list.length ? list : [attachment])
@@ -1093,11 +924,13 @@ function NetworkPage() {
 
       // If text content is empty but attachments exist, use an informative placeholder caption
       const messageContent = content || (
-        uploadedAttachments[0]?.attachment_type === 'image'
+        uploadedAttachments[0]?.attachment_type === 'photo' || uploadedAttachments[0]?.attachment_type === 'image'
           ? (uploadedAttachments.length > 1 ? `${uploadedAttachments.length} Photos` : 'Photo')
           : uploadedAttachments[0]?.attachment_type === 'video'
             ? 'Video'
-            : uploadedAttachments[0]?.file_name || 'Attachment'
+            : uploadedAttachments[0]?.attachment_type === 'audio'
+              ? '🎙️ Voice message'
+              : uploadedAttachments[0]?.original_filename || 'Attachment'
       )
 
       const { data, error: insertError } = await client
@@ -1121,7 +954,7 @@ function NetworkPage() {
           original_filename: att.original_filename,
           file_size: att.file_size,
           mime_type: att.mime_type,
-          attachment_type: att.attachment_type,
+          attachment_type: att.attachment_type === 'image' ? 'photo' : (att.attachment_type || 'file'),
           metadata: att.metadata || {},
         }))
         const { error: attInsertError } = await client
@@ -1590,120 +1423,44 @@ function NetworkPage() {
                             </div>
                           </div>
                         )}
-                        {/* Hidden Photo / Video Input */}
-                        <input
-                          ref={photoInputRef}
-                          type="file"
-                          multiple
-                          accept="image/*,video/*"
-                          style={{ display: 'none' }}
-                          onChange={handleSelectFiles}
-                        />
-
-                        {/* Hidden Document / File Input */}
                         <input
                           ref={fileInputRef}
                           type="file"
                           multiple
-                          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+                          accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
                           style={{ display: 'none' }}
                           onChange={handleSelectFiles}
                         />
-
-                        {/* Voice Recording Bar OR Standard Composer Inputs */}
-                        {isRecordingAudio ? (
-                          <div className="qv-recording-bar">
-                            <div className="qv-recording-status">
-                              <div className="qv-recording-dot" />
-                              <span className="qv-recording-time">{formatVoiceTime(recordingDuration)}</span>
-                              <div className="qv-recording-waves">
-                                <span />
-                                <span />
-                                <span />
-                                <span />
-                                <span />
-                              </div>
-                            </div>
-                            <div className="qv-recording-actions">
-                              <button
-                                type="button"
-                                className="qv-recording-cancel-btn"
-                                onClick={cancelAudioRecording}
-                                title="Discard voice recording"
-                                aria-label="Discard recording"
-                              >
-                                <Trash2 size={18} />
-                              </button>
-                              <button
-                                type="button"
-                                className="qv-recording-send-btn"
-                                onClick={stopAndSendAudioRecording}
-                                title="Send voice message"
-                                aria-label="Send voice message"
-                                disabled={sending}
-                              >
-                                {sending ? <LoaderCircle size={18} className="spinner" /> : <Send size={18} />}
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="network-message-input-row">
-                            {/* 1. Dedicated Photo / Video Button */}
-                            <button
-                              type="button"
-                              className="network-composer-action-btn"
-                              onClick={() => photoInputRef.current?.click()}
-                              aria-label="Attach photos or videos"
-                              title="Photo / Video"
-                              disabled={sending}
-                            >
-                              <ImageIcon size={18} />
-                            </button>
-
-                            {/* 2. Dedicated Voice Message Button */}
-                            <button
-                              type="button"
-                              className="network-composer-action-btn"
-                              onClick={startAudioRecording}
-                              aria-label="Record voice message"
-                              title="Voice message"
-                              disabled={sending}
-                            >
-                              <Mic size={18} />
-                            </button>
-
-                            {/* 3. Dedicated File Attachment Button */}
-                            <button
-                              type="button"
-                              className="network-composer-action-btn"
-                              onClick={() => fileInputRef.current?.click()}
-                              aria-label="Attach document or file"
-                              title="Attach file"
-                              disabled={sending}
-                            >
-                              <Paperclip size={18} />
-                            </button>
-
-                            <textarea
-                              aria-label="Message"
-                              maxLength={4000}
-                              onChange={(event) => { setDraft(event.target.value); sendTypingSignal() }}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                                  event.preventDefault()
-                                  event.currentTarget.form.requestSubmit()
-                                }
-                              }}
-                              placeholder={pendingFiles.length > 0 ? "Add a caption... (optional, Enter to send)" : "Write a message... (Enter to send, Shift+Enter for a new line)"}
-                              rows={2}
-                              value={draft}
-                            />
-                            <EmojiPicker onSelect={(emoji) => { setDraft((current) => `${current}${emoji}`); sendTypingSignal() }} />
-                            <button type="submit" disabled={(!draft.trim() && pendingFiles.length === 0) || sending} aria-label="Send message">
-                              {sending ? <LoaderCircle size={18} className="spinner" /> : <Send size={18} />}
-                            </button>
-                          </div>
-                        )}
+                        <div className="network-message-input-row">
+                          <button
+                            type="button"
+                            className="network-attachment-button"
+                            onClick={() => fileInputRef.current?.click()}
+                            aria-label="Add attachments"
+                            title="Attach photos, videos, or files"
+                            disabled={sending}
+                          >
+                            <Paperclip size={18} />
+                          </button>
+                          <textarea
+                            aria-label="Message"
+                            maxLength={4000}
+                            onChange={(event) => { setDraft(event.target.value); sendTypingSignal() }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                                event.preventDefault()
+                                event.currentTarget.form.requestSubmit()
+                              }
+                            }}
+                            placeholder={pendingFiles.length > 0 ? "Add a caption... (optional, Enter to send)" : "Write a message... (Enter to send, Shift+Enter for a new line)"}
+                            rows={2}
+                            value={draft}
+                          />
+                          <EmojiPicker onSelect={(emoji) => { setDraft((current) => `${current}${emoji}`); sendTypingSignal() }} />
+                          <button type="submit" disabled={(!draft.trim() && pendingFiles.length === 0) || sending} aria-label="Send message">
+                            {sending ? <LoaderCircle size={18} className="spinner" /> : <Send size={18} />}
+                          </button>
+                        </div>
                       </form>
                       <SharedMediaPanel
                         conversationId={activeConversation.id}

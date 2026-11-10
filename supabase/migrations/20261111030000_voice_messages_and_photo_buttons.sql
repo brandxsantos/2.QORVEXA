@@ -5,11 +5,11 @@
 
 begin;
 
--- 1. Extend attachment_type constraint to include 'audio'
+-- 1. Extend attachment_type constraint to include 'audio', 'image', and 'document'
 alter table public.message_attachments drop constraint if exists message_attachments_attachment_type_check;
 
 alter table public.message_attachments add constraint message_attachments_attachment_type_check
-  check (attachment_type in ('photo', 'video', 'file', 'audio'));
+  check (attachment_type in ('photo', 'image', 'video', 'file', 'audio', 'document'));
 
 -- 2. Update storage bucket allowed mime types for audio formats
 update storage.buckets
@@ -48,10 +48,10 @@ as $$
     latest.id,
     case
       when latest.content is not null and btrim(latest.content) <> '' then latest.content
-      when latest_att.attachment_type = 'photo' then '📷 Photo'
+      when latest_att.attachment_type in ('photo', 'image') then '📷 Photo'
       when latest_att.attachment_type = 'video' then '🎥 Video'
       when latest_att.attachment_type = 'audio' then '🎙️ Voice message'
-      when latest_att.attachment_type = 'file' then '📎 ' || coalesce(latest_att.original_filename, 'File')
+      when latest_att.attachment_type in ('file', 'document') then '📎 ' || coalesce(latest_att.original_filename, 'File')
       else ''
     end,
     latest.sender_id,
