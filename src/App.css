@@ -5348,7 +5348,8 @@
   border-color: rgb(0 229 255 / 55%);
 }
 
-.network-message-form > button {
+.network-message-form > button,
+.network-message-input-row > button[type="submit"] {
   display: grid;
   width: 2.7rem;
   height: 2.7rem;
@@ -5361,7 +5362,8 @@
   cursor: pointer;
 }
 
-.network-message-form > button:disabled {
+.network-message-form > button:disabled,
+.network-message-input-row > button[type="submit"]:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -8806,7 +8808,8 @@
   color: #8999ad;
 }
 
-.network-message-form > button {
+.network-message-form > button,
+.network-message-input-row > button[type="submit"] {
   width: 2.85rem;
   height: 2.85rem;
   border-radius: 50%;
@@ -8814,7 +8817,8 @@
   transition: filter 160ms ease, transform 160ms ease;
 }
 
-.network-message-form > button:hover:not(:disabled) {
+.network-message-form > button:hover:not(:disabled),
+.network-message-input-row > button[type="submit"]:hover:not(:disabled) {
   filter: brightness(1.12);
   transform: translateY(-1px);
 }
@@ -10302,6 +10306,22 @@
   background: #E0F2FE;
   color: #0284C7;
   border-color: #BAE6FD;
+}
+
+@media (max-width: 600px) {
+  .network-message-input-row {
+    gap: 0.35rem;
+  }
+  .network-attachment-button,
+  .network-composer-action-btn {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+  .network-message-form > button,
+  .network-message-input-row > button[type="submit"] {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
 }
 
 /* Composer Attachments Pre-send Tray */
