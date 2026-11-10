@@ -1,7 +1,13 @@
 -- QORVEXA: INSTANTS FEATURE MIGRATION
 -- Camera-first spontaneous photo sharing with view-once and 24-hour expiration.
 
--- 1. Close Friends Table
+create schema if not exists qorvexa_private;
+
+-- ============================================================================
+-- 1. TABLES (Created first before cross-table policies/helpers)
+-- ============================================================================
+
+-- 1a. Close Friends Table
 create table if not exists public.close_friends (
   user_id uuid not null references public.profiles(id) on delete cascade,
   friend_id uuid not null references public.profiles(id) on delete cascade,
@@ -13,17 +19,7 @@ create table if not exists public.close_friends (
 create index if not exists close_friends_user_idx on public.close_friends (user_id);
 create index if not exists close_friends_friend_idx on public.close_friends (friend_id);
 
-alter table public.close_friends enable row level security;
-revoke all on public.close_friends from public, anon;
-grant select, insert, delete on public.close_friends to authenticated;
-
-drop policy if exists "Users can manage own close friends" on public.close_friends;
-create policy "Users can manage own close friends"
-  on public.close_friends for all to authenticated
-  using (user_id = (select auth.uid()))
-  with check (user_id = (select auth.uid()));
-
--- 2. Instants Table
+-- 1b. Instants Table
 create table if not exists public.instants (
   id uuid primary key default gen_random_uuid(),
   sender_id uuid not null references public.profiles(id) on delete cascade,
@@ -38,27 +34,7 @@ create table if not exists public.instants (
 create index if not exists instants_sender_idx on public.instants (sender_id, created_at desc);
 create index if not exists instants_expires_idx on public.instants (expires_at);
 
-alter table public.instants enable row level security;
-revoke all on public.instants from public, anon;
-grant select on public.instants to authenticated;
-
-drop policy if exists "Members can read visible instants" on public.instants;
-create policy "Members can read visible instants"
-  on public.instants for select to authenticated
-  using (
-    sender_id = (select auth.uid())
-    or exists (
-      select 1 from public.instant_recipients ir
-      where ir.instant_id = id and ir.recipient_id = (select auth.uid())
-    )
-  );
-
-drop policy if exists "Senders can delete own instants" on public.instants;
-create policy "Senders can delete own instants"
-  on public.instants for delete to authenticated
-  using (sender_id = (select auth.uid()));
-
--- 3. Instant Recipients Table (Tracks View-Once and Delivery per recipient)
+-- 1c. Instant Recipients Table (Tracks View-Once and Delivery per recipient)
 create table if not exists public.instant_recipients (
   id uuid primary key default gen_random_uuid(),
   instant_id uuid not null references public.instants(id) on delete cascade,
@@ -72,22 +48,7 @@ create table if not exists public.instant_recipients (
 create index if not exists instant_recipients_user_idx on public.instant_recipients (recipient_id, is_viewed, created_at desc);
 create index if not exists instant_recipients_instant_idx on public.instant_recipients (instant_id);
 
-alter table public.instant_recipients enable row level security;
-revoke all on public.instant_recipients from public, anon;
-grant select on public.instant_recipients to authenticated;
-
-drop policy if exists "Recipients and senders can read recipient state" on public.instant_recipients;
-create policy "Recipients and senders can read recipient state"
-  on public.instant_recipients for select to authenticated
-  using (
-    recipient_id = (select auth.uid())
-    or exists (
-      select 1 from public.instants i
-      where i.id = instant_id and i.sender_id = (select auth.uid())
-    )
-  );
-
--- 4. Instant Reactions Table
+-- 1d. Instant Reactions Table
 create table if not exists public.instant_reactions (
   id uuid primary key default gen_random_uuid(),
   instant_id uuid not null references public.instants(id) on delete cascade,
@@ -99,6 +60,126 @@ create table if not exists public.instant_reactions (
 
 create index if not exists instant_reactions_instant_idx on public.instant_reactions (instant_id);
 
+-- ============================================================================
+-- 2. PRIVATE SECURITY HELPERS (Prevents RLS infinite recursion across tables)
+-- ============================================================================
+
+create or replace function qorvexa_private.is_instant_sender(
+  p_instant_id uuid,
+  p_user_id uuid default auth.uid()
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.instants i
+    where i.id = p_instant_id
+      and i.sender_id = coalesce(p_user_id, auth.uid())
+  );
+$$;
+
+revoke all on function qorvexa_private.is_instant_sender(uuid, uuid) from public, anon;
+grant execute on function qorvexa_private.is_instant_sender(uuid, uuid) to authenticated;
+
+create or replace function qorvexa_private.is_instant_recipient(
+  p_instant_id uuid,
+  p_user_id uuid default auth.uid()
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.instant_recipients ir
+    where ir.instant_id = p_instant_id
+      and ir.recipient_id = coalesce(p_user_id, auth.uid())
+  );
+$$;
+
+revoke all on function qorvexa_private.is_instant_recipient(uuid, uuid) from public, anon;
+grant execute on function qorvexa_private.is_instant_recipient(uuid, uuid) to authenticated;
+
+create or replace function qorvexa_private.can_access_instant_photo(
+  p_image_path text,
+  p_user_id uuid default auth.uid()
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.instants i
+    join public.instant_recipients ir on ir.instant_id = i.id
+    where ir.recipient_id = coalesce(p_user_id, auth.uid())
+      and i.image_path = p_image_path
+      and i.expires_at > now()
+      and (
+        not ir.is_viewed
+        or ir.viewed_at >= (now() - interval '2 minutes')
+      )
+  );
+$$;
+
+revoke all on function qorvexa_private.can_access_instant_photo(text, uuid) from public, anon;
+grant execute on function qorvexa_private.can_access_instant_photo(text, uuid) to authenticated;
+
+-- ============================================================================
+-- 3. ROW LEVEL SECURITY POLICIES
+-- ============================================================================
+
+-- 3a. Close Friends RLS
+alter table public.close_friends enable row level security;
+revoke all on public.close_friends from public, anon;
+grant select, insert, delete on public.close_friends to authenticated;
+
+drop policy if exists "Users can manage own close friends" on public.close_friends;
+create policy "Users can manage own close friends"
+  on public.close_friends for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+-- 3b. Instants RLS
+alter table public.instants enable row level security;
+revoke all on public.instants from public, anon;
+grant select, delete on public.instants to authenticated;
+
+drop policy if exists "Members can read visible instants" on public.instants;
+create policy "Members can read visible instants"
+  on public.instants for select to authenticated
+  using (
+    sender_id = (select auth.uid())
+    or qorvexa_private.is_instant_recipient(id, (select auth.uid()))
+  );
+
+drop policy if exists "Senders can delete own instants" on public.instants;
+create policy "Senders can delete own instants"
+  on public.instants for delete to authenticated
+  using (sender_id = (select auth.uid()));
+
+-- 3c. Instant Recipients RLS
+alter table public.instant_recipients enable row level security;
+revoke all on public.instant_recipients from public, anon;
+grant select on public.instant_recipients to authenticated;
+
+drop policy if exists "Recipients and senders can read recipient state" on public.instant_recipients;
+create policy "Recipients and senders can read recipient state"
+  on public.instant_recipients for select to authenticated
+  using (
+    recipient_id = (select auth.uid())
+    or qorvexa_private.is_instant_sender(instant_id, (select auth.uid()))
+  );
+
+-- 3d. Instant Reactions RLS
 alter table public.instant_reactions enable row level security;
 revoke all on public.instant_reactions from public, anon;
 grant select, insert, update, delete on public.instant_reactions to authenticated;
@@ -108,17 +189,8 @@ create policy "Participants can view instant reactions"
   on public.instant_reactions for select to authenticated
   using (
     user_id = (select auth.uid())
-    or exists (
-      select 1 from public.instants i
-      where i.id = instant_id
-        and (
-          i.sender_id = (select auth.uid())
-          or exists (
-            select 1 from public.instant_recipients ir
-            where ir.instant_id = i.id and ir.recipient_id = (select auth.uid())
-          )
-        )
-    )
+    or qorvexa_private.is_instant_sender(instant_id, (select auth.uid()))
+    or qorvexa_private.is_instant_recipient(instant_id, (select auth.uid()))
   );
 
 drop policy if exists "Authorized recipients or sender can react" on public.instant_reactions;
@@ -127,14 +199,8 @@ create policy "Authorized recipients or sender can react"
   with check (
     user_id = (select auth.uid())
     and (
-      exists (
-        select 1 from public.instant_recipients ir
-        where ir.instant_id = instant_id and ir.recipient_id = (select auth.uid())
-      )
-      or exists (
-        select 1 from public.instants i
-        where i.id = instant_id and i.sender_id = (select auth.uid())
-      )
+      qorvexa_private.is_instant_recipient(instant_id, (select auth.uid()))
+      or qorvexa_private.is_instant_sender(instant_id, (select auth.uid()))
     )
   );
 
@@ -149,7 +215,37 @@ create policy "Users can remove own reaction"
   on public.instant_reactions for delete to authenticated
   using (user_id = (select auth.uid()));
 
--- 5. Storage Bucket Configuration (Private qorvexa-instants bucket)
+-- ============================================================================
+-- 4. NOTIFICATIONS CONSTRAINT UPDATE
+-- ============================================================================
+
+do $$
+begin
+  if to_regclass('public.notifications') is not null then
+    alter table public.notifications
+      drop constraint if exists notifications_type_check;
+
+    alter table public.notifications
+      add constraint notifications_type_check
+      check (type in (
+        'friend_request',
+        'friend_request_accepted',
+        'post_like',
+        'comment',
+        'reply',
+        'message',
+        'new_follower',
+        'instant',
+        'instant_reaction'
+      ));
+  end if;
+end;
+$$;
+
+-- ============================================================================
+-- 5. STORAGE BUCKET CONFIGURATION (Private qorvexa-instants bucket)
+-- ============================================================================
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'qorvexa-instants',
@@ -178,14 +274,7 @@ create policy "Authorized viewers can access Instants photos"
     bucket_id = 'qorvexa-instants'
     and (
       (storage.foldername(name))[1] = (select auth.uid())::text
-      or exists (
-        select 1
-        from public.instants i
-        join public.instant_recipients ir on ir.instant_id = i.id
-        where ir.recipient_id = (select auth.uid())
-          and i.image_path = name
-          and i.expires_at > now()
-      )
+      or qorvexa_private.can_access_instant_photo(name, (select auth.uid()))
     )
   );
 
@@ -197,7 +286,10 @@ create policy "Senders can delete own Instants photos"
     and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
+-- ============================================================================
 -- 6. RPC: Create Instant
+-- ============================================================================
+
 create or replace function public.create_instant(
   p_image_path text,
   p_caption text default null,
@@ -282,6 +374,21 @@ begin
     end if;
   end if;
 
+  -- Emit non-sensitive notifications to eligible recipients if notifications table exists
+  if to_regclass('public.notifications') is not null then
+    insert into public.notifications (user_id, actor_id, type, reference_id, preview)
+    select ir.recipient_id,
+           v_sender_id,
+           'instant',
+           v_instant_id,
+           case
+             when p_audience_type = 'close_friends' then 'Close Friends Instant · View once'
+             else 'New Instant photo · View once'
+           end
+    from public.instant_recipients ir
+    where ir.instant_id = v_instant_id;
+  end if;
+
   return jsonb_build_object(
     'instant_id', v_instant_id,
     'recipient_count', v_recipient_count,
@@ -293,7 +400,10 @@ $$;
 revoke all on function public.create_instant(text, text, text) from public, anon;
 grant execute on function public.create_instant(text, text, text) to authenticated;
 
+-- ============================================================================
 -- 7. RPC: Consume and View Instant (Atomic Server-Side View-Once Enforcement)
+-- ============================================================================
+
 create or replace function public.consume_and_view_instant(p_instant_id uuid)
 returns jsonb
 language plpgsql
@@ -378,7 +488,10 @@ $$;
 revoke all on function public.consume_and_view_instant(uuid) from public, anon;
 grant execute on function public.consume_and_view_instant(uuid) to authenticated;
 
+-- ============================================================================
 -- 8. RPC: Get Active Instants Inbox (For top of Messages)
+-- ============================================================================
+
 create or replace function public.get_active_instants_inbox()
 returns jsonb
 language plpgsql
@@ -435,7 +548,10 @@ $$;
 revoke all on function public.get_active_instants_inbox() from public, anon;
 grant execute on function public.get_active_instants_inbox() to authenticated;
 
+-- ============================================================================
 -- 9. RPC: Get Sent Instants Archive (Sender's Private Archive)
+-- ============================================================================
+
 create or replace function public.get_sent_instants_archive()
 returns jsonb
 language plpgsql
@@ -509,7 +625,10 @@ $$;
 revoke all on function public.get_sent_instants_archive() from public, anon;
 grant execute on function public.get_sent_instants_archive() to authenticated;
 
+-- ============================================================================
 -- 10. RPC: Set or Remove Reaction to an Instant
+-- ============================================================================
+
 create or replace function public.set_instant_reaction(
   p_instant_id uuid,
   p_reaction text default null
@@ -521,20 +640,22 @@ set search_path = ''
 as $$
 declare
   v_user_id uuid;
+  v_sender_id uuid;
 begin
   v_user_id := auth.uid();
   if v_user_id is null then
     raise exception 'Authentication required.' using errcode = '42501';
   end if;
 
+  select sender_id into v_sender_id
+  from public.instants
+  where id = p_instant_id;
+
   -- Validate access
   if not exists (
     select 1 from public.instant_recipients ir
     where ir.instant_id = p_instant_id and ir.recipient_id = v_user_id
-  ) and not exists (
-    select 1 from public.instants i
-    where i.id = p_instant_id and i.sender_id = v_user_id
-  ) then
+  ) and v_sender_id is distinct from v_user_id then
     raise exception 'Not authorized to react to this Instant.';
   end if;
 
@@ -549,6 +670,12 @@ begin
   on conflict (instant_id, user_id)
   do update set reaction = excluded.reaction, created_at = now();
 
+  -- Notify sender if recipient reacted
+  if v_sender_id is not null and v_sender_id <> v_user_id and to_regclass('public.notifications') is not null then
+    insert into public.notifications (user_id, actor_id, type, reference_id, preview)
+    values (v_sender_id, v_user_id, 'instant_reaction', p_instant_id, 'Reacted ' || trim(p_reaction) || ' to your Instant');
+  end if;
+
   return jsonb_build_object('success', true, 'reaction', trim(p_reaction));
 end;
 $$;
@@ -556,7 +683,10 @@ $$;
 revoke all on function public.set_instant_reaction(uuid, text) from public, anon;
 grant execute on function public.set_instant_reaction(uuid, text) to authenticated;
 
+-- ============================================================================
 -- 11. RPC: Close Friends Management
+-- ============================================================================
+
 create or replace function public.get_close_friends()
 returns jsonb
 language plpgsql
@@ -638,7 +768,10 @@ $$;
 revoke all on function public.set_close_friend(uuid, boolean) from public, anon;
 grant execute on function public.set_close_friend(uuid, boolean) to authenticated;
 
--- 12. Safe Expiration Cleanup RPC
+-- ============================================================================
+-- 12. RPC: Safe Expiration Cleanup
+-- ============================================================================
+
 create or replace function public.cleanup_expired_instants()
 returns integer
 language plpgsql
@@ -667,3 +800,34 @@ $$;
 
 revoke all on function public.cleanup_expired_instants() from public, anon;
 grant execute on function public.cleanup_expired_instants() to authenticated;
+
+-- ============================================================================
+-- 13. REALTIME PUBLICATION
+-- ============================================================================
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'instants'
+    ) then
+      alter publication supabase_realtime add table public.instants;
+    end if;
+
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'instant_recipients'
+    ) then
+      alter publication supabase_realtime add table public.instant_recipients;
+    end if;
+
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'instant_reactions'
+    ) then
+      alter publication supabase_realtime add table public.instant_reactions;
+    end if;
+  end if;
+end;
+$$;

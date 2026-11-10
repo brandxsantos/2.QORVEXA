@@ -732,6 +732,10 @@ function NetworkPage() {
       navigate(`/app/messages/${encodeURIComponent(notification.conversation_id)}`)
       return
     }
+    if (notification.type === 'instant' || notification.type === 'instant_reaction') {
+      navigate('/app/messages')
+      return
+    }
 
     let postId = notification.post_id
     if (!postId && notification.type === 'post_like') postId = notification.reference_id
@@ -1105,9 +1109,11 @@ function NetworkPage() {
                     : notification.type === 'friend_request' ? 'sent you a friend request.'
                     : notification.type === 'friend_request_accepted' ? 'accepted your friend request.'
                       : notification.type === 'message' ? 'sent you a message.'
-                        : notification.type === 'post_like' ? 'liked your post.'
-                          : notification.type === 'reply' ? 'replied to your comment.'
-                            : 'commented on your post.'
+                        : notification.type === 'instant' ? 'sent you an Instant.'
+                          : notification.type === 'instant_reaction' ? 'reacted to your Instant.'
+                            : notification.type === 'post_like' ? 'liked your post.'
+                              : notification.type === 'reply' ? 'replied to your comment.'
+                                : 'commented on your post.'
                   return (
                     <article
                       className={`network-notification${notification.is_read ? '' : ' is-unread'}`}
