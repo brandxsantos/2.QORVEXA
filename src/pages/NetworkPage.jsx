@@ -544,10 +544,16 @@ function NetworkPage() {
     .map((request) => [request.receiver_id, request]))
   const profileById = useMemo(() => Object.fromEntries(profiles.map((profile) => [profile.id, profile])), [profiles])
   const activeConversation = conversations.find((conversation) => conversation.id === selectedConversationId)
-  const conversationTimeline = useMemo(() => [
-    ...messages.map((message) => ({ ...message, timelineType: 'message' })),
-    ...callReceipts.map((session) => ({ ...session, timelineType: 'call' })),
-  ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()), [messages, callReceipts])
+  const conversationTimeline = useMemo(() => {
+    const callIds = new Set(callReceipts.map((s) => s.id))
+    const textMessages = messages.filter(
+      (m) => !(m.call_session_id && callIds.has(m.call_session_id)) && m.message_type !== 'call'
+    )
+    return [
+      ...textMessages.map((message) => ({ ...message, timelineType: 'message' })),
+      ...callReceipts.map((session) => ({ ...session, timelineType: 'call' })),
+    ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  }, [messages, callReceipts])
   const watchedPresenceIds = new Set(presenceTargetIds.split(',').filter(Boolean))
   const profileAvailability = (profile) => !profile || !watchedPresenceIds.has(profile.id)
     ? undefined

@@ -1,4 +1,4 @@
-﻿import { Phone, Video } from 'lucide-react'
+import { Phone, Video, PhoneMissed, PhoneOff } from 'lucide-react'
 import './CallReceipt.css'
 
 function formatDuration(acceptedAt, endedAt) {
@@ -62,16 +62,24 @@ function getCallLabel(session, currentUserId) {
 export default function CallReceipt({ session, currentUserId }) {
   if (!session || !currentUserId) return null
 
+  const isCaller = session.caller_id === currentUserId
   const isVideo = session.call_type === 'video'
-  const Icon = isVideo ? Video : Phone
+  const isMissed = ['expired', 'declined', 'cancelled'].includes(session.status)
   const { label, duration } = getCallLabel(session, currentUserId)
   const timestamp = session.created_at
 
+  const getIcon = () => {
+    if (isMissed) {
+      return !isCaller ? <PhoneMissed size={17} /> : <PhoneOff size={17} />
+    }
+    return isVideo ? <Video size={17} /> : <Phone size={17} />
+  }
+
   return (
-    <div className="q-call-receipt" role="note">
+    <div className={`q-call-receipt ${isCaller ? 'q-call-receipt--own' : 'q-call-receipt--peer'} ${isMissed ? 'q-call-receipt--missed' : ''}`} role="note">
       <div className="q-call-receipt-card">
-        <span className="q-call-receipt-icon" aria-hidden="true">
-          <Icon size={17} />
+        <span className={`q-call-receipt-icon ${isMissed ? 'q-call-receipt-icon--missed' : ''}`} aria-hidden="true">
+          {getIcon()}
         </span>
         <span className="q-call-receipt-details">
           <span className="q-call-receipt-label">

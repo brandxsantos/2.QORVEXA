@@ -1,4 +1,4 @@
-﻿.q-call-receipt {
+.q-call-receipt {
   display: flex;
   justify-content: center;
   width: 100%;
@@ -26,6 +26,15 @@
   border-radius: 50%;
   background: rgb(14 165 233 / 16%);
   color: #67e8f9;
+}
+
+.q-call-receipt-icon--missed {
+  background: rgb(244 63 94 / 16%);
+  color: #f43f5e;
+}
+
+.q-call-receipt--missed .q-call-receipt-card {
+  border-color: rgb(244 63 94 / 22%);
 }
 
 .q-call-receipt-details {

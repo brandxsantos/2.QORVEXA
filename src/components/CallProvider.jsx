@@ -12,6 +12,9 @@ import {
   playCallEndSound,
 } from '../lib/callSounds.js'
 
+const DEFAULT_ICE_SERVERS = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
+]
 
 export function CallProvider({ children }) {
   const { user } = useAuth()
@@ -36,6 +39,7 @@ export function CallProvider({ children }) {
   const acceptCallInProgressRef = useRef(false)
   const respondInProgressRef = useRef(false)
   const endedSoundCallIdRef = useRef(null)
+  const readyIntervalRef = useRef(null)
 
   const playCallEndOnce = useCallback(callId => {
     if (!callId || endedSoundCallIdRef.current === callId) return
@@ -88,6 +92,11 @@ export function CallProvider({ children }) {
 
   const closeConnection = useCallback(async () => {
     setConnectionState('new')
+    if (readyIntervalRef.current) {
+      clearInterval(readyIntervalRef.current)
+      readyIntervalRef.current = null
+    }
+
     if (channelRef.current) {
       const channel = channelRef.current
       channelRef.current = null
@@ -112,18 +121,36 @@ export function CallProvider({ children }) {
     callRef.current = null
   }, [closeConnection, playCallEndOnce])
 
-  const sendSignal = useCallback(async (event, payload) => {
+  const sendSignal = useCallback(async (event, payload = {}) => {
     const channel = channelRef.current
     if (!channel) return
+
+    const normalizedPayload = {
+      event,
+      type: event,
+      ...payload,
+    }
+
+    if (payload.description) {
+      normalizedPayload.sdp = payload.description
+    } else if (payload.sdp) {
+      normalizedPayload.description = payload.sdp
+    }
+
+    if (payload.candidate) {
+      normalizedPayload.ice = payload.candidate
+    } else if (payload.ice) {
+      normalizedPayload.candidate = payload.ice
+    }
 
     const result = await channel.send({
       type: 'broadcast',
       event: 'signal',
-      payload: { event, ...payload },
+      payload: normalizedPayload,
     })
 
     if (result !== 'ok') {
-      console.warn('Call signaling delivery:', result)
+      console.warn('[QORVEXA WebRTC] Call signaling delivery:', result)
     }
   }, [])
 
@@ -135,9 +162,9 @@ export function CallProvider({ children }) {
 
     for (const candidate of pending) {
       try {
-        await peer.addIceCandidate(candidate)
+        await peer.addIceCandidate(new RTCIceCandidate(candidate))
       } catch (error) {
-        console.warn('Unable to apply queued ICE candidate:', error)
+        console.warn('[QORVEXA WebRTC] Unable to apply queued ICE candidate:', error)
       }
     }
   }, [])
@@ -153,7 +180,7 @@ export function CallProvider({ children }) {
     setCallError('')
     pendingIceRef.current = []
 
-    let iceServers
+    let iceServers = [...DEFAULT_ICE_SERVERS]
 
     try {
       const { data: turnData, error: turnError } = await client.functions.invoke(
@@ -163,21 +190,14 @@ export function CallProvider({ children }) {
 
       if (turnError) throw turnError
 
-      if (!Array.isArray(turnData?.iceServers) || turnData.iceServers.length === 0) {
-        throw new Error('The call network service returned no ICE servers.')
+      if (Array.isArray(turnData?.iceServers) && turnData.iceServers.length > 0) {
+        iceServers = [...turnData.iceServers, ...DEFAULT_ICE_SERVERS]
+        console.info('[QORVEXA WebRTC] TURN credentials loaded with STUN fallback:', {
+          serverCount: iceServers.length,
+        })
       }
-
-      iceServers = turnData.iceServers
-
-      console.info('[QORVEXA WebRTC] TURN credentials loaded:', {
-        serverCount: iceServers.length,
-      })
     } catch (error) {
-      connectedCallIdRef.current = null
-      setConnectionState('failed')
-      console.error('[QORVEXA WebRTC] Unable to load TURN credentials:', error)
-      setCallError(error.message || 'Unable to prepare the call network connection.')
-      return
+      console.warn('[QORVEXA WebRTC] Unable to load TURN credentials, proceeding with Google STUN fallback:', error.message)
     }
 
     const peer = new RTCPeerConnection({ iceServers })
@@ -224,6 +244,7 @@ export function CallProvider({ children }) {
       if (event.candidate) {
         sendSignal('ice', {
           candidate: event.candidate.toJSON(),
+          ice: event.candidate.toJSON(),
         })
       }
     }
@@ -240,7 +261,12 @@ export function CallProvider({ children }) {
       console.info('[QORVEXA WebRTC] Peer connection state:', peer.connectionState)
       setConnectionState(peer.connectionState)
 
-      if (peer.connectionState === 'failed') {
+      if (peer.connectionState === 'connected') {
+        if (readyIntervalRef.current) {
+          clearInterval(readyIntervalRef.current)
+          readyIntervalRef.current = null
+        }
+      } else if (peer.connectionState === 'failed') {
         setCallError('The connection was interrupted. Please end the call and try again.')
       }
     }
@@ -268,13 +294,21 @@ export function CallProvider({ children }) {
         .on('broadcast', { event: 'signal' }, async ({ payload }) => {
           if (!payload || peerRef.current !== peer) return
 
+          const eventType = payload.event || payload.type
+          const sdpDesc = payload.description || payload.sdp
+          const candidateData = payload.candidate || payload.ice
+
           try {
-            if (payload.event === 'ready') {
-              if (isCaller && payload.role === 'callee' && !offerStartedRef.current) {
+            if (eventType === 'ready') {
+              if (isCaller && payload.role === 'callee' && !offerStartedRef.current && peer.signalingState === 'stable') {
                 offerStartedRef.current = true
+                if (readyIntervalRef.current) {
+                  clearInterval(readyIntervalRef.current)
+                  readyIntervalRef.current = null
+                }
                 const offer = await peer.createOffer()
                 await peer.setLocalDescription(offer)
-                await sendSignal('offer', { description: peer.localDescription })
+                await sendSignal('offer', { description: peer.localDescription, sdp: peer.localDescription })
               }
 
               if (!isCaller && payload.role === 'caller') {
@@ -282,37 +316,66 @@ export function CallProvider({ children }) {
               }
             }
 
-            if (payload.event === 'offer' && !isCaller) {
-              await peer.setRemoteDescription(payload.description)
-              await flushPendingIce()
+            if (eventType === 'offer' && !isCaller) {
+              if (readyIntervalRef.current) {
+                clearInterval(readyIntervalRef.current)
+                readyIntervalRef.current = null
+              }
 
-              const answer = await peer.createAnswer()
-              await peer.setLocalDescription(answer)
-              await sendSignal('answer', { description: peer.localDescription })
+              if (peer.signalingState === 'stable') {
+                await peer.setRemoteDescription(new RTCSessionDescription(sdpDesc))
+                await flushPendingIce()
+
+                const answer = await peer.createAnswer()
+                await peer.setLocalDescription(answer)
+                await sendSignal('answer', { description: peer.localDescription, sdp: peer.localDescription })
+              }
             }
 
-            if (payload.event === 'answer' && isCaller) {
-              await peer.setRemoteDescription(payload.description)
-              await flushPendingIce()
+            if (eventType === 'answer' && isCaller) {
+              if (peer.signalingState === 'have-local-offer') {
+                await peer.setRemoteDescription(new RTCSessionDescription(sdpDesc))
+                await flushPendingIce()
+              }
             }
 
-            if (payload.event === 'ice' && payload.candidate) {
-              if (peer.remoteDescription) {
-                await peer.addIceCandidate(payload.candidate)
+            if ((eventType === 'ice' || eventType === 'candidate') && candidateData) {
+              if (peer.remoteDescription && peer.remoteDescription.type) {
+                try {
+                  await peer.addIceCandidate(new RTCIceCandidate(candidateData))
+                } catch (candidateErr) {
+                  console.warn('[QORVEXA WebRTC] Unable to apply ICE candidate:', candidateErr)
+                }
               } else {
-                pendingIceRef.current.push(payload.candidate)
+                pendingIceRef.current.push(candidateData)
               }
             }
           } catch (error) {
-            console.error('Call signaling error:', error)
+            console.error('[QORVEXA WebRTC] Call signaling error:', error)
             setCallError(error.message || 'Call connection failed.')
           }
         })
         .subscribe(status => {
           if (status === 'SUBSCRIBED') {
-            sendSignal('ready', {
-              role: isCaller ? 'caller' : 'callee',
-            })
+            if (!isCaller) {
+              let pulseCount = 0
+              const pulseReady = () => {
+                if (!peerRef.current || peer.remoteDescription || pulseCount >= 30) {
+                  if (readyIntervalRef.current) {
+                    clearInterval(readyIntervalRef.current)
+                    readyIntervalRef.current = null
+                  }
+                  return
+                }
+                pulseCount += 1
+                sendSignal('ready', { role: 'callee' })
+              }
+
+              pulseReady()
+              readyIntervalRef.current = setInterval(pulseReady, 800)
+            } else {
+              sendSignal('ready', { role: 'caller' })
+            }
           }
 
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -637,6 +700,11 @@ export function CallProvider({ children }) {
 
   useEffect(() => {
     return () => {
+      if (readyIntervalRef.current) {
+        clearInterval(readyIntervalRef.current)
+        readyIntervalRef.current = null
+      }
+
       const channel = channelRef.current
       channelRef.current = null
 
