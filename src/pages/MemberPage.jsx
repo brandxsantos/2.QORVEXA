@@ -847,6 +847,9 @@ function MemberPage() {
                         <div className="member-post-header-author">
                           <div className="member-post-author-name">
                             {authorProfile ? <Link to={authorProfile}><strong>{authorName}</strong></Link> : <strong>{authorName}</strong>}
+                            {post.media_path?.includes('/avatars/') && (
+                              <span className="member-post-action-subtext"> updated their profile picture</span>
+                            )}
                           </div>
                           <div className="member-post-author-sub">
                             {author?.username && <Link to={authorProfile} className="member-post-username">@{author.username}</Link>}
@@ -893,7 +896,19 @@ function MemberPage() {
                       </div>
                       {post.author_id === user.id && <span className="public-post-audience"><ShieldCheck size={12} />{post.post_visibility === 'only_me' ? 'Only me' : post.post_visibility === 'friends' ? 'Friends' : 'Public'}</span>}
                       {post.content && <p className="member-post-content"><LinkedText text={post.content} /></p>}
-                      {post.media_path && <Link to={`/post/${post.id}`} className="member-post-media-link"><ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to post" loading="lazy" /></Link>}
+                      {post.media_path && (
+                        <Link
+                          to={`/post/${post.id}`}
+                          className={`member-post-media-link ${post.media_path.includes('/avatars/') ? 'member-post-media-link--avatar-post' : ''}`}
+                        >
+                          <ProtectedMediaImage
+                            className={`member-post-media ${post.media_path.includes('/avatars/') ? 'member-post-media--avatar-post' : ''}`}
+                            path={post.media_path}
+                            alt="Image attached to post"
+                            loading="lazy"
+                          />
+                        </Link>
+                      )}
                       <div className="member-post-footer member-post-action-bar">
                         <PostReactionButton
                           reaction={postReactions[post.id]}
@@ -1065,18 +1080,24 @@ function MemberPage() {
           setCropModalOpen(false)
           setSelectedCropFile(null)
         }}
-        onSuccess={(newPath) => {
+        onSuccess={(newPath, newPost) => {
           setMemberProfile((current) => current ? { ...current, avatar_url: newPath } : current)
-          setPosts((currentPosts) => currentPosts.map((post) => {
-            if (post.author_id === user?.id) {
-              return {
-                ...post,
-                profiles: { ...post.profiles, avatar_url: newPath },
+          setPosts((currentPosts) => {
+            const updated = currentPosts.map((post) => {
+              if (post.author_id === user?.id) {
+                return {
+                  ...post,
+                  profiles: { ...post.profiles, avatar_url: newPath },
+                }
               }
+              return post
+            })
+            if (newPost) {
+              return [newPost, ...updated]
             }
-            return post
-          }))
-          setNotificationToast('Profile picture updated.')
+            return updated
+          })
+          setNotificationToast('Profile picture updated and posted to timeline.')
         }}
       />
     </main>

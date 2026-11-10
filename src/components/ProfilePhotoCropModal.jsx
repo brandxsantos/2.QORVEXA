@@ -12,6 +12,10 @@ import {
   LoaderCircle,
   Camera,
   Eye,
+  Globe,
+  Users,
+  Lock,
+  ChevronDown,
 } from 'lucide-react'
 import { getSupabaseClient } from '../lib/supabase.js'
 import './ProfilePhotoCropModal.css'
@@ -19,6 +23,12 @@ import './ProfilePhotoCropModal.css'
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_FILE_BYTES = 8 * 1024 * 1024 // 8 MB
 const TARGET_SIZE = 512
+
+const AUDIENCE_OPTIONS = [
+  { value: 'public', label: 'Public', description: 'Anyone on QORVEXA can see this post', Icon: Globe },
+  { value: 'friends', label: 'Friends', description: 'Only your accepted friends can see it', Icon: Users },
+  { value: 'only_me', label: 'Only me', description: 'Only visible to you', Icon: Lock },
+]
 
 /**
  * Validates basic file format and size limits.
@@ -123,6 +133,7 @@ export default function ProfilePhotoCropModal({
   isOpen,
   initialFile = null,
   userId,
+  currentAvatarUrl = '',
   _currentAvatarUrl = '',
   onClose,
   onSuccess,
@@ -134,9 +145,16 @@ export default function ProfilePhotoCropModal({
   const [previewUrl, setPreviewUrl] = useState('')
   const [previewMode, setPreviewMode] = useState(false)
   const [generatingPreview, setGeneratingPreview] = useState(false)
+  const [caption, setCaption] = useState('')
+  const [visibility, setVisibility] = useState('public')
+  const [audienceOpen, setAudienceOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
   const fileInputRef = useRef(null)
+  const audienceRef = useRef(null)
+
+  const selectedAudience = AUDIENCE_OPTIONS.find((opt) => opt.value === visibility) || AUDIENCE_OPTIONS[0]
 
   const loadFile = useCallback(async (file) => {
     setError('')
@@ -185,6 +203,9 @@ export default function ProfilePhotoCropModal({
         return ''
       })
       setPreviewMode(false)
+      setCaption('')
+      setVisibility('public')
+      setAudienceOpen(false)
       setError('')
       setLoading(false)
       return
@@ -200,12 +221,28 @@ export default function ProfilePhotoCropModal({
     if (!isOpen) return
     function handleKeyDown(e) {
       if (e.key === 'Escape' && !loading) {
+        if (audienceOpen) {
+          setAudienceOpen(false)
+          return
+        }
         onClose?.()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, loading, onClose])
+  }, [isOpen, loading, audienceOpen, onClose])
+
+  // Handle outside click for audience dropdown
+  useEffect(() => {
+    if (!audienceOpen) return
+    function handleClickOutside(e) {
+      if (audienceRef.current && !audienceRef.current.contains(e.target)) {
+        setAudienceOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [audienceOpen])
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0]
@@ -269,6 +306,7 @@ export default function ProfilePhotoCropModal({
     setError('')
 
     let uploadedPath = null
+    const previousAvatar = currentAvatarUrl || _currentAvatarUrl || null
     const client = getSupabaseClient()
 
     try {
@@ -328,7 +366,31 @@ export default function ProfilePhotoCropModal({
         throw new Error(updateError.message || updateError.error || 'Failed to update profile avatar.')
       }
 
-      // 5. Dispatch a global profile-updated event so all parts of the app update live
+      // 5. Automatically create a corresponding post using the EXISTING QORVEXA POSTS SYSTEM
+      const postSelection = 'id, author_id, content, media_path, media_type, post_visibility, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url)'
+      const trimmedCaption = caption.trim()
+
+      const { data: newPost, error: postError } = await client
+        .from('posts')
+        .insert({
+          author_id: effectiveUserId,
+          content: trimmedCaption,
+          media_path: uploadedPath,
+          media_type: 'image',
+          post_visibility: visibility,
+        })
+        .select(postSelection)
+        .single()
+
+      if (postError) {
+        console.error('[QORVEXA] Post creation error on profile photo update:', postError)
+        // Rollback: restore previous avatar url in profile and remove uploaded storage file
+        await client.from('profiles').update({ avatar_url: previousAvatar }).eq('id', effectiveUserId)
+        await client.storage.from('qorvexa-media').remove([uploadedPath])
+        throw new Error(postError.message || postError.error || 'Failed to post profile picture update to your timeline.')
+      }
+
+      // 6. Dispatch a global profile-updated event so all parts of the app update live
       window.dispatchEvent(
         new CustomEvent('qorvexa:profile-updated', {
           detail: {
@@ -338,7 +400,7 @@ export default function ProfilePhotoCropModal({
         })
       )
 
-      onSuccess?.(uploadedPath)
+      onSuccess?.(uploadedPath, newPost)
       onClose?.()
     } catch (err) {
       console.error('[QORVEXA] Error saving profile photo:', err)
@@ -432,6 +494,22 @@ export default function ProfilePhotoCropModal({
                   </div>
                 </div>
               </div>
+
+              {/* Timeline Post Preview Card */}
+              <div className="q-photo-crop-preview-card">
+                <div className="q-photo-crop-preview-card-header">
+                  <span className="q-photo-crop-preview-card-title">Timeline Post Preview</span>
+                  <span className="q-photo-crop-preview-card-audience">
+                    <selectedAudience.Icon size={12} />
+                    <span>{selectedAudience.label}</span>
+                  </span>
+                </div>
+                {caption.trim() ? (
+                  <p className="q-photo-crop-preview-caption-text">{caption.trim()}</p>
+                ) : (
+                  <p className="q-photo-crop-preview-caption-empty">No caption provided (photo-only update)</p>
+                )}
+              </div>
             </div>
           ) : (
             /* Active Cropping Workspace */
@@ -508,6 +586,71 @@ export default function ProfilePhotoCropModal({
                   </button>
                 </div>
               </div>
+
+              {/* Timeline Post Details: Audience & Caption */}
+              <div className="q-photo-crop-post-section">
+                <div className="q-photo-crop-post-header-row">
+                  <span className="q-photo-crop-post-heading">Post to Timeline</span>
+                  <div className="q-photo-crop-audience-wrap" ref={audienceRef}>
+                    <button
+                      type="button"
+                      className="q-photo-crop-audience-trigger"
+                      onClick={() => setAudienceOpen((prev) => !prev)}
+                      aria-haspopup="listbox"
+                      aria-expanded={audienceOpen}
+                      title="Select who can see this profile update post"
+                    >
+                      <selectedAudience.Icon size={13} className="q-photo-crop-audience-icon" />
+                      <span>{selectedAudience.label}</span>
+                      <ChevronDown size={13} className={`q-photo-crop-chevron ${audienceOpen ? 'is-open' : ''}`} />
+                    </button>
+                    {audienceOpen && (
+                      <div className="q-photo-crop-audience-popover" role="listbox">
+                        {AUDIENCE_OPTIONS.map((opt) => {
+                          const OptIcon = opt.Icon
+                          const isSelected = visibility === opt.value
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              className={`q-photo-crop-audience-item ${isSelected ? 'is-selected' : ''}`}
+                              onClick={() => {
+                                setVisibility(opt.value)
+                                setAudienceOpen(false)
+                              }}
+                            >
+                              <span className="q-photo-crop-audience-icon-badge">
+                                <OptIcon size={14} />
+                              </span>
+                              <div className="q-photo-crop-audience-text">
+                                <span className="q-photo-crop-audience-name">{opt.label}</span>
+                                <span className="q-photo-crop-audience-desc">{opt.description}</span>
+                              </div>
+                              {isSelected && <Check size={14} className="q-photo-crop-audience-check" />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="q-photo-crop-caption-wrap">
+                  <textarea
+                    className="q-photo-crop-caption-input"
+                    value={caption}
+                    onChange={(e) => setCaption(e.target.value.slice(0, 1000))}
+                    placeholder="Write an optional caption for your profile picture update..."
+                    rows={2}
+                    maxLength={1000}
+                  />
+                  <div className="q-photo-crop-caption-meta">
+                    <span className="q-photo-crop-char-count">{caption.length}/1,000</span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -562,7 +705,7 @@ export default function ProfilePhotoCropModal({
             {loading ? (
               <>
                 <LoaderCircle size={16} className="q-photo-crop-spinner" />
-                <span>Saving photo...</span>
+                <span>Saving &amp; Posting...</span>
               </>
             ) : (
               <>

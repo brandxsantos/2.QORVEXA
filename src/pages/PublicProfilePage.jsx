@@ -1245,18 +1245,37 @@ function PublicProfilePage() {
                     setCropModalOpen(false)
                     setSelectedCropFile(null)
                   }}
-                  onSuccess={(newPath) => {
+                  onSuccess={(newPath, newPost) => {
                     setProfile((curr) => curr ? { ...curr, avatar_url: newPath } : curr)
-                    setPosts((curr) => curr.map((post) => {
-                      if (post.author_id === user?.id) {
-                        return {
-                          ...post,
-                          profiles: { ...post.profiles, avatar_url: newPath },
+                    setPosts((curr) => {
+                      const updated = curr.map((post) => {
+                        if (post.author_id === user?.id) {
+                          return {
+                            ...post,
+                            profiles: { ...post.profiles, avatar_url: newPath },
+                          }
                         }
+                        return post
+                      })
+                      if (newPost) {
+                        return [
+                          {
+                            ...newPost,
+                            feed_entry_id: 'post:' + newPost.id,
+                            feed_created_at: newPost.created_at,
+                            is_repost: false,
+                          },
+                          ...updated,
+                        ]
                       }
-                      return post
-                    }))
-                    setNotice('Profile picture updated successfully.')
+                      return updated
+                    })
+                    if (newPost) {
+                      setPostCount((count) => count + 1)
+                      setLoadedPostCount((count) => count + 1)
+                      setLoadedAuthoredPostCount((count) => count + 1)
+                    }
+                    setNotice('Profile picture updated and posted to timeline.')
                   }}
                 />
               </>
@@ -1302,6 +1321,9 @@ function PublicProfilePage() {
                           <div className="member-post-header-author">
                             <div className="member-post-author-name">
                               <Link to={postAuthorUrl}><strong>{postAuthor.display_name || postAuthor.username}</strong></Link>
+                              {post.media_path?.includes('/avatars/') && (
+                                <span className="member-post-action-subtext"> updated their profile picture</span>
+                              )}
                             </div>
                             <div className="member-post-author-sub">
                               {postAuthor?.username && <Link to={postAuthorUrl} className="member-post-username">@{postAuthor.username}</Link>}
@@ -1345,7 +1367,20 @@ function PublicProfilePage() {
                         </div>
                         {isOwner && !post.is_repost && <span className="public-post-audience"><Shield size={12} />{post.post_visibility === 'only_me' ? 'Only me' : post.post_visibility === 'friends' ? 'Friends' : 'Public'}</span>}
                         {post.content && <p className="member-post-content"><LinkedText text={post.content} /></p>}
-                        {post.media_path && <button className="public-profile-photo-button" type="button" onClick={() => setSelectedPhoto(post.media_path)}><ProtectedMediaImage className="member-post-media" path={post.media_path} alt="Image attached to post" loading="lazy" /></button>}
+                        {post.media_path && (
+                          <button
+                            className={`public-profile-photo-button ${post.media_path.includes('/avatars/') ? 'member-post-media-link--avatar-post' : ''}`}
+                            type="button"
+                            onClick={() => setSelectedPhoto(post.media_path)}
+                          >
+                            <ProtectedMediaImage
+                              className={`member-post-media ${post.media_path.includes('/avatars/') ? 'member-post-media--avatar-post' : ''}`}
+                              path={post.media_path}
+                              alt="Image attached to post"
+                              loading="lazy"
+                            />
+                          </button>
+                        )}
                         <div className="member-post-footer member-post-action-bar">
                           <PostReactionButton
                             reaction={postReactions[post.id]}

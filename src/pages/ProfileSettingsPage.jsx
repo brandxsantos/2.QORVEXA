@@ -664,7 +664,7 @@ setPhoneVisibility(data.phone_visibility || 'only_me')
         }}
         onSuccess={(newPath) => {
           setProfile((curr) => curr ? { ...curr, avatar_url: newPath } : curr)
-          setNotice('Profile picture updated successfully.')
+          setNotice('Profile picture updated and posted to timeline.')
         }}
       />
     </main>
