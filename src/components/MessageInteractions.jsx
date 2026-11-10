@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MessageCircle, Smile } from 'lucide-react'
+import { MessageCircle, Smile, FileText, Download, Play } from 'lucide-react'
+import { formatFileSize, getFileExtension } from '../lib/messageAttachments.js'
 
 const REACTIONS = [
   { type: 'like', emoji: '👍', label: 'Like' },
@@ -16,10 +17,12 @@ export default function MessageInteractions({
   message,
   replyMessage,
   reactions = [],
+  attachments = [],
   currentUserId,
   onReply,
   onReact,
   onJump,
+  onOpenMedia,
   footer = null,
   bubbleClassName = '',
 }) {
@@ -28,6 +31,15 @@ export default function MessageInteractions({
   const triggerRef = useRef(null)
   const pickerRef = useRef(null)
   const isOwn = message.sender_id === currentUserId
+
+  const photos = attachments.filter((a) => a.attachment_type === 'photo')
+  const videos = attachments.filter((a) => a.attachment_type === 'video')
+  const files = attachments.filter((a) => a.attachment_type === 'file')
+  const hasAttachments = attachments.length > 0
+  const allMedia = [...photos, ...videos]
+
+  const isAutoFallback = hasAttachments && ['Photo', 'Video', 'Attachment'].includes(message.content?.trim())
+  const showContent = message.content && !isAutoFallback
 
   useLayoutEffect(() => {
     if (!pickerOpen) return
@@ -106,8 +118,9 @@ export default function MessageInteractions({
   }
 
   return (
-    <div className={`qv-message-layout${isOwn ? ' is-own' : ' is-incoming'}${groupedReactions.length > 0 ? ' has-reactions' : ''}`}>
-      <div className={`qv-message-bubble-content ${bubbleClassName}`.trim()}>
+    <div className={`qv-message-layout${isOwn ? ' is-own' : ' is-incoming'}${groupedReactions.length > 0 ? ' has-reactions' : ''}${hasAttachments ? ' has-attachments' : ''}`}>
+      <div className={`qv-message-bubble-content ${bubbleClassName}${hasAttachments ? ' qv-message-bubble--with-attachments' : ''}`.trim()}>
+        {/* Reply Quote Preview */}
         {replyMessage && (
           <button
             type="button"
@@ -123,8 +136,100 @@ export default function MessageInteractions({
           </button>
         )}
 
-        <p className="qv-message-content">{message.content}</p>
+        {/* 1. Photos */}
+        {photos.length > 0 && (
+          photos.length === 1 ? (
+            <div
+              className="qv-bubble-media-single"
+              onClick={() => onOpenMedia?.(photos[0], allMedia)}
+              role="button"
+              tabIndex={0}
+            >
+              <img src={photos[0].signedUrl} alt={photos[0].original_filename} loading="lazy" />
+            </div>
+          ) : (
+            <div className={`qv-bubble-media-grid grid-${Math.min(photos.length, 4)}`}>
+              {photos.slice(0, 4).map((photo, idx) => (
+                <div
+                  key={photo.id}
+                  className="qv-bubble-media-cell"
+                  onClick={() => onOpenMedia?.(photo, allMedia)}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <img src={photo.signedUrl} alt={photo.original_filename} loading="lazy" />
+                  {idx === 3 && photos.length > 4 && (
+                    <div className="qv-bubble-media-more">+{photos.length - 4}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        )}
 
+        {/* 2. Videos */}
+        {videos.length > 0 && (
+          <div className="qv-bubble-video-list">
+            {videos.map((vid) => (
+              <div
+                key={vid.id}
+                className="qv-bubble-video-card"
+                onClick={() => onOpenMedia?.(vid, allMedia)}
+                role="button"
+                tabIndex={0}
+              >
+                <video src={vid.signedUrl} preload="metadata" />
+                <div className="qv-bubble-video-overlay">
+                  <div className="qv-bubble-video-play-btn">
+                    <Play size={22} fill="white" />
+                  </div>
+                  <span className="qv-bubble-video-badge">{formatFileSize(vid.file_size)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 3. Document / File Cards */}
+        {files.length > 0 && (
+          <div className="qv-bubble-file-list">
+            {files.map((file) => (
+              <a
+                key={file.id}
+                href={file.signedUrl}
+                download={file.original_filename}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="qv-bubble-file-card"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="qv-bubble-file-icon">
+                  <FileText size={18} />
+                  <span className="qv-bubble-file-ext">{getFileExtension(file.original_filename)}</span>
+                </div>
+                <div className="qv-bubble-file-info">
+                  <span className="qv-bubble-file-name" title={file.original_filename}>{file.original_filename}</span>
+                  <span className="qv-bubble-file-size">{formatFileSize(file.file_size)}</span>
+                </div>
+                <div className="qv-bubble-file-download" title="Download file">
+                  <Download size={15} />
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
+
+        {/* 4. Text Content or Caption */}
+        {showContent && (
+          <p className={`qv-message-content${hasAttachments ? ' qv-message-caption' : ''}`}>
+            {message.content}
+          </p>
+        )}
+        {!hasAttachments && !showContent && message.content && (
+          <p className="qv-message-content">{message.content}</p>
+        )}
+
+        {/* Footer: timestamp & receipt */}
         {footer && <div className="qv-message-footer">{footer}</div>}
       </div>
 

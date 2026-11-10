@@ -10,6 +10,8 @@ import CallReceipt from './CallReceipt.jsx'
 import EmojiPicker from './EmojiPicker.jsx'
 import MessageInteractions from './MessageInteractions.jsx'
 import { loadMessageInteractions, toggleMessageReaction } from '../lib/messageInteractions.js'
+import { loadMessageAttachments } from '../lib/messageAttachments.js'
+import MediaLightboxModal from './MediaLightboxModal.jsx'
 import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
 import './FloatingChatDock.css'
 
@@ -38,6 +40,9 @@ function FloatingChatDock() {
   messagesByConversationRef.current = messagesByConversation
   const [replyMessagesByConversation, setReplyMessagesByConversation] = useState({})
   const [reactionsByConversation, setReactionsByConversation] = useState({})
+  const [attachmentsByConversation, setAttachmentsByConversation] = useState({})
+  const [lightboxMedia, setLightboxMedia] = useState(null)
+  const [lightboxMediaList, setLightboxMediaList] = useState([])
   const [replyingToByConversation, setReplyingToByConversation] = useState({})
   const [reactionWorkingIds, setReactionWorkingIds] = useState([])
 
@@ -189,6 +194,11 @@ setLoadingIds((current) => current.includes(conversationId)
       setReactionsByConversation((current) => ({
         ...current,
         [conversationId]: interactionData.reactionsByMessageId,
+      }))
+      const atts = await loadMessageAttachments(client, (loadedMessages || []).map((m) => m.id))
+      setAttachmentsByConversation((current) => ({
+        ...current,
+        [conversationId]: atts,
       }))
 
       const { error: notificationError } = await client.from('notifications')
@@ -653,7 +663,8 @@ setLoadingIds((current) => current.includes(conversationId)
 
   const refreshFloatingInteractions = useCallback(async (conversationId) => {
     const rows = messagesByConversationRef.current[conversationId] || []
-    const result = await loadMessageInteractions(getSupabaseClient(), rows)
+    const client = getSupabaseClient()
+    const result = await loadMessageInteractions(client, rows)
 
     setReplyMessagesByConversation((current) => ({
       ...current,
@@ -662,6 +673,11 @@ setLoadingIds((current) => current.includes(conversationId)
     setReactionsByConversation((current) => ({
       ...current,
       [conversationId]: result.reactionsByMessageId,
+    }))
+    const atts = await loadMessageAttachments(client, (rows || []).map((m) => m.id))
+    setAttachmentsByConversation((current) => ({
+      ...current,
+      [conversationId]: atts,
     }))
   }, [])
 
@@ -860,6 +876,7 @@ setLoadingIds((current) => current.includes(conversationId)
                         message={item}
                         replyMessage={replyMessagesByConversation[conversationId]?.[item.reply_to_message_id]}
                         reactions={reactionsByConversation[conversationId]?.[item.id] || []}
+                        attachments={attachmentsByConversation[conversationId]?.[item.id] || []}
                         currentUserId={user.id}
                         onReply={(message) => setReplyingToByConversation((current) => ({
                           ...current,
@@ -867,6 +884,10 @@ setLoadingIds((current) => current.includes(conversationId)
                         }))}
                         onReact={(message, type) => handleFloatingReaction(conversationId, message, type)}
                         onJump={(messageId) => jumpToFloatingMessage(conversationId, messageId)}
+                        onOpenMedia={(attachment, list) => {
+                          setLightboxMedia(attachment)
+                          setLightboxMediaList(list && list.length ? list : [attachment])
+                        }}
                       />
                     </div>
                   ))}
@@ -1258,6 +1279,13 @@ setLoadingIds((current) => current.includes(conversationId)
           )}
         </button>
       </div>
+
+      <MediaLightboxModal
+        isOpen={Boolean(lightboxMedia)}
+        activeMedia={lightboxMedia}
+        mediaList={lightboxMediaList}
+        onClose={() => setLightboxMedia(null)}
+      />
     </div>
   )
 }

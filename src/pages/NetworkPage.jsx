@@ -8,6 +8,8 @@ import {
   CheckCheck,
   Clock3,
   Compass,
+  Images,
+  Paperclip,
   Rss,
   LoaderCircle,
   LogOut,
@@ -39,6 +41,9 @@ import AccountMenu from '../components/AccountMenu.jsx'
 import EmojiPicker from '../components/EmojiPicker.jsx'
 import MessageInteractions from '../components/MessageInteractions.jsx'
 import { loadMessageInteractions, toggleMessageReaction } from '../lib/messageInteractions.js'
+import { uploadAttachmentFile, loadMessageAttachments } from '../lib/messageAttachments.js'
+import MediaLightboxModal from '../components/MediaLightboxModal.jsx'
+import SharedMediaPanel from '../components/SharedMediaPanel.jsx'
 import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
 import InstantsBar from '../components/instants/InstantsBar.jsx'
 
@@ -128,6 +133,13 @@ function NetworkPage() {
   messagesRef.current = messages
   const [replyMessagesById, setReplyMessagesById] = useState({})
   const [reactionsByMessageId, setReactionsByMessageId] = useState({})
+  const [attachmentsByMessageId, setAttachmentsByMessageId] = useState({})
+  const [pendingFiles, setPendingFiles] = useState([])
+  const [uploadProgress, setUploadProgress] = useState(null)
+  const [lightboxMedia, setLightboxMedia] = useState(null)
+  const [lightboxMediaList, setLightboxMediaList] = useState([])
+  const [showSharedMedia, setShowSharedMedia] = useState(false)
+  const fileInputRef = useRef(null)
   const [replyingTo, setReplyingTo] = useState(null)
   const [reactionWorkingId, setReactionWorkingId] = useState('')
   const [callReceipts, setCallReceipts] = useState([])
@@ -258,9 +270,12 @@ function NetworkPage() {
   }, [])
 
   const refreshMessageInteractions = useCallback(async (rows) => {
-    const result = await loadMessageInteractions(getSupabaseClient(), rows || [])
+    const client = getSupabaseClient()
+    const result = await loadMessageInteractions(client, rows || [])
     setReplyMessagesById(result.replyMessagesById)
     setReactionsByMessageId(result.reactionsByMessageId)
+    const attachments = await loadMessageAttachments(client, (rows || []).map((m) => m.id))
+    setAttachmentsByMessageId(attachments)
   }, [])
   const loadMessages = useCallback(async (conversationId) => {
     if (!conversationId) {
@@ -448,6 +463,14 @@ function NetworkPage() {
         event: '*',
         schema: 'public',
         table: 'message_reactions',
+      }, () => {
+        refreshMessageInteractions(messagesRef.current)
+          .catch((loadError) => setError(loadError.message))
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'message_attachments',
       }, () => {
         refreshMessageInteractions(messagesRef.current)
           .catch((loadError) => setError(loadError.message))
@@ -833,32 +856,129 @@ function NetworkPage() {
       setError(jumpError.message || 'Original message could not be opened.')
     }
   }
+
+  function handleSelectFiles(event) {
+    const selected = Array.from(event.target.files || [])
+    if (!selected.length) return
+    const newItems = selected.map((file) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      file,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+    }))
+    setPendingFiles((prev) => [...prev, ...newItems].slice(0, 10))
+    event.target.value = ''
+  }
+
+  function handleRemovePendingFile(id) {
+    setPendingFiles((prev) => {
+      const target = prev.find((item) => item.id === id)
+      if (target?.previewUrl) {
+        try { URL.revokeObjectURL(target.previewUrl) } catch (_) {}
+      }
+      return prev.filter((item) => item.id !== id)
+    })
+  }
+
+  function handleOpenMedia(attachment, list) {
+    setLightboxMedia(attachment)
+    setLightboxMediaList(list && list.length ? list : [attachment])
+  }
+
   async function handleSendMessage(event) {
-    event.preventDefault()
+    event?.preventDefault?.()
     const content = draft.trim()
-    if (!content || sending || !activeConversation) return
+    if ((!content && pendingFiles.length === 0) || sending || !activeConversation) return
     setSending(true)
     setError('')
     try {
-      const { data, error: insertError } = await getSupabaseClient()
+      const client = getSupabaseClient()
+      const uploadedAttachments = []
+
+      if (pendingFiles.length > 0) {
+        for (let i = 0; i < pendingFiles.length; i++) {
+          const item = pendingFiles[i]
+          setUploadProgress({
+            current: i + 1,
+            total: pendingFiles.length,
+            percent: Math.round(((i) / pendingFiles.length) * 100),
+            name: item.name,
+          })
+          const uploaded = await uploadAttachmentFile(
+            client,
+            activeConversation.id,
+            user.id,
+            item.file
+          )
+          uploadedAttachments.push(uploaded)
+        }
+        setUploadProgress({
+          current: pendingFiles.length,
+          total: pendingFiles.length,
+          percent: 100,
+          name: '',
+        })
+      }
+
+      // If text content is empty but attachments exist, use an informative placeholder caption
+      const messageContent = content || (
+        uploadedAttachments[0]?.attachment_type === 'image'
+          ? (uploadedAttachments.length > 1 ? `${uploadedAttachments.length} Photos` : 'Photo')
+          : uploadedAttachments[0]?.attachment_type === 'video'
+            ? 'Video'
+            : uploadedAttachments[0]?.file_name || 'Attachment'
+      )
+
+      const { data, error: insertError } = await client
         .from('messages')
         .insert({
           conversation_id: activeConversation.id,
           sender_id: user.id,
-          content,
+          content: messageContent,
           reply_to_message_id: replyingTo?.id || null,
         })
         .select(messageFields)
         .single()
       if (insertError) throw insertError
-      setMessages((current) => current.some((message) => message.id === data.id) ? current : [...current, data])
+
+      if (uploadedAttachments.length > 0) {
+        const rowsToInsert = uploadedAttachments.map((att) => ({
+          message_id: data.id,
+          conversation_id: activeConversation.id,
+          sender_id: user.id,
+          file_path: att.file_path,
+          file_name: att.file_name,
+          file_size: att.file_size,
+          mime_type: att.mime_type,
+          attachment_type: att.attachment_type,
+        }))
+        const { error: attInsertError } = await client
+          .from('message_attachments')
+          .insert(rowsToInsert)
+        if (attInsertError) throw attInsertError
+      }
+
+      // Cleanup blob URLs
+      pendingFiles.forEach((item) => {
+        if (item.previewUrl) {
+          try { URL.revokeObjectURL(item.previewUrl) } catch (_) {}
+        }
+      })
+
+      const updated = [...messagesRef.current.filter((m) => m.id !== data.id), data]
+      setMessages(updated)
       setDraft('')
+      setPendingFiles([])
       setReplyingTo(null)
       setTypingConversationId('')
+      await refreshMessageInteractions(updated)
     } catch (sendError) {
       setError(sendError.message || 'Message could not be sent.')
     } finally {
       setSending(false)
+      setUploadProgress(null)
     }
   }
 
@@ -1178,6 +1298,15 @@ function NetworkPage() {
                         <div className="network-chat-call-controls">
                           <button
                             type="button"
+                            onClick={() => setShowSharedMedia((prev) => !prev)}
+                            className={`network-action-icon-btn${showSharedMedia ? ' network-action-icon-btn--active' : ''}`}
+                            aria-label="Shared media gallery"
+                            title="Shared photos, videos, and files"
+                          >
+                            <Images size={17} />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => startCall(activeConversation.id, 'audio').catch(() => {})}
                             disabled={Boolean(call)}
                             aria-label={`Start audio call with ${profileName(activeConversation.peer)}`}
@@ -1213,10 +1342,12 @@ function NetworkPage() {
                                 message={message}
                                 replyMessage={replyMessagesById[message.reply_to_message_id]}
                                 reactions={reactionsByMessageId[message.id] || []}
+                                attachments={attachmentsByMessageId[message.id] || []}
                                 currentUserId={user.id}
                                 onReply={setReplyingTo}
                                 onReact={handleReactToMessage}
                                 onJump={jumpToMessage}
+                                onOpenMedia={handleOpenMedia}
                                 footer={
                                   <>
                                     <time dateTime={message.created_at}>{formatTime(message.created_at, true)}</time>
@@ -1254,25 +1385,95 @@ function NetworkPage() {
                             </button>
                           </div>
                         )}
-                        <textarea
-                          aria-label="Message"
-                          maxLength={4000}
-                          onChange={(event) => { setDraft(event.target.value); sendTypingSignal() }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                              event.preventDefault()
-                              event.currentTarget.form.requestSubmit()
-                            }
-                          }}
-                          placeholder="Write a message... (Enter to send, Shift+Enter for a new line)"
-                          rows={2}
-                          value={draft}
+                        {pendingFiles.length > 0 && (
+                          <div className="qv-composer-attachments-tray">
+                            {pendingFiles.map((item) => (
+                              <div key={item.id} className="qv-composer-attachment-item">
+                                {item.previewUrl ? (
+                                  <img src={item.previewUrl} alt={item.name} className="qv-composer-attachment-thumb" />
+                                ) : (
+                                  <div className="qv-composer-attachment-file-badge">
+                                    <span className="qv-composer-attachment-ext">{item.name.split('.').pop()?.toUpperCase() || 'FILE'}</span>
+                                  </div>
+                                )}
+                                <span className="qv-composer-attachment-name" title={item.name}>{item.name}</span>
+                                <button
+                                  type="button"
+                                  className="qv-composer-attachment-remove"
+                                  onClick={() => handleRemovePendingFile(item.id)}
+                                  aria-label={`Remove ${item.name}`}
+                                >
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {uploadProgress && (
+                          <div className="qv-composer-upload-progress">
+                            <div className="qv-composer-upload-progress-info">
+                              <LoaderCircle size={14} className="spinner" />
+                              <span>Uploading {uploadProgress.current} of {uploadProgress.total}{uploadProgress.name ? `: ${uploadProgress.name}` : ''}</span>
+                            </div>
+                            <div className="qv-composer-upload-bar">
+                              <div className="qv-composer-upload-bar-fill" style={{ width: `${uploadProgress.percent}%` }} />
+                            </div>
+                          </div>
+                        )}
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          multiple
+                          accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+                          style={{ display: 'none' }}
+                          onChange={handleSelectFiles}
                         />
-                        <EmojiPicker onSelect={(emoji) => { setDraft((current) => `${current}${emoji}`); sendTypingSignal() }} />
-                        <button type="submit" disabled={!draft.trim() || sending} aria-label="Send message">
-                          {sending ? <LoaderCircle size={18} className="spinner" /> : <Send size={18} />}
-                        </button>
+                        <div className="network-message-input-row">
+                          <button
+                            type="button"
+                            className="network-attachment-button"
+                            onClick={() => fileInputRef.current?.click()}
+                            aria-label="Add attachments"
+                            title="Attach photos, videos, or files"
+                            disabled={sending}
+                          >
+                            <Paperclip size={18} />
+                          </button>
+                          <textarea
+                            aria-label="Message"
+                            maxLength={4000}
+                            onChange={(event) => { setDraft(event.target.value); sendTypingSignal() }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                                event.preventDefault()
+                                event.currentTarget.form.requestSubmit()
+                              }
+                            }}
+                            placeholder={pendingFiles.length > 0 ? "Add a caption... (optional, Enter to send)" : "Write a message... (Enter to send, Shift+Enter for a new line)"}
+                            rows={2}
+                            value={draft}
+                          />
+                          <EmojiPicker onSelect={(emoji) => { setDraft((current) => `${current}${emoji}`); sendTypingSignal() }} />
+                          <button type="submit" disabled={(!draft.trim() && pendingFiles.length === 0) || sending} aria-label="Send message">
+                            {sending ? <LoaderCircle size={18} className="spinner" /> : <Send size={18} />}
+                          </button>
+                        </div>
                       </form>
+                      <SharedMediaPanel
+                        conversationId={activeConversation.id}
+                        isOpen={showSharedMedia}
+                        onClose={() => setShowSharedMedia(false)}
+                        onOpenMedia={(item, list) => {
+                          setLightboxMedia(item)
+                          setLightboxMediaList(list)
+                        }}
+                      />
+                      <MediaLightboxModal
+                        isOpen={Boolean(lightboxMedia)}
+                        activeMedia={lightboxMedia}
+                        mediaList={lightboxMediaList}
+                        onClose={() => setLightboxMedia(null)}
+                      />
                     </>
                   ) : (
                     <div className="network-chat-empty-state">
