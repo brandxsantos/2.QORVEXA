@@ -271,6 +271,24 @@ function NetworkPage() {
   const selectedConversationId = pathConversationId || searchParams.get('conversation')
   const currentUserName = user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
   const currentUsername = user.user_metadata?.username
+
+  const friendIds = useMemo(() => new Set(friendships.map((friendship) => (
+    friendship.user_low === user.id ? friendship.user_high : friendship.user_low
+  ))), [friendships, user.id])
+  const incomingRequests = requests.filter((request) => request.receiver_id === user.id && request.status === 'pending')
+  const outgoingByUser = new Map(requests
+    .filter((request) => request.sender_id === user.id && request.status === 'pending')
+    .map((request) => [request.receiver_id, request]))
+  const profileById = useMemo(() => Object.fromEntries(profiles.map((profile) => [profile.id, profile])), [profiles])
+  const profileByIdRef = useRef(profileById)
+  profileByIdRef.current = profileById
+  const conversationsRef = useRef(conversations)
+  conversationsRef.current = conversations
+  const activeConversation = useMemo(() => {
+    if (!selectedConversationId) return null
+    return conversations.find((conversation) => conversation.id === selectedConversationId)
+      || (directActiveConversation?.id === selectedConversationId ? directActiveConversation : null)
+  }, [conversations, directActiveConversation, selectedConversationId])
   useEffect(() => {
     if (!notificationToast) return undefined
     const timer = window.setTimeout(() => setNotificationToast(''), 4500)
@@ -560,7 +578,7 @@ function NetworkPage() {
     const currentRequestId = activeConvRequestIdRef.current
 
     // If already in conversations list, use that immediately
-    const existing = conversations.find((c) => c.id === selectedConversationId)
+    const existing = conversationsRef.current.find((c) => c.id === selectedConversationId)
     if (existing) {
       setDirectActiveConversation(existing)
     }
@@ -579,7 +597,7 @@ function NetworkPage() {
         if (convErr || !conv || !active || currentRequestId !== activeConvRequestIdRef.current) return
 
         const peerId = conv.user_low === user.id ? conv.user_high : conv.user_low
-        let peer = profileById[peerId]
+        let peer = profileByIdRef.current[peerId]
         if (!peer) {
           const { data: prof } = await client
             .from('profiles')
@@ -616,7 +634,7 @@ function NetworkPage() {
     return () => {
       active = false
     }
-  }, [activeSection, conversations, profileById, selectedConversationId, user.id])
+  }, [activeSection, selectedConversationId, user.id])
 
   useEffect(() => {
     if (!selectedConversationId || activeSection !== 'messages') return undefined
@@ -771,19 +789,6 @@ function NetworkPage() {
     }
   }, [loadNetwork, user.id])
 
-  const friendIds = useMemo(() => new Set(friendships.map((friendship) => (
-    friendship.user_low === user.id ? friendship.user_high : friendship.user_low
-  ))), [friendships, user.id])
-  const incomingRequests = requests.filter((request) => request.receiver_id === user.id && request.status === 'pending')
-  const outgoingByUser = new Map(requests
-    .filter((request) => request.sender_id === user.id && request.status === 'pending')
-    .map((request) => [request.receiver_id, request]))
-  const profileById = useMemo(() => Object.fromEntries(profiles.map((profile) => [profile.id, profile])), [profiles])
-  const activeConversation = useMemo(() => {
-    if (!selectedConversationId) return null
-    return conversations.find((conversation) => conversation.id === selectedConversationId)
-      || (directActiveConversation?.id === selectedConversationId ? directActiveConversation : null)
-  }, [conversations, directActiveConversation, selectedConversationId])
   const conversationTimeline = useMemo(() => {
     const callIds = new Set(callReceipts.map((s) => s.id))
     const textMessages = messages.filter(
