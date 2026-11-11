@@ -123,6 +123,24 @@ function NetworkPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const activeSection = location.pathname.split('/')[2] || 'friends'
+  const [messagesTab, setMessagesTab] = useState(() => searchParams.get('tab') || 'chats')
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam === 'stories' || tabParam === 'instants' || tabParam === 'chats') {
+      setMessagesTab(tabParam)
+    } else if (!tabParam) {
+      setMessagesTab('chats')
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    if (activeSection === 'stories') {
+      navigate('/app/messages?tab=stories', { replace: true })
+    } else if (activeSection === 'instants') {
+      navigate('/app/messages?tab=instants', { replace: true })
+    }
+  }, [activeSection, navigate])
   const [profiles, setProfiles] = useState([])
   const [discoveryLoadedCount, setDiscoveryLoadedCount] = useState(0)
   const [hasMoreDiscoverProfiles, setHasMoreDiscoverProfiles] = useState(false)
@@ -1242,9 +1260,9 @@ function NetworkPage() {
     discover: 'Discover people',
     notifications: 'Notifications',
     messages: 'Messages',
-    stories: 'Stories',
-    instants: 'Instants',
   }
+
+  const effectiveMessagesTab = selectedConversationId ? 'chats' : messagesTab
 
   return (
     <main className="member-page member-feed-page network-page">
@@ -1258,8 +1276,6 @@ function NetworkPage() {
           <Link to="/app/explore" className={`network-nav-link${activeSection === 'explore' ? ' is-active' : ''}`}><Compass size={15} aria-hidden="true" />Explore</Link>
           <Link to="/app/discover" className={`network-nav-link${activeSection === 'discover' ? ' is-active' : ''}`}><UserPlus size={15} aria-hidden="true" />Discover</Link>
           <Link to="/app/friends" className={`network-nav-link${activeSection === 'friends' ? ' is-active' : ''}`}><Users size={15} aria-hidden="true" />Friends</Link>
-          <Link to="/app/stories" className={`network-nav-link${activeSection === 'stories' ? ' is-active' : ''}`}><Sparkles size={15} aria-hidden="true" />Stories</Link>
-          <Link to="/app/instants" className={`network-nav-link${activeSection === 'instants' ? ' is-active' : ''}`}><Zap size={15} aria-hidden="true" />Instants</Link>
           <Link to="/app/notifications" className={`network-nav-link${activeSection === 'notifications' ? ' is-active' : ''}`}>
           <Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}
           </Link>
@@ -1279,6 +1295,51 @@ function NetworkPage() {
             <label className="network-search"><Search size={16} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${activeSection === 'friends' ? 'friends' : 'people'}...`} /></label>
           )}
         </div>
+
+        {activeSection === 'messages' && (
+          <div className="network-messages-subnav" role="tablist" aria-label="Messages tabs">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={effectiveMessagesTab === 'chats'}
+              className={`network-messages-tab${effectiveMessagesTab === 'chats' ? ' is-active' : ''}`}
+              onClick={() => {
+                setMessagesTab('chats')
+                navigate(selectedConversationId ? `/app/messages/${encodeURIComponent(selectedConversationId)}` : '/app/messages')
+              }}
+            >
+              <MessageCircle size={15} aria-hidden="true" />
+              <span>Chats</span>
+              {unreadMessages > 0 && <span className="network-badge">{unreadMessages}</span>}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={effectiveMessagesTab === 'stories'}
+              className={`network-messages-tab${effectiveMessagesTab === 'stories' ? ' is-active' : ''}`}
+              onClick={() => {
+                setMessagesTab('stories')
+                navigate('/app/messages?tab=stories')
+              }}
+            >
+              <Sparkles size={15} aria-hidden="true" />
+              <span>Stories</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={effectiveMessagesTab === 'instants'}
+              className={`network-messages-tab${effectiveMessagesTab === 'instants' ? ' is-active' : ''}`}
+              onClick={() => {
+                setMessagesTab('instants')
+                navigate('/app/messages?tab=instants')
+              }}
+            >
+              <Zap size={15} aria-hidden="true" />
+              <span>Instants</span>
+            </button>
+          </div>
+        )}
 
         {error && <div className="network-error" role="alert"><AlertCircle size={17} aria-hidden="true" /><span>{error}</span><button type="button" onClick={refresh}>Retry</button></div>}
        {presenceError && (
@@ -1446,20 +1507,22 @@ function NetworkPage() {
               </section>
             )}
 
-            {activeSection === 'stories' && (
-              <section className="network-stories-tab-view">
-                <StoriesTab user={user} profile={ownProfile} onReply={handleInstantReply} />
-              </section>
-            )}
-
-            {activeSection === 'instants' && (
-              <section className="network-instants-tab-view">
-                <InstantsTab user={user} onReply={handleInstantReply} />
-              </section>
-            )}
-
             {activeSection === 'messages' && (
-              <div className="network-messenger">
+              <>
+                {effectiveMessagesTab === 'stories' && (
+                  <section className="network-stories-tab-view">
+                    <StoriesTab user={user} profile={ownProfile} onReply={handleInstantReply} />
+                  </section>
+                )}
+
+                {effectiveMessagesTab === 'instants' && (
+                  <section className="network-instants-tab-view">
+                    <InstantsTab user={user} onReply={handleInstantReply} />
+                  </section>
+                )}
+
+                {effectiveMessagesTab === 'chats' && (
+                  <div className="network-messenger">
                 <aside className={`network-conversation-list${selectedConversationId ? ' network-conversation-list--mobile-hidden' : ''}`}>
                   <div className="network-conversation-heading"><h2>Messages</h2><span>{conversations.length}</span></div>
                   <label className="network-search network-search--conversation"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations..." /></label>
@@ -1756,7 +1819,9 @@ function NetworkPage() {
             )}
           </>
         )}
-      </section>
+      </>
+    )}
+  </section>
       <footer className="member-feed-footer">
         <span>QORVEXA <span>·</span> Connect Beyond Limits.</span>
         <span>Signed in as {currentUsername ? `@${currentUsername}` : currentUserName}</span>
