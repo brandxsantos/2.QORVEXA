@@ -288,18 +288,20 @@ setLoadingIds((current) => current.includes(conversationId)
         }))
       })
 
-      client.from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', user.id)
-        .eq('type', 'message')
-        .eq('conversation_id', conversationId)
-        .eq('is_read', false)
-        .then(() => {})
-        .catch(() => {})
+      Promise.resolve(
+        client.from('notifications')
+          .update({ is_read: true })
+          .eq('user_id', user.id)
+          .eq('type', 'message')
+          .eq('conversation_id', conversationId)
+          .eq('is_read', false)
+      ).catch(() => {})
 
-      client.rpc('mark_conversation_read', {
-        target_conversation_id: conversationId,
-      }).catch(() => {})
+      Promise.resolve(
+        client.rpc('mark_conversation_read', {
+          target_conversation_id: conversationId,
+        })
+      ).catch(() => {})
     } catch (loadError) {
       setError(loadError.message || 'Messages could not be loaded.')
     } finally {
@@ -403,9 +405,11 @@ setLoadingIds((current) => current.includes(conversationId)
             const msg = payload?.new
             if (payload?.eventType === 'INSERT' && msg && msg.sender_id !== user.id) {
               if (openIdsRef.current.includes(msg.conversation_id)) {
-                getSupabaseClient().rpc('mark_conversation_read', {
-                  target_conversation_id: msg.conversation_id,
-                }).catch(() => {})
+                Promise.resolve(
+                  getSupabaseClient().rpc('mark_conversation_read', {
+                    target_conversation_id: msg.conversation_id,
+                  })
+                ).catch(() => {})
               } else {
                 markConversationDelivered(getSupabaseClient(), msg.conversation_id).catch(() => {})
               }

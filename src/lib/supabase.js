@@ -77,8 +77,7 @@ export async function getOwnProfileSettingsCached(client = getSupabaseClient(), 
     return ownSettingsCache.promise
   }
 
-  ownSettingsCache.promise = client
-    .rpc('get_own_profile_settings')
+  ownSettingsCache.promise = Promise.resolve(client.rpc('get_own_profile_settings'))
     .then((result) => {
       if (!result.error && result.data) {
         ownSettingsCache.data = result.data

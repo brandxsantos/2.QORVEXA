@@ -484,10 +484,12 @@ export function CallProvider({ children }) {
                   target_action: s.status === 'accepted' ? 'end' : 'cancel',
                 })
               } catch {
-                await client.rpc('respond_to_call', {
-                  target_call_id: s.id,
-                  target_action: 'decline',
-                }).catch(() => {})
+                await Promise.resolve(
+                  client.rpc('respond_to_call', {
+                    target_call_id: s.id,
+                    target_action: 'decline',
+                  })
+                ).catch(() => {})
               }
             }
           }

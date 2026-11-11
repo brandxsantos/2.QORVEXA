@@ -607,19 +607,21 @@ function NetworkPage() {
     
     // Mark as read non-fatally in the background (fire-and-forget, do not block message display)
     const client = getSupabaseClient()
-    client
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('user_id', user.id)
-      .eq('type', 'message')
-      .eq('conversation_id', conversationId)
-      .eq('is_read', false)
-      .then(() => {})
-      .catch((notifErr) => console.warn('Non-fatal notifications read update failure:', notifErr))
+    Promise.resolve(
+      client
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('type', 'message')
+        .eq('conversation_id', conversationId)
+        .eq('is_read', false)
+    ).catch((notifErr) => console.warn('Non-fatal notifications read update failure:', notifErr))
 
-    client.rpc('mark_conversation_read', {
-      target_conversation_id: conversationId,
-    }).catch((readErr) => console.warn('Non-fatal mark_conversation_read failure:', readErr))
+    Promise.resolve(
+      client.rpc('mark_conversation_read', {
+        target_conversation_id: conversationId,
+      })
+    ).catch((readErr) => console.warn('Non-fatal mark_conversation_read failure:', readErr))
   }, [refreshMessageInteractions, user.id])
 
   const loadCallReceipts = useCallback(async (conversationId) => {
@@ -836,9 +838,11 @@ function NetworkPage() {
       }, (payload) => {
         loadMessages(selectedConversationId).catch((loadError) => setError(loadError.message))
         if (payload?.eventType === 'INSERT' && payload?.new?.sender_id !== user.id) {
-          getSupabaseClient().rpc('mark_conversation_read', {
-            target_conversation_id: selectedConversationId,
-          }).catch(() => {})
+          Promise.resolve(
+            getSupabaseClient().rpc('mark_conversation_read', {
+              target_conversation_id: selectedConversationId,
+            })
+          ).catch(() => {})
         }
       })
       .on('postgres_changes', {
@@ -969,9 +973,11 @@ function NetworkPage() {
         const msg = payload?.new
         if (payload?.eventType === 'INSERT' && msg && msg.sender_id !== user.id) {
           if (msg.conversation_id === selectedConversationIdRef.current) {
-            getSupabaseClient().rpc('mark_conversation_read', {
-              target_conversation_id: msg.conversation_id,
-            }).catch(() => {})
+            Promise.resolve(
+              getSupabaseClient().rpc('mark_conversation_read', {
+                target_conversation_id: msg.conversation_id,
+              })
+            ).catch(() => {})
           } else {
             markConversationDelivered(getSupabaseClient(), msg.conversation_id).catch(() => {})
           }
