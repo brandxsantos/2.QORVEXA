@@ -34,7 +34,6 @@ export async function fetchActiveStories() {
         audience_type,
         created_at,
         expires_at,
-        is_story,
         profiles:sender_id (id, username, display_name, avatar_url)
       )
     `)
@@ -46,7 +45,7 @@ export async function fetchActiveStories() {
   }
 
   return (data || [])
-    .filter((row) => row.instants && (row.instants.is_story || row.instants.image_path?.includes('/story_')))
+    .filter((row) => row.instants && (row.instants.is_story === true || row.instants.image_path?.includes('/story_')))
     .map((row) => ({
       id: row.instants.id,
       sender_id: row.instants.sender_id,
@@ -78,9 +77,8 @@ export async function fetchMyActiveStories(userId) {
   const now = new Date().toISOString()
   const { data, error } = await client
     .from('instants')
-    .select('id, sender_id, image_path, caption, audience_type, created_at, expires_at, is_story')
+    .select('id, sender_id, image_path, caption, audience_type, created_at, expires_at')
     .eq('sender_id', userId)
-    .or('is_story.eq.true,image_path.like.%/story_%')
     .gt('expires_at', now)
     .order('created_at', { ascending: true })
 
@@ -89,7 +87,9 @@ export async function fetchMyActiveStories(userId) {
     return []
   }
 
-  return (data || []).map((item) => ({ ...item, is_own: true, is_story: true }))
+  return (data || [])
+    .filter((item) => item.is_story === true || item.image_path?.includes('/story_'))
+    .map((item) => ({ ...item, is_own: true, is_story: true }))
 }
 
 export async function createStory({ imageBlob, caption = '', audienceType = 'friends', userId }) {
@@ -122,24 +122,50 @@ export async function createStory({ imageBlob, caption = '', audienceType = 'fri
     console.warn('[stories] create_story RPC exception:', rpcEx)
   }
 
-  // 3. Resilient Fallback Direct Insert (ensures is_story = true)
+  // 3. Resilient Fallback Direct Insert (handles with or without is_story in schema cache)
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-  const { data: storyRow, error: insertError } = await client
+  const basePayload = {
+    sender_id: userId,
+    image_path: imagePath,
+    caption: caption.trim() || null,
+    audience_type: audienceType,
+    expires_at: expiresAt,
+  }
+
+  let storyRow = null
+
+  // Attempt insert with is_story: true
+  const { data: rowWithStory, error: insertError } = await client
     .from('instants')
-    .insert({
-      sender_id: userId,
-      image_path: imagePath,
-      caption: caption.trim() || null,
-      audience_type: audienceType,
-      is_story: true,
-      expires_at: expiresAt,
-    })
+    .insert({ ...basePayload, is_story: true })
     .select('id, expires_at')
     .single()
 
   if (insertError) {
-    await client.storage.from('qorvexa-instants').remove([imagePath]).catch(() => {})
-    throw insertError
+    // If is_story is missing from schema cache, fall back to base insert
+    if (
+      insertError.code === '42703' ||
+      insertError.code === 'PGRST204' ||
+      insertError.message?.includes('is_story') ||
+      insertError.message?.includes('schema cache')
+    ) {
+      const { data: baseRow, error: baseErr } = await client
+        .from('instants')
+        .insert(basePayload)
+        .select('id, expires_at')
+        .single()
+
+      if (baseErr) {
+        await client.storage.from('qorvexa-instants').remove([imagePath]).catch(() => {})
+        throw baseErr
+      }
+      storyRow = baseRow
+    } else {
+      await client.storage.from('qorvexa-instants').remove([imagePath]).catch(() => {})
+      throw insertError
+    }
+  } else {
+    storyRow = rowWithStory
   }
 
   // Populate recipients for fallback
@@ -196,13 +222,15 @@ export async function fetchMyActiveInstants(userId) {
   const client = getSupabaseClient()
   try {
     const { data, error } = await client.rpc('get_my_active_instants')
-    if (!error && Array.isArray(data)) return data
+    if (!error && Array.isArray(data)) {
+      return (data || []).filter((item) => item.is_story !== true && !item.image_path?.includes('/story_'))
+    }
   } catch (_) {}
 
   if (!userId) return []
   const { data, error } = await client
     .from('instants')
-    .select('id, sender_id, image_path, caption, audience_type, created_at, expires_at, is_story')
+    .select('id, sender_id, image_path, caption, audience_type, created_at, expires_at')
     .eq('sender_id', userId)
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: true })
@@ -212,7 +240,9 @@ export async function fetchMyActiveInstants(userId) {
     return []
   }
 
-  return (data || []).map((item) => ({ ...item, is_own: true }))
+  return (data || [])
+    .filter((item) => item.is_story !== true && !item.image_path?.includes('/story_'))
+    .map((item) => ({ ...item, is_own: true, is_story: false }))
 }
 
 export async function fetchSentInstants() {
@@ -279,7 +309,7 @@ export async function consumeAndViewInstant(instantId, isOwn = false, ownProfile
     // Fallback direct load for sender
     const { data: instant, error } = await client
       .from('instants')
-      .select('id, sender_id, image_path, caption, audience_type, created_at, expires_at, is_story')
+      .select('id, sender_id, image_path, caption, audience_type, created_at, expires_at')
       .eq('id', instantId)
       .single()
 
@@ -441,20 +471,48 @@ export async function sendStoryReply({ storyId, storyOwnerId, content = '', reac
     reaction: reaction || null,
   }
 
-  const { data: insertedMsg, error: msgErr } = await client
+  let insertedMsg = null
+  const fullPayload = {
+    conversation_id: conversationId,
+    sender_id: user.id,
+    content: cleanContent,
+    message_type: 'story_reply',
+    story_id: storyId,
+    story_metadata: meta,
+  }
+
+  const { data: fullMsg, error: msgErr } = await client
     .from('messages')
-    .insert({
-      conversation_id: conversationId,
-      sender_id: user.id,
-      content: cleanContent,
-      message_type: 'story_reply',
-      story_id: storyId,
-      story_metadata: meta,
-    })
-    .select('id, conversation_id, sender_id, content, message_type, story_id, story_metadata, created_at')
+    .insert(fullPayload)
+    .select('id, conversation_id, sender_id, content, created_at')
     .single()
 
-  if (msgErr) throw msgErr
+  if (msgErr) {
+    // If schema cache does not have story reply columns, fallback to standard message
+    if (
+      msgErr.code === '42703' ||
+      msgErr.code === 'PGRST204' ||
+      msgErr.message?.includes('schema cache') ||
+      msgErr.message?.includes('story_id') ||
+      msgErr.message?.includes('message_type')
+    ) {
+      const { data: baseMsg, error: baseErr } = await client
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: user.id,
+          content: cleanContent,
+        })
+        .select('id, conversation_id, sender_id, content, created_at')
+        .single()
+      if (baseErr) throw baseErr
+      insertedMsg = baseMsg
+    } else {
+      throw msgErr
+    }
+  } else {
+    insertedMsg = fullMsg
+  }
 
   await client
     .from('conversations')
@@ -493,11 +551,9 @@ export async function getStoryForViewer(storyId) {
       audience_type,
       created_at,
       expires_at,
-      is_story,
       profiles:sender_id (id, username, display_name, avatar_url)
     `)
     .eq('id', storyId)
-    .eq('is_story', true)
     .maybeSingle()
 
   if (error || !story) return { available: false, reason: 'not_found' }
@@ -507,6 +563,7 @@ export async function getStoryForViewer(storyId) {
     available: true,
     story: {
       ...story,
+      is_story: true,
       sender: story.profiles,
     },
   }

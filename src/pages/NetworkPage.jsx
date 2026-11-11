@@ -56,7 +56,26 @@ import { getStoryForViewer } from '../lib/instants.js'
 
 const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility, online_status_visibility'
 const requestFields = 'id, sender_id, receiver_id, status, created_at'
-const messageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, message_type, story_id, story_metadata, created_at'
+const baseMessageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, created_at'
+const fullMessageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, message_type, story_id, story_metadata, created_at'
+let activeMessageFields = fullMessageFields
+
+async function queryMessagesWithFallback(queryFn) {
+  const primaryResult = await queryFn(activeMessageFields)
+  if (!primaryResult.error) return primaryResult
+
+  const err = primaryResult.error
+  if (
+    err.code === '42703' ||
+    err.code === 'PGRST204' ||
+    err.message?.includes('schema cache') ||
+    err.message?.includes('does not exist')
+  ) {
+    activeMessageFields = baseMessageFields
+    return await queryFn(baseMessageFields)
+  }
+  return primaryResult
+}
 const notificationFields = 'id, user_id, actor_id, type, reference_id, post_id, conversation_id, preview, is_read, created_at, profiles!notifications_actor_id_fkey(username, display_name, avatar_url)'
 const notificationFilters = [
   ['all', 'All notifications'],
@@ -358,12 +377,14 @@ function NetworkPage() {
       setHasMoreMessages(false)
       return
     }
-    const { data, error: queryError } = await getSupabaseClient()
-      .from('messages')
-      .select(messageFields)
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: false })
-      .limit(100)
+    const { data, error: queryError } = await queryMessagesWithFallback((fields) =>
+      getSupabaseClient()
+        .from('messages')
+        .select(fields)
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(100)
+    )
     if (queryError) throw queryError
     const loadedMessages = (data || []).reverse()
     setMessages(loadedMessages)
@@ -906,12 +927,14 @@ function NetworkPage() {
     }
 
     try {
-      const { data, error: queryError } = await getSupabaseClient()
-        .from('messages')
-        .select(messageFields)
-        .eq('id', messageId)
-        .eq('conversation_id', selectedConversationId)
-        .maybeSingle()
+      const { data, error: queryError } = await queryMessagesWithFallback((fields) =>
+        getSupabaseClient()
+          .from('messages')
+          .select(fields)
+          .eq('id', messageId)
+          .eq('conversation_id', selectedConversationId)
+          .maybeSingle()
+      )
 
       if (queryError) throw queryError
       if (!data) return
@@ -1074,16 +1097,18 @@ function NetworkPage() {
       const uploaded = await uploadAttachmentFile(client, activeConversation.id, user.id, audioFile)
       setUploadProgress({ current: 1, total: 1, percent: 100, name: 'Voice message' })
 
-      const { data, error: insertError } = await client
-        .from('messages')
-        .insert({
-          conversation_id: activeConversation.id,
-          sender_id: user.id,
-          content: '🎙️ Voice message',
-          reply_to_message_id: replyingTo?.id || null,
-        })
-        .select(messageFields)
-        .single()
+      const { data, error: insertError } = await queryMessagesWithFallback((fields) =>
+        client
+          .from('messages')
+          .insert({
+            conversation_id: activeConversation.id,
+            sender_id: user.id,
+            content: '🎙️ Voice message',
+            reply_to_message_id: replyingTo?.id || null,
+          })
+          .select(fields)
+          .single()
+      )
 
       if (insertError) throw insertError
 
@@ -1168,16 +1193,18 @@ function NetworkPage() {
               : uploadedAttachments[0]?.original_filename || 'Attachment'
       )
 
-      const { data, error: insertError } = await client
-        .from('messages')
-        .insert({
-          conversation_id: activeConversation.id,
-          sender_id: user.id,
-          content: messageContent,
-          reply_to_message_id: replyingTo?.id || null,
-        })
-        .select(messageFields)
-        .single()
+      const { data, error: insertError } = await queryMessagesWithFallback((fields) =>
+        client
+          .from('messages')
+          .insert({
+            conversation_id: activeConversation.id,
+            sender_id: user.id,
+            content: messageContent,
+            reply_to_message_id: replyingTo?.id || null,
+          })
+          .select(fields)
+          .single()
+      )
       if (insertError) throw insertError
 
       if (uploadedAttachments.length > 0) {
@@ -1225,13 +1252,15 @@ function NetworkPage() {
     if (!activeConversation || !oldestMessage || loadingOlderMessages) return
     setLoadingOlderMessages(true)
     try {
-      const { data, error: queryError } = await getSupabaseClient()
-        .from('messages')
-        .select(messageFields)
-        .eq('conversation_id', activeConversation.id)
-        .lt('created_at', oldestMessage.created_at)
-        .order('created_at', { ascending: false })
-        .limit(100)
+      const { data, error: queryError } = await queryMessagesWithFallback((fields) =>
+        getSupabaseClient()
+          .from('messages')
+          .select(fields)
+          .eq('conversation_id', activeConversation.id)
+          .lt('created_at', oldestMessage.created_at)
+          .order('created_at', { ascending: false })
+          .limit(100)
+      )
       if (queryError) throw queryError
       skipNextMessageScrollRef.current = true
       const olderMessages = (data || []).reverse()
