@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Plus, Sparkles, Star, Users } from 'lucide-react'
-import { fetchActiveStories, fetchMyActiveStories } from '../../lib/instants.js'
+import { fetchActiveStories, fetchMyActiveStories } from '../../lib/stories.js'
 import { getSupabaseClient } from '../../lib/supabase.js'
 import ProtectedMediaImage from '../ProtectedMediaImage.jsx'
-import StoryCreateModal from './StoryCreateModal.jsx'
+import StoryThumbnail from './StoryThumbnail.jsx'
+import StoryStudioModal from './StoryStudioModal.jsx'
 import StoryViewerModal from './StoryViewerModal.jsx'
 import './Instants.css'
 
@@ -215,7 +216,14 @@ export default function StoriesPreviewTray({
           >
             <div className={`instant-avatar-ring ${hasOwnActive ? 'is-own-active' : 'is-unseen-empty'}`}>
               <div className="instant-avatar-inner">
-                {avatarPath ? (
+                {hasOwnActive && myStories[myStories.length - 1]?.image_path ? (
+                  <StoryThumbnail
+                    imagePath={myStories[myStories.length - 1].image_path}
+                    alt={ownDisplayName}
+                    className="instant-avatar-img"
+                    fallbackInitials={ownInitial}
+                  />
+                ) : avatarPath ? (
                   <ProtectedMediaImage
                     path={avatarPath}
                     alt={ownDisplayName}
@@ -308,8 +316,8 @@ export default function StoriesPreviewTray({
         })}
       </div>
 
-      {/* Creation Modal */}
-      <StoryCreateModal
+      {/* Studio Modal */}
+      <StoryStudioModal
         isOpen={createModalOpen}
         initialMode={createModalMode}
         onClose={() => setCreateModalOpen(false)}

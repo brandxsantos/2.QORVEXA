@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, MessageSquare, LoaderCircle, AlertCircle, Star, ChevronLeft, ChevronRight, Eye, Send, Sparkles, Users, Trash2 } from 'lucide-react'
-import { consumeAndViewInstant, reactToInstant, sendStoryReply, fetchStoryViewers, deleteStory } from '../../lib/stories.js'
+import { consumeAndViewStory, reactToStory, sendStoryReply, fetchStoryViewers, deleteStory } from '../../lib/stories.js'
 import ProtectedMediaImage from '../ProtectedMediaImage.jsx'
 import './Instants.css'
 
@@ -100,7 +100,7 @@ export default function StoryViewerModal({
     async function loadStory() {
       try {
         const isOwn = !!currentStack?.isOwn
-        const data = await consumeAndViewInstant(currentInstant.id, isOwn, ownProfile)
+        const data = await consumeAndViewStory(currentInstant.id, isOwn, ownProfile)
         if (!active || activeInstantIdRef.current !== currentInstant.id) return
 
         setStoryData(data)
@@ -332,23 +332,24 @@ export default function StoryViewerModal({
     setSendingReply(true)
     setMyReaction(emoji)
     try {
-      await Promise.all([
-        reactToInstant(currentInstant.id, emoji).catch(() => {}),
-        sendStoryReply({
-          storyId: currentInstant.id,
-          storyOwnerId: storyData?.sender?.id || currentStack?.id,
+      try {
+        await reactToStory(currentInstant.id, emoji)
+      } catch (_) {}
+
+      await sendStoryReply({
+        storyId: currentInstant.id,
+        storyOwnerId: storyData?.sender?.id || currentStack?.id,
+        reaction: emoji,
+        content: emoji,
+        storySnapshot: {
+          story_id: currentInstant.id,
+          image_path: storyData?.image_path || currentInstant.image_path,
+          caption: storyData?.caption || currentInstant.caption,
+          sender_id: storyData?.sender?.id || currentStack?.id,
+          expires_at: storyData?.expires_at || currentInstant.expires_at,
           reaction: emoji,
-          content: emoji,
-          storySnapshot: {
-            story_id: currentInstant.id,
-            image_path: storyData?.image_path || currentInstant.image_path,
-            caption: storyData?.caption || currentInstant.caption,
-            sender_id: storyData?.sender?.id || currentStack?.id,
-            expires_at: storyData?.expires_at || currentInstant.expires_at,
-            reaction: emoji,
-          },
-        }),
-      ])
+        },
+      })
       setReplyFeedback(`Reacted ${emoji} in Messenger`)
       setTimeout(() => setReplyFeedback(''), 2500)
     } catch (err) {
@@ -543,11 +544,11 @@ export default function StoryViewerModal({
               <AlertCircle size={44} color="#f59e0b" style={{ margin: '0 auto 12px auto' }} />
               <p className="story-error-title">{error}</p>
               <p className="story-error-desc">
-                Stories and Instants are view-once and expire after 24 hours.
+                This story is no longer available or has expired after 24 hours.
               </p>
               <button
                 type="button"
-                className="instant-retake-btn"
+                className="story-skip-btn"
                 onClick={(e) => {
                   e.stopPropagation()
                   nextStory()

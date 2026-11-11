@@ -2861,7 +2861,7 @@
 .stories-spotlight-card {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.5) 100%);
   border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
   border-radius: 20px;
@@ -2872,10 +2872,164 @@
   overflow: hidden;
 }
 
+/* Actual Story Photo Preview Frame for Your Story */
+.stories-spotlight-story-preview {
+  position: relative;
+  width: 90px;
+  height: 125px;
+  border-radius: 16px;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(0, 217, 245, 0.35);
+  border: 2px solid transparent;
+  background: linear-gradient(135deg, #00d9f5 0%, #2563eb 50%, #8b5cf6 100%) border-box;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+}
+
+.stories-spotlight-story-preview:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 24px rgba(0, 217, 245, 0.5);
+}
+
+.stories-spotlight-thumb-wrap {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.stories-spotlight-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.stories-spotlight-thumb-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.3) 0%, transparent 40%, rgba(15, 23, 42, 0.85) 100%);
+  pointer-events: none;
+}
+
+.stories-spotlight-thumb-top {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 2;
+}
+
+.story-owner-badge-ring {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  padding: 1.5px;
+  background: linear-gradient(135deg, #00d9f5 0%, #3b82f6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.story-owner-badge-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #0f172a;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.story-owner-badge-inner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.stories-spotlight-count-pill {
+  font-size: 0.58rem;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  padding: 1px 5px;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+}
+
+.stories-spotlight-thumb-bottom {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  right: 6px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+}
+
+.stories-spotlight-view-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 1px 5px;
+  border-radius: 6px;
+}
+
+/* Empty Profile Avatar Box */
 .stories-spotlight-avatar-box {
   position: relative;
   flex-shrink: 0;
   cursor: pointer;
+}
+
+/* Story Thumbnail Components */
+.story-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.story-thumb-skeleton {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 25%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.04) 75%);
+  background-size: 200% 100%;
+}
+
+.story-thumb-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: var(--text-muted, #94a3b8);
+}
+
+.story-thumb-initials {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.story-thumb-fallback-pattern {
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08) 0%, transparent 60%);
 }
 
 .instant-avatar-ring--large {

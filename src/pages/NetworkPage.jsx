@@ -801,9 +801,9 @@ function NetworkPage() {
     }
   }
 
-  function handleInstantReply({ peerId, caption }) {
+  function handleStoryReply({ peerId, caption }) {
     openConversation({ id: peerId }).then(() => {
-      setDraft(caption ? `Replying to Instant ("${caption.slice(0, 35)}…"): ` : 'Replying to Instant: ')
+      setDraft(caption ? `Replying to Story ("${caption.slice(0, 35)}…"): ` : 'Replying to Story: ')
     })
   }
 
@@ -1576,7 +1576,7 @@ function NetworkPage() {
               <>
                 {effectiveMessagesTab === 'stories' && (
                   <section className="network-stories-tab-view">
-                    <StoriesTab user={user} profile={ownProfile} onReply={handleInstantReply} />
+                    <StoriesTab user={user} profile={ownProfile} onReply={handleStoryReply} />
                   </section>
                 )}
 
@@ -1587,7 +1587,7 @@ function NetworkPage() {
                   <StoriesPreviewTray
                     user={user}
                     profile={ownProfile}
-                    onReply={handleInstantReply}
+                    onReply={handleStoryReply}
                     className="network-stories-preview-tray"
                   />
                   <label className="network-search network-search--conversation"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations..." /></label>

@@ -280,41 +280,91 @@ export default function StoriesTab({ user, profile, onReply }) {
       <div className="stories-lounge-content">
         {/* 1. YOUR STORY SPOTLIGHT CARD */}
         <div className="stories-spotlight-card">
-          <div
-            className={`stories-spotlight-avatar-box ${hasOwnActive ? 'is-active-ring' : ''}`}
-            onClick={handleOpenOwnStory}
-            role="button"
-            tabIndex={0}
-            title={hasOwnActive ? 'View your story' : 'Add to your story'}
-          >
-            <div className={`instant-avatar-ring instant-avatar-ring--large ${hasOwnActive ? 'is-own-active' : 'is-unseen-empty'}`}>
-              <div className="instant-avatar-inner">
-                {avatarPath ? (
-                  <ProtectedMediaImage
-                    path={avatarPath}
-                    alt={ownDisplayName}
-                    className="instant-avatar-img"
-                    fallback={<span>{ownInitial}</span>}
-                  />
-                ) : (
-                  <span>{ownInitial}</span>
+          {hasOwnActive && myStories[myStories.length - 1]?.image_path ? (
+            /* Actual Uploaded Story Photo Preview Frame */
+            <div
+              className="stories-spotlight-story-preview"
+              onClick={handleOpenOwnStory}
+              role="button"
+              tabIndex={0}
+              title="View your active story"
+            >
+              <div className="stories-spotlight-thumb-wrap">
+                <StoryThumbnail
+                  imagePath={myStories[myStories.length - 1].image_path}
+                  alt="Your active story preview"
+                  className="stories-spotlight-thumb-img"
+                  fallbackInitials={ownInitial}
+                />
+                <div className="stories-spotlight-thumb-gradient" />
+              </div>
+
+              {/* Owner Avatar Badge overlay in top-left */}
+              <div className="stories-spotlight-thumb-top">
+                <div className="story-owner-badge-ring">
+                  <div className="story-owner-badge-inner">
+                    {avatarPath ? (
+                      <ProtectedMediaImage
+                        path={avatarPath}
+                        alt={ownDisplayName}
+                        fallback={<span>{ownInitial}</span>}
+                      />
+                    ) : (
+                      <span>{ownInitial}</span>
+                    )}
+                  </div>
+                </div>
+                {myStories.length > 1 && (
+                  <span className="stories-spotlight-count-pill">{myStories.length} updates</span>
                 )}
               </div>
-            </div>
 
-            <button
-              type="button"
-              className="stories-spotlight-add-btn"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleOpenStudio('choose')
-              }}
-              title="Add Story"
-              aria-label="Add Story"
+              {/* Views indicator overlay in bottom */}
+              <div className="stories-spotlight-thumb-bottom">
+                <span className="stories-spotlight-view-tag">
+                  <Eye size={12} />
+                  <span>Tap to view</span>
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* Empty state: profile photo with attractive Add Story (+) indicator */
+            <div
+              className="stories-spotlight-avatar-box is-empty"
+              onClick={() => handleOpenStudio('choose')}
+              role="button"
+              tabIndex={0}
+              title="Add to your story"
             >
-              <Plus size={16} strokeWidth={2.8} />
-            </button>
-          </div>
+              <div className="instant-avatar-ring instant-avatar-ring--large is-unseen-empty">
+                <div className="instant-avatar-inner">
+                  {avatarPath ? (
+                    <ProtectedMediaImage
+                      path={avatarPath}
+                      alt={ownDisplayName}
+                      className="instant-avatar-img"
+                      fallback={<span>{ownInitial}</span>}
+                    />
+                  ) : (
+                    <span>{ownInitial}</span>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="stories-spotlight-add-btn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleOpenStudio('choose')
+                }}
+                title="Add Story"
+                aria-label="Add Story"
+              >
+                <Plus size={16} strokeWidth={2.8} />
+              </button>
+            </div>
+          )}
 
           <div className="stories-spotlight-info">
             <div className="stories-spotlight-title-row">
@@ -326,11 +376,20 @@ export default function StoriesTab({ user, profile, onReply }) {
 
             <p className="stories-spotlight-desc">
               {hasOwnActive
-                ? `${myStories.length} active ${myStories.length === 1 ? 'update' : 'updates'} published · Tap avatar to view`
+                ? `${myStories.length} active ${myStories.length === 1 ? 'update' : 'updates'} published · Tap preview to view`
                 : 'Share a photo, text update, or creative canvas with your friends.'}
             </p>
 
             <div className="stories-spotlight-actions">
+              <button
+                type="button"
+                className="stories-spotlight-action-pill is-primary"
+                onClick={() => handleOpenStudio('choose')}
+              >
+                <Plus size={14} />
+                <span>{hasOwnActive ? 'Add to Story' : 'New Story'}</span>
+              </button>
+
               <button
                 type="button"
                 className="stories-spotlight-action-pill"
@@ -399,17 +458,12 @@ export default function StoriesTab({ user, profile, onReply }) {
                   >
                     {/* Media Thumbnail */}
                     <div className="stories-editorial-media-wrapper">
-                      {latestStory?.image_path ? (
-                        <StoryThumbnail
-                          imagePath={latestStory.image_path}
-                          alt={`${senderName}'s story`}
-                          className="stories-editorial-thumbnail"
-                        />
-                      ) : (
-                        <div className="stories-editorial-fallback">
-                          <Sparkles size={28} />
-                        </div>
-                      )}
+                      <StoryThumbnail
+                        imagePath={latestStory?.image_path}
+                        alt={`${senderName}'s story`}
+                        className="stories-editorial-thumbnail"
+                        fallbackInitials={senderName[0]}
+                      />
                       <div className="stories-editorial-gradient" />
                     </div>
 

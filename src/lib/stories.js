@@ -172,11 +172,12 @@ export async function deleteStory(storyId, userId) {
   const client = getSupabaseClient()
 
   // 1. Delete associated recipients
-  await client
-    .from('instant_recipients')
-    .delete()
-    .eq('instant_id', storyId)
-    .catch(() => {})
+  try {
+    await client
+      .from('instant_recipients')
+      .delete()
+      .eq('instant_id', storyId)
+  } catch (_) {}
 
   // 2. Delete story record
   const { error } = await client
@@ -350,7 +351,9 @@ async function populateStoryRecipients({ storyId, audienceType, userId }) {
           instant_id: storyId,
           recipient_id: cf.friend_id,
         }))
-        await client.from('instant_recipients').insert(recipients).catch(() => {})
+        try {
+          await client.from('instant_recipients').insert(recipients)
+        } catch (_) {}
       }
     } else {
       const { data: friendships } = await client
@@ -363,7 +366,9 @@ async function populateStoryRecipients({ storyId, audienceType, userId }) {
           instant_id: storyId,
           recipient_id: f.user_low === userId ? f.user_high : f.user_low,
         }))
-        await client.from('instant_recipients').insert(recipients).catch(() => {})
+        try {
+          await client.from('instant_recipients').insert(recipients)
+        } catch (_) {}
       }
     }
   } catch (err) {
@@ -449,15 +454,18 @@ export async function consumeAndViewStory(storyId, isOwn = false, ownProfile = n
     const { data: authData } = await client.auth.getUser()
     const viewerId = authData?.user?.id
     if (viewerId) {
-      await client
-        .from('instant_recipients')
-        .update({
-          is_viewed: true,
-          viewed_at: new Date().toISOString(),
-        })
-        .eq('instant_id', storyId)
-        .eq('recipient_id', viewerId)
-        .catch(() => {})
+      try {
+        await client
+          .from('instant_recipients')
+          .update({
+            is_viewed: true,
+            viewed_at: new Date().toISOString(),
+          })
+          .eq('instant_id', storyId)
+          .eq('recipient_id', viewerId)
+      } catch (trackErr) {
+        console.warn('[stories] Error updating view status:', trackErr)
+      }
     }
   }
 
@@ -560,14 +568,14 @@ export async function sendStoryReply({ storyId, storyOwnerId, content = '', reac
 
   // 1. Authoritative RPC check
   try {
-    const { data, error } = await client.rpc('send_story_reply_message', {
+    const { data, error: rpcError } = await client.rpc('send_story_reply_message', {
       p_story_id: storyId,
       p_story_owner_id: storyOwnerId,
       p_content: content,
       p_reaction: reaction,
       p_story_snapshot: storySnapshot,
     })
-    if (!error && data?.conversation_id) return data
+    if (!rpcError && data?.conversation_id) return data
   } catch (_) {}
 
   // 2. Resilient Direct Messenger Integration
@@ -645,11 +653,12 @@ export async function sendStoryReply({ storyId, storyOwnerId, content = '', reac
   }
 
   // Update conversation last_activity_at
-  await client
-    .from('conversations')
-    .update({ last_activity_at: new Date().toISOString() })
-    .eq('id', convId)
-    .catch(() => {})
+  try {
+    await client
+      .from('conversations')
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq('id', convId)
+  } catch (_) {}
 
   return {
     conversation_id: convId,
