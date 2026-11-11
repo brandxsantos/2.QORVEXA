@@ -317,13 +317,15 @@ export default function StoriesPreviewTray({
       </div>
 
       {/* Studio Modal */}
-      <StoryStudioModal
-        isOpen={createModalOpen}
-        initialMode={createModalMode}
-        onClose={() => setCreateModalOpen(false)}
-        onStoryPublished={handleStoryPublished}
-        user={user}
-      />
+      {createModalOpen && (
+        <StoryStudioModal
+          isOpen={createModalOpen}
+          initialMode={createModalMode}
+          onClose={() => setCreateModalOpen(false)}
+          onStoryPublished={handleStoryPublished}
+          user={user}
+        />
+      )}
 
       {/* Continuous Viewer Modal */}
       <StoryViewerModal

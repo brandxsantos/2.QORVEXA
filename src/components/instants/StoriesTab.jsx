@@ -537,13 +537,15 @@ export default function StoriesTab({ user, profile, onReply }) {
       </div>
 
       {/* Story Studio Composer Modal */}
-      <StoryStudioModal
-        isOpen={studioOpen}
-        initialMode={studioMode}
-        onClose={() => setStudioOpen(false)}
-        onStoryPublished={handleStoryPublished}
-        user={user}
-      />
+      {studioOpen && (
+        <StoryStudioModal
+          isOpen={studioOpen}
+          initialMode={studioMode}
+          onClose={() => setStudioOpen(false)}
+          onStoryPublished={handleStoryPublished}
+          user={user}
+        />
+      )}
 
       {/* Story Archive Modal */}
       <StoryArchiveModal

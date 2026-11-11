@@ -88,19 +88,22 @@ export default function StoryStudioModal({
   const [error, setError] = useState('')
 
   const fileInputRef = useRef(null)
+  const slidesRef = useRef(slides)
+  slidesRef.current = slides
+  const prevOpenRef = useRef(false)
 
-  // Clean up object URLs when closing
+  // Clean up object URLs when closing without creating re-render loops
   const cleanupSlides = useCallback(() => {
-    slides.forEach((s) => {
-      if (s.previewUrl && !s.previewUrl.startsWith('data:')) {
+    slidesRef.current.forEach((s) => {
+      if (s?.previewUrl && !s.previewUrl.startsWith('data:')) {
         URL.revokeObjectURL(s.previewUrl)
       }
     })
-    setSlides([])
+    setSlides((prev) => (prev.length > 0 ? [] : prev))
     setActiveSlideIdx(0)
-    setStickersOnSlide([])
-    setDrawHistory([])
-  }, [slides])
+    setStickersOnSlide((prev) => (prev.length > 0 ? [] : prev))
+    setDrawHistory((prev) => (prev.length > 0 ? [] : prev))
+  }, [])
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -109,30 +112,43 @@ export default function StoryStudioModal({
     }
   }, [])
 
-  // Handle open/close and initial mode
+  // Handle open/close and initial mode safely without infinite loops
   useEffect(() => {
     if (!isOpen) {
-      stopCamera()
-      cleanupSlides()
-      setStudioMode('choose')
-      setError('')
-      setPublishing(false)
-      setPublishProgress(null)
-      setActiveTool('none')
-    } else {
-      setError('')
-      if (initialMode === 'camera') {
-        startCamera('user')
-      } else if (initialMode === 'gallery') {
+      if (prevOpenRef.current) {
+        stopCamera()
+        cleanupSlides()
         setStudioMode('choose')
-        setTimeout(() => fileInputRef.current?.click(), 80)
-      } else if (initialMode === 'text') {
-        setStudioMode('text')
-      } else {
-        setStudioMode('choose')
+        setError('')
+        setPublishing(false)
+        setPublishProgress(null)
+        setActiveTool('none')
+        prevOpenRef.current = false
       }
+      return
+    }
+
+    prevOpenRef.current = true
+    setError('')
+    if (initialMode === 'camera') {
+      startCamera('user')
+    } else if (initialMode === 'gallery') {
+      setStudioMode('choose')
+      setTimeout(() => fileInputRef.current?.click(), 80)
+    } else if (initialMode === 'text') {
+      setStudioMode('text')
+    } else {
+      setStudioMode('choose')
     }
   }, [isOpen, initialMode, stopCamera, cleanupSlides])
+
+  // Clean up camera stream and object URLs on component unmount
+  useEffect(() => {
+    return () => {
+      stopCamera()
+      cleanupSlides()
+    }
+  }, [stopCamera, cleanupSlides])
 
   // Camera Management
   const startCamera = async (facing = 'user') => {
