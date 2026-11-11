@@ -4,6 +4,7 @@ import { useAuth } from '../context/useAuth.js'
 import {
   authorizeRealtimeSession,
   getSupabaseClient,
+  getOwnProfileSettingsCached,
 } from '../lib/supabase.js'
 
 const availabilityEvent = 'qorvexa:availability-change'
@@ -174,9 +175,7 @@ console.log('[QORVEXA Presence Debug] Track result:', {
           }
         })
 
-        const { data, error } = await client.rpc(
-          'get_own_profile_settings',
-        )
+        const { data, error } = await getOwnProfileSettingsCached(client)
 
         if (error) throw error
         if (!active) return
@@ -248,7 +247,7 @@ console.log('[QORVEXA Presence Debug] Track result:', {
         channel = null
       }
     }
-  }, [user])
+  }, [user?.id])
 
   return null
 }

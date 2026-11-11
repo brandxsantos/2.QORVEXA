@@ -21,25 +21,34 @@ export function AuthProvider({ children }) {
     const { client } = clientState
     if (!client) return undefined
 
+    function applySessionUser(nextUser, nextError = null) {
+      setAuthState((prev) => {
+        if (
+          !prev.loading &&
+          prev.error === nextError &&
+          prev.user?.id === nextUser?.id &&
+          prev.user?.updated_at === nextUser?.updated_at
+        ) {
+          return prev
+        }
+        return { user: nextUser, loading: false, error: nextError }
+      })
+    }
+
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((_event, session) => {
       if (active) {
-        setAuthState({ user: session?.user ?? null, loading: false, error: null })
+        applySessionUser(session?.user ?? null, null)
       }
     })
 
     client.auth.getSession().then(({ data, error }) => {
       if (!active) return
-
-      setAuthState({
-        user: data.session?.user ?? null,
-        loading: false,
-        error: error?.message ?? null,
-      })
+      applySessionUser(data.session?.user ?? null, error?.message ?? null)
     }).catch((error) => {
       if (active) {
-        setAuthState({ user: null, loading: false, error: error.message })
+        applySessionUser(null, error.message)
       }
     })
 

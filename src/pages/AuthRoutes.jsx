@@ -34,7 +34,6 @@ function ProtectedRoute({ children }) {
 
 function AuthRoutes() {
   const { pathname } = useLocation()
-  const networkSection = pathname.startsWith('/app/messages') ? 'network-messages' : (pathname.split('/')[2] || 'network')
   const memberPage = pathname.startsWith('/profile/') || pathname.startsWith('/post/')
     ? <PublicProfilePage key={pathname} />
     : pathname.startsWith('/hashtag/')
@@ -49,7 +48,7 @@ function AuthRoutes() {
         ? <BookmarksPage />
         : pathname === '/app/privacy'
           ? <PrivacyPage />
-          : <NetworkPage key={networkSection} />
+          : <NetworkPage />
   const page = pathname.startsWith('/profile/') || pathname.startsWith('/post/') || pathname.startsWith('/hashtag/')
     ? memberPage
     : pathname.startsWith('/app')

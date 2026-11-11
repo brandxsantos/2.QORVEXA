@@ -35,7 +35,7 @@ import BrandMark from '../components/BrandMark.jsx'
 import CallReceipt from '../components/CallReceipt.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { useCall } from '../context/useCall.js'
-import { authorizeRealtimeSession, getSupabaseClient } from '../lib/supabase.js'
+import { authorizeRealtimeSession, getSupabaseClient, getOwnProfileSettingsCached } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import NotificationToast from '../components/NotificationToast.jsx'
 import notificationToastText from '../lib/notificationToastText.js'
@@ -128,6 +128,7 @@ const notificationFilters = [
   ['other', 'Other activity'],
 ]
 const presenceStatusEvent = 'qorvexa:presence-status'
+const networkCacheByUserId = new Map()
 
 function isNetworkSetupError(error) {
   return ['42P01', '42703', 'PGRST200', 'PGRST202', 'PGRST205', '42883'].includes(error.code)
@@ -199,16 +200,17 @@ function NetworkPage() {
       navigate('/app/messages?tab=stories', { replace: true })
     }
   }, [activeSection, navigate])
-  const [profiles, setProfiles] = useState([])
-  const [discoveryLoadedCount, setDiscoveryLoadedCount] = useState(0)
-  const [hasMoreDiscoverProfiles, setHasMoreDiscoverProfiles] = useState(false)
-  const [requests, setRequests] = useState([])
-  const [friendships, setFriendships] = useState([])
-  const [ownUsername, setOwnUsername] = useState(user.user_metadata?.username || '')
-  const [blockedIds, setBlockedIds] = useState(() => new Set())
-  const [notifications, setNotifications] = useState([])
+  const cachedNetwork = networkCacheByUserId.get(user.id)
+  const [profiles, setProfiles] = useState(() => cachedNetwork?.profiles || [])
+  const [discoveryLoadedCount, setDiscoveryLoadedCount] = useState(() => cachedNetwork?.discoveryLoadedCount || 0)
+  const [hasMoreDiscoverProfiles, setHasMoreDiscoverProfiles] = useState(() => cachedNetwork?.hasMoreDiscoverProfiles || false)
+  const [requests, setRequests] = useState(() => cachedNetwork?.requests || [])
+  const [friendships, setFriendships] = useState(() => cachedNetwork?.friendships || [])
+  const [ownUsername, setOwnUsername] = useState(() => cachedNetwork?.ownUsername || user.user_metadata?.username || '')
+  const [blockedIds, setBlockedIds] = useState(() => cachedNetwork?.blockedIds || new Set())
+  const [notifications, setNotifications] = useState(() => cachedNetwork?.notifications || [])
   const [notificationFilter, setNotificationFilter] = useState('all')
-  const [conversations, setConversations] = useState([])
+  const [conversations, setConversations] = useState(() => cachedNetwork?.conversations || [])
   const [directActiveConversation, setDirectActiveConversation] = useState(null)
   const activeConvRequestIdRef = useRef(0)
   const [messages, setMessages] = useState([])
@@ -230,7 +232,7 @@ function NetworkPage() {
   const audioStreamRef = useRef(null)
   const audioChunksRef = useRef([])
   const recordingTimerRef = useRef(null)
-  const [ownProfile, setOwnProfile] = useState(null)
+  const [ownProfile, setOwnProfile] = useState(() => cachedNetwork?.ownProfile || null)
   const [replyingTo, setReplyingTo] = useState(null)
   const [reactionWorkingId, setReactionWorkingId] = useState('')
   const [callReceipts, setCallReceipts] = useState([])
@@ -239,12 +241,15 @@ function NetworkPage() {
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
   const [query, setQuery] = useState('')
   const [draft, setDraft] = useState('')
-  const [status, setStatus] = useState('loading')
+  const [status, setStatus] = useState(() => (cachedNetwork ? 'ready' : 'loading'))
   const [error, setError] = useState('')
   const [presenceError, setPresenceError] = useState('')
   const [workingId, setWorkingId] = useState('')
   const [sending, setSending] = useState(false)
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(() => cachedNetwork?.unreadNotificationCount || 0)
+  const activeSectionRef = useRef(activeSection)
+  activeSectionRef.current = activeSection
+  const callsListCacheRef = useRef(cachedNetwork?.callsList || [])
   const [notificationToast, setNotificationToast] = useState('')
   const [typingConversationId, setTypingConversationId] = useState('')
   const [reportTarget, setReportTarget] = useState(null)
@@ -346,27 +351,35 @@ function NetworkPage() {
 
   const loadNetwork = useCallback(async () => {
     const client = getSupabaseClient()
-    const [profilesResult, ownProfileResult, ownSettingsResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult, callsResult] = await Promise.all([
-      client.from('profiles').select(profileFields).neq('id', user.id).order('created_at', { ascending: false }).range(0, 49),
-      client.from('profiles').select('id, username, display_name, avatar_url').eq('id', user.id).maybeSingle(),
-      client.rpc('get_own_profile_settings'),
-      client.from('friend_requests').select(requestFields).or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
+    const isDiscover = activeSectionRef.current === 'discover'
+    const isNotifications = activeSectionRef.current === 'notifications'
+
+    // Stage 1: Fast core queries required to render the current view immediately
+    const [
+      requestsResult,
+      friendshipsResult,
+      conversationsResult,
+      conversationSummariesResult,
+      blocksResult,
+      stage1ProfilesResult,
+      stage1NotificationsResult,
+    ] = await Promise.all([
+      client.from('friend_requests').select(requestFields).or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: false }).limit(100),
       client.from('friendships').select('user_low, user_high, created_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
-      client.from('notifications').select(notificationFields).eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
       queryConversationsWithFallback((fields) =>
         client.from('conversations').select(fields).or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('updated_at', { ascending: false }).limit(100)
       ),
-      client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
       client.rpc('get_conversation_summaries'),
       client.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
-      client.from('call_sessions')
-        .select('id, conversation_id, caller_id, callee_id, call_type, status, created_at, accepted_at, ended_at')
-        .or(`caller_id.eq.${user.id},callee_id.eq.${user.id}`)
-        .order('created_at', { ascending: false })
-        .limit(200),
+      isDiscover
+        ? client.from('profiles').select(profileFields).neq('id', user.id).order('created_at', { ascending: false }).range(0, 49)
+        : Promise.resolve({ data: null, error: null }),
+      isNotifications
+        ? client.from('notifications').select(notificationFields).eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)
+        : Promise.resolve({ data: null, error: null }),
     ])
 
-    for (const result of [profilesResult, ownProfileResult, ownSettingsResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult, callsResult]) {
+    for (const result of [requestsResult, friendshipsResult, conversationsResult, conversationSummariesResult, blocksResult, stage1ProfilesResult, stage1NotificationsResult]) {
       if (result.error) throw result.error
     }
 
@@ -389,58 +402,172 @@ function NetworkPage() {
       }
     }
 
-    let profileById = Object.fromEntries((profilesResult.data || []).map((profile) => [profile.id, profile]))
+    let currentProfileMap = { ...profileByIdRef.current }
+    if (stage1ProfilesResult.data) {
+      for (const profile of stage1ProfilesResult.data) {
+        currentProfileMap[profile.id] = profile
+      }
+    }
+
     const summariesByConversationId = Object.fromEntries((conversationSummariesResult.data || []).map((summary) => [summary.conversation_id, summary]))
     const relatedIds = new Set([
+      user.id,
       ...(requestsResult.data || []).flatMap((request) => [request.sender_id, request.receiver_id]),
       ...(friendshipsResult.data || []).flatMap((friendship) => [friendship.user_low, friendship.user_high]),
     ])
 
     if (conversationRows.length) {
-      const peerIds = [...new Set(conversationRows.map((conversation) => (
-        conversation.user_low === user.id ? conversation.user_high : conversation.user_low
-      )))]
-      peerIds.forEach((id) => relatedIds.add(id))
-    }
-
-    const missingProfileIds = [...relatedIds].filter((id) => id !== user.id && !profileById[id])
-    if (missingProfileIds.length) {
-      const peerResult = await client.from('profiles').select(profileFields).in('id', missingProfileIds)
-      if (peerResult.error) throw peerResult.error
-      profileById = {
-        ...profileById,
-        ...Object.fromEntries((peerResult.data || []).map((profile) => [profile.id, profile])),
+      for (const conversation of conversationRows) {
+        const peerId = conversation.user_low === user.id ? conversation.user_high : conversation.user_low
+        relatedIds.add(peerId)
       }
     }
 
-    setProfiles(Object.values(profileById))
-    setOwnProfile(ownProfileResult.data || null)
-    setOwnUsername(ownProfileResult.data?.username || '')
-    setAvailabilityById((current) => ({ ...current, [user.id]: ownSettingsResult.data?.[0]?.availability_status || 'online' }))
-    setDiscoveryLoadedCount(profilesResult.data?.length || 0)
-    setHasMoreDiscoverProfiles((profilesResult.data?.length || 0) === 50)
+    const neededProfileIds = [...relatedIds].filter((id) => !currentProfileMap[id])
+    if (neededProfileIds.length) {
+      const peerResult = await client.from('profiles').select(profileFields).in('id', neededProfileIds)
+      if (peerResult.error) throw peerResult.error
+      for (const profile of peerResult.data || []) {
+        currentProfileMap[profile.id] = profile
+      }
+    }
 
-    setRequests(requestsResult.data || [])
-    setFriendships(friendshipsResult.data || [])
+    const resolvedOwnProfile = currentProfileMap[user.id] || null
     const blockedSet = new Set((blocksResult.data || []).map((item) => item.blocked_id))
-    setBlockedIds(blockedSet)
-    setNotifications(notificationsResult.data || [])
-    setUnreadNotificationCount(unreadCountResult.count || 0)
-    
-    // Only exclude blocked peers; Supabase RLS enforces conversation access
     const activeConversations = conversationRows.filter((conversation) => {
       const peerId = conversation.user_low === user.id ? conversation.user_high : conversation.user_low
       return !blockedSet.has(peerId)
     })
-    const updatedConversations = applyCallReceiptsToConversations(
+
+    const initialConversations = applyCallReceiptsToConversations(
       activeConversations,
       summariesByConversationId,
-      callsResult.data || [],
+      callsListCacheRef.current || [],
       user.id,
-      profileById
+      currentProfileMap
     )
-    setConversations(updatedConversations)
+
+    const allProfilesList = Object.values(currentProfileMap).filter((p) => p.id !== user.id)
+    setProfiles(allProfilesList)
+    if (resolvedOwnProfile) {
+      setOwnProfile(resolvedOwnProfile)
+      setOwnUsername(resolvedOwnProfile.username || '')
+    }
+    if (stage1ProfilesResult.data) {
+      setDiscoveryLoadedCount(stage1ProfilesResult.data.length)
+      setHasMoreDiscoverProfiles(stage1ProfilesResult.data.length === 50)
+    }
+    if (stage1NotificationsResult.data) {
+      setNotifications(stage1NotificationsResult.data)
+    }
+
+    setRequests(requestsResult.data || [])
+    setFriendships(friendshipsResult.data || [])
+    setBlockedIds(blockedSet)
+    setConversations(initialConversations)
     setStatus('ready')
+
+    const friendProfiles = [...new Set((friendshipsResult.data || []).map((f) => (
+      f.user_low === user.id ? f.user_high : f.user_low
+    )))]
+      .filter((id) => !blockedSet.has(id))
+      .map((id) => currentProfileMap[id])
+      .filter(Boolean)
+
+    networkCacheByUserId.set(user.id, {
+      profiles: allProfilesList,
+      ownProfile: resolvedOwnProfile,
+      ownUsername: resolvedOwnProfile?.username || '',
+      discoveryLoadedCount: stage1ProfilesResult.data ? stage1ProfilesResult.data.length : (networkCacheByUserId.get(user.id)?.discoveryLoadedCount || 0),
+      hasMoreDiscoverProfiles: stage1ProfilesResult.data ? stage1ProfilesResult.data.length === 50 : (networkCacheByUserId.get(user.id)?.hasMoreDiscoverProfiles || false),
+      requests: requestsResult.data || [],
+      friendships: friendshipsResult.data || [],
+      blockedIds: blockedSet,
+      notifications: stage1NotificationsResult.data || networkCacheByUserId.get(user.id)?.notifications || [],
+      unreadNotificationCount: networkCacheByUserId.get(user.id)?.unreadNotificationCount || 0,
+      conversations: initialConversations,
+      callsList: callsListCacheRef.current || [],
+    })
+
+    window.dispatchEvent(new CustomEvent('qorvexa:network-synced', {
+      detail: {
+        conversations: initialConversations,
+        friends: friendProfiles,
+      },
+    }))
+
+    // Stage 2: Non-blocking background enrichment (settings, notifications, calls, discovery profiles)
+    Promise.all([
+      getOwnProfileSettingsCached(client).catch(() => ({ data: null, error: null })),
+      !isNotifications
+        ? client.from('notifications').select(notificationFields).eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)
+        : Promise.resolve({ data: stage1NotificationsResult.data, error: null }),
+      client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
+      client.from('call_sessions')
+        .select('id, conversation_id, caller_id, callee_id, call_type, status, created_at, accepted_at, ended_at')
+        .or(`caller_id.eq.${user.id},callee_id.eq.${user.id}`)
+        .order('created_at', { ascending: false })
+        .limit(50),
+      !isDiscover
+        ? client.from('profiles').select(profileFields).neq('id', user.id).order('created_at', { ascending: false }).range(0, 49)
+        : Promise.resolve({ data: null, error: null }),
+    ]).then(([ownSettingsResult, bgNotificationsResult, unreadCountResult, callsResult, bgProfilesResult]) => {
+      if (ownSettingsResult?.data?.[0]) {
+        setAvailabilityById((current) => ({
+          ...current,
+          [user.id]: ownSettingsResult.data[0].availability_status || 'online',
+        }))
+      }
+
+      if (!bgNotificationsResult?.error && bgNotificationsResult?.data) {
+        setNotifications(bgNotificationsResult.data)
+      }
+      if (!unreadCountResult?.error && typeof unreadCountResult?.count === 'number') {
+        setUnreadNotificationCount(unreadCountResult.count)
+      }
+
+      let enrichedProfileMap = { ...currentProfileMap }
+      if (!bgProfilesResult?.error && bgProfilesResult?.data) {
+        for (const p of bgProfilesResult.data) {
+          enrichedProfileMap[p.id] = p
+        }
+        const mergedProfiles = Object.values(enrichedProfileMap).filter((p) => p.id !== user.id)
+        setProfiles(mergedProfiles)
+        setDiscoveryLoadedCount(bgProfilesResult.data.length)
+        setHasMoreDiscoverProfiles(bgProfilesResult.data.length === 50)
+      }
+
+      let finalConversations = initialConversations
+      if (!callsResult?.error && callsResult?.data) {
+        callsListCacheRef.current = callsResult.data
+        finalConversations = applyCallReceiptsToConversations(
+          activeConversations,
+          summariesByConversationId,
+          callsResult.data,
+          user.id,
+          enrichedProfileMap
+        )
+        setConversations(finalConversations)
+        window.dispatchEvent(new CustomEvent('qorvexa:network-synced', {
+          detail: {
+            conversations: finalConversations,
+            friends: friendProfiles,
+          },
+        }))
+      }
+
+      const prevCache = networkCacheByUserId.get(user.id) || {}
+      networkCacheByUserId.set(user.id, {
+        ...prevCache,
+        profiles: Object.values(enrichedProfileMap).filter((p) => p.id !== user.id),
+        notifications: bgNotificationsResult?.data || prevCache.notifications || [],
+        unreadNotificationCount: typeof unreadCountResult?.count === 'number' ? unreadCountResult.count : (prevCache.unreadNotificationCount || 0),
+        conversations: finalConversations,
+        callsList: callsListCacheRef.current || [],
+      })
+    }).catch((bgErr) => {
+      console.warn('Non-fatal background network enrichment error:', bgErr)
+    })
   }, [user.id])
 
   const handleNetworkLoadError = useCallback((loadError) => {
@@ -545,6 +672,7 @@ function NetworkPage() {
   }, [])
 
   useEffect(() => {
+    if (status !== 'ready' || !presenceTargetIds) return undefined
     const client = getSupabaseClient()
     const presenceChannels = new Map()
     let active = true
@@ -607,7 +735,7 @@ function NetworkPage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       for (const channel of presenceChannels.values()) client.removeChannel(channel)
     }
-  }, [presenceTargetIds, user.id])
+  }, [presenceTargetIds, status, user.id])
 
   // Dedicated immediate resolution for selected conversation
   useEffect(() => {

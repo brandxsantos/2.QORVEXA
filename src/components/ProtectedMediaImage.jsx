@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { getSupabaseClient } from '../lib/supabase.js'
 
+const mediaUrlCache = new Map()
+const inflightDownloads = new Map()
+
 function getObjectPath(value) {
   if (!value) return null
   if (!value.startsWith('http')) return value
@@ -14,9 +17,55 @@ function getObjectPath(value) {
   }
 }
 
+function resolveMediaObject(objectPath) {
+  if (mediaUrlCache.has(objectPath)) {
+    return Promise.resolve(mediaUrlCache.get(objectPath))
+  }
+  if (inflightDownloads.has(objectPath)) {
+    return inflightDownloads.get(objectPath)
+  }
+
+  const client = getSupabaseClient()
+  const promise = client.storage
+    .from('qorvexa-media')
+    .download(objectPath)
+    .then(({ data, error }) => {
+      if (error) throw error
+      const objectUrl = URL.createObjectURL(data)
+      const entry = { src: objectUrl, unavailable: false }
+      mediaUrlCache.set(objectPath, entry)
+      return entry
+    })
+    .catch(() => {
+      try {
+        const { data: pubData } = client.storage
+          .from('qorvexa-media')
+          .getPublicUrl(objectPath)
+        if (pubData?.publicUrl) {
+          const entry = { src: pubData.publicUrl, unavailable: false }
+          mediaUrlCache.set(objectPath, entry)
+          return entry
+        }
+      } catch (_) {}
+      return { src: '', unavailable: true }
+    })
+    .finally(() => {
+      inflightDownloads.delete(objectPath)
+    })
+
+  inflightDownloads.set(objectPath, promise)
+  return promise
+}
+
 function ProtectedMediaImage({ path, alt = '', className, loading, fallback }) {
-  const [resolved, setResolved] = useState({ path: '', src: '', unavailable: false })
   const objectPath = getObjectPath(path)
+  const [resolved, setResolved] = useState(() => {
+    if (objectPath && mediaUrlCache.has(objectPath)) {
+      const cached = mediaUrlCache.get(objectPath)
+      return { path, src: cached.src, unavailable: cached.unavailable }
+    }
+    return { path: '', src: '', unavailable: false }
+  })
   const externalSource = path?.startsWith('http') && !objectPath ? path : ''
   const placeholder = fallback || 'Image unavailable'
   const fallbackClass = [
@@ -27,33 +76,22 @@ function ProtectedMediaImage({ path, alt = '', className, loading, fallback }) {
 
   useEffect(() => {
     let active = true
-    let objectUrl = ''
     if (!objectPath) return undefined
 
-    getSupabaseClient().storage.from('qorvexa-media')
-      .download(objectPath)
-      .then(({ data, error }) => {
-        if (error) throw error
-        objectUrl = URL.createObjectURL(data)
-        if (active) setResolved({ path, src: objectUrl, unavailable: false })
-        else URL.revokeObjectURL(objectUrl)
-      })
-      .catch(() => {
-        try {
-          const { data: pubData } = getSupabaseClient()
-            .storage.from('qorvexa-media')
-            .getPublicUrl(objectPath)
-          if (active && pubData?.publicUrl) {
-            setResolved({ path, src: pubData.publicUrl, unavailable: false })
-            return
-          }
-        } catch (_) {}
-        if (active) setResolved({ path, src: '', unavailable: true })
-      })
+    if (mediaUrlCache.has(objectPath)) {
+      const cached = mediaUrlCache.get(objectPath)
+      setResolved({ path, src: cached.src, unavailable: cached.unavailable })
+      return undefined
+    }
+
+    resolveMediaObject(objectPath).then((entry) => {
+      if (active) {
+        setResolved({ path, src: entry.src, unavailable: entry.unavailable })
+      }
+    })
 
     return () => {
       active = false
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [objectPath, path])
 

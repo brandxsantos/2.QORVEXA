@@ -269,43 +269,43 @@ setLoadingIds((current) => current.includes(conversationId)
         [conversationId]: loadedMessages,
       }))
 
-      const interactionData = await loadMessageInteractions(client, loadedMessages)
-      setReplyMessagesByConversation((current) => ({
-        ...current,
-        [conversationId]: interactionData.replyMessagesById,
-      }))
-      setReactionsByConversation((current) => ({
-        ...current,
-        [conversationId]: interactionData.reactionsByMessageId,
-      }))
-      const atts = await loadMessageAttachments(client, (loadedMessages || []).map((m) => m.id))
-      setAttachmentsByConversation((current) => ({
-        ...current,
-        [conversationId]: atts,
-      }))
+      // Non-blocking background enrichment for interactions, attachments, and read status
+      Promise.all([
+        loadMessageInteractions(client, loadedMessages).catch(() => ({ replyMessagesById: {}, reactionsByMessageId: {} })),
+        loadMessageAttachments(client, (loadedMessages || []).map((m) => m.id)).catch(() => ({})),
+      ]).then(([interactionData, atts]) => {
+        setReplyMessagesByConversation((current) => ({
+          ...current,
+          [conversationId]: interactionData.replyMessagesById,
+        }))
+        setReactionsByConversation((current) => ({
+          ...current,
+          [conversationId]: interactionData.reactionsByMessageId,
+        }))
+        setAttachmentsByConversation((current) => ({
+          ...current,
+          [conversationId]: atts,
+        }))
+      })
 
-      try {
-        await client.from('notifications')
-          .update({ is_read: true })
-          .eq('user_id', user.id)
-          .eq('type', 'message')
-          .eq('conversation_id', conversationId)
-          .eq('is_read', false)
+      client.from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('type', 'message')
+        .eq('conversation_id', conversationId)
+        .eq('is_read', false)
+        .then(() => {})
+        .catch(() => {})
 
-        await client.rpc('mark_conversation_read', {
-          target_conversation_id: conversationId,
-        })
-      } catch (readErr) {
-        console.warn('Non-fatal mark_conversation_read failure:', readErr)
-      }
-
-      await loadConversations().catch(() => {})
+      client.rpc('mark_conversation_read', {
+        target_conversation_id: conversationId,
+      }).catch(() => {})
     } catch (loadError) {
       setError(loadError.message || 'Messages could not be loaded.')
     } finally {
       setLoadingIds((current) => current.filter((id) => id !== conversationId))
     }
-  }, [loadConversations, user?.id])
+  }, [user?.id])
 
 
   const loadCallReceipts = useCallback(async (conversationId) => {
@@ -344,13 +344,34 @@ setLoadingIds((current) => current.includes(conversationId)
 
   useEffect(() => {
     let active = true
+    let hydratedFromNetwork = false
 
-    loadConversations().catch((loadError) => {
-      if (active) setError(loadError.message || 'Conversations could not be loaded.')
-    })
+    function handleNetworkSynced(event) {
+      if (!active) return
+      const detail = event.detail
+      if (detail?.conversations) {
+        hydratedFromNetwork = true
+        setConversations(detail.conversations)
+      }
+      if (detail?.friends) {
+        setFriends(detail.friends)
+      }
+    }
+
+    window.addEventListener('qorvexa:network-synced', handleNetworkSynced)
+
+    // Defer standalone fetch slightly so NetworkPage never competes with FloatingChatDock at startup
+    const timer = window.setTimeout(() => {
+      if (!active || hydratedFromNetwork) return
+      loadConversations().catch((loadError) => {
+        if (active) setError(loadError.message || 'Conversations could not be loaded.')
+      })
+    }, 900)
 
     return () => {
       active = false
+      window.clearTimeout(timer)
+      window.removeEventListener('qorvexa:network-synced', handleNetworkSynced)
     }
   }, [loadConversations])
 

@@ -17,6 +17,15 @@ create index if not exists conversations_user_low_delivered_idx
 create index if not exists conversations_user_high_delivered_idx
   on public.conversations (user_high, user_high_last_delivered_at);
 
+create index if not exists conversations_user_low_updated_idx
+  on public.conversations (user_low, updated_at desc);
+
+create index if not exists conversations_user_high_updated_idx
+  on public.conversations (user_high, updated_at desc);
+
+create index if not exists blocked_users_blocker_blocked_idx
+  on public.blocked_users (blocker_id, blocked_id);
+
 -- Grant select on conversations to authenticated
 grant select on public.conversations to authenticated;
 

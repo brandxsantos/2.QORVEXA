@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { getSupabaseClient } from '../lib/supabase.js'
+import { getSupabaseClient, getOwnProfileSettingsCached } from '../lib/supabase.js'
 
 const ThemeContext = createContext(null)
 const STORAGE_KEY = 'qorvexa_theme'
@@ -71,7 +71,7 @@ export function ThemeProvider({ children }) {
       if (!user) return
 
       try {
-        const { data, error } = await client.rpc('get_own_profile_settings')
+        const { data, error } = await getOwnProfileSettingsCached(client)
 
         if (!active || currentRequest !== requestId) return
 
