@@ -297,3 +297,164 @@ export async function toggleCloseFriend(friendId, isCloseFriend) {
 }
 
 export const setCloseFriend = toggleCloseFriend
+
+// ==========================================
+// 4. STORY REPLIES & STORY VIEWER INTEGRATION
+// ==========================================
+
+export async function sendStoryReply({ storyId, storyOwnerId, content = '', reaction = null, storySnapshot = null }) {
+  if (!storyId) throw new Error('Story ID is required.')
+  const client = getSupabaseClient()
+  const { data: { user } } = await client.auth.getUser()
+  if (!user) throw new Error('Authentication required.')
+
+  const cleanContent = (content || '').trim() || reaction
+  if (!cleanContent) throw new Error('Reply content or reaction is required.')
+
+  // 1. Try authoritative RPC
+  try {
+    const { data, error } = await client.rpc('send_story_reply', {
+      p_story_id: storyId,
+      p_content: content ? content.trim() : null,
+      p_reaction: reaction ? reaction.trim() : null,
+    })
+    if (!error && data?.success) return data
+    if (error && !error.message?.includes('function') && !error.message?.includes('not found') && !error.message?.includes('does not exist')) {
+      throw error
+    }
+  } catch (rpcErr) {
+    if (!rpcErr.message?.includes('function') && !rpcErr.message?.includes('not found') && !rpcErr.message?.includes('does not exist')) {
+      throw rpcErr
+    }
+  }
+
+  // 2. Fallback: retrieve or create conversation and insert directly
+  if (!storyOwnerId) {
+    const { data: storyRow } = await client
+      .from('instants')
+      .select('sender_id, image_path, caption, expires_at')
+      .eq('id', storyId)
+      .maybeSingle()
+    if (storyRow) {
+      storyOwnerId = storyRow.sender_id
+      if (!storySnapshot) {
+        storySnapshot = {
+          story_id: storyId,
+          image_path: storyRow.image_path,
+          caption: storyRow.caption,
+          sender_id: storyRow.sender_id,
+          expires_at: storyRow.expires_at,
+          reaction: reaction || null,
+        }
+      }
+    }
+  }
+
+  if (!storyOwnerId) throw new Error('Story owner not found.')
+  if (storyOwnerId === user.id) throw new Error('Cannot reply to your own story.')
+
+  // Find or create conversation
+  let conversationId = null
+  const { data: convRpcId, error: convErr } = await client.rpc('start_direct_conversation', {
+    target_user_id: storyOwnerId,
+  })
+  if (!convErr && convRpcId) {
+    conversationId = convRpcId
+  } else {
+    const low = user.id < storyOwnerId ? user.id : storyOwnerId
+    const high = user.id < storyOwnerId ? storyOwnerId : user.id
+    const { data: existingConv } = await client
+      .from('conversations')
+      .select('id')
+      .eq('user_low', low)
+      .eq('user_high', high)
+      .maybeSingle()
+    if (existingConv) {
+      conversationId = existingConv.id
+    } else {
+      const { data: newConv, error: newConvErr } = await client
+        .from('conversations')
+        .insert({ user_low: low, user_high: high })
+        .select('id')
+        .single()
+      if (newConvErr) throw newConvErr
+      conversationId = newConv.id
+    }
+  }
+
+  const meta = storySnapshot || {
+    story_id: storyId,
+    reaction: reaction || null,
+  }
+
+  const { data: insertedMsg, error: msgErr } = await client
+    .from('messages')
+    .insert({
+      conversation_id: conversationId,
+      sender_id: user.id,
+      content: cleanContent,
+      message_type: 'story_reply',
+      story_id: storyId,
+      story_metadata: meta,
+    })
+    .select('id, conversation_id, sender_id, content, message_type, story_id, story_metadata, created_at')
+    .single()
+
+  if (msgErr) throw msgErr
+
+  await client
+    .from('conversations')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('id', conversationId)
+    .catch(() => {})
+
+  return {
+    success: true,
+    message_id: insertedMsg.id,
+    conversation_id: conversationId,
+    story_id: storyId,
+  }
+}
+
+export async function getStoryForViewer(storyId) {
+  if (!storyId) return { available: false, reason: 'not_found' }
+  const client = getSupabaseClient()
+
+  // 1. Try authoritative RPC
+  try {
+    const { data, error } = await client.rpc('get_story_for_viewer', {
+      p_story_id: storyId,
+    })
+    if (!error && data) return data
+  } catch (_) {}
+
+  // 2. Fallback direct table query
+  const { data: story, error } = await client
+    .from('instants')
+    .select(`
+      id,
+      sender_id,
+      image_path,
+      caption,
+      audience_type,
+      created_at,
+      expires_at,
+      is_story,
+      profiles:sender_id (id, username, display_name, avatar_url)
+    `)
+    .eq('id', storyId)
+    .eq('is_story', true)
+    .maybeSingle()
+
+  if (error || !story) return { available: false, reason: 'not_found' }
+  if (new Date(story.expires_at) <= new Date()) return { available: false, reason: 'expired' }
+
+  return {
+    available: true,
+    story: {
+      ...story,
+      sender: story.profiles,
+    },
+  }
+}
+

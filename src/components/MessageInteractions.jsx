@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MessageCircle, Smile, FileText, Download, Play } from 'lucide-react'
+import { MessageCircle, Smile, FileText, Download, Play, Sparkles } from 'lucide-react'
 import { formatFileSize, getFileExtension } from '../lib/messageAttachments.js'
 import VoicePlayer from './VoicePlayer.jsx'
+import StoryThumbnail from './instants/StoryThumbnail.jsx'
 
 const REACTIONS = [
   { type: 'like', emoji: '👍', label: 'Like' },
@@ -24,6 +25,7 @@ export default function MessageInteractions({
   onReact,
   onJump,
   onOpenMedia,
+  onOpenStory,
   footer = null,
   bubbleClassName = '',
 }) {
@@ -32,6 +34,10 @@ export default function MessageInteractions({
   const triggerRef = useRef(null)
   const pickerRef = useRef(null)
   const isOwn = message.sender_id === currentUserId
+
+  const isStoryReply = message.message_type === 'story_reply' || Boolean(message.story_id) || Boolean(message.story_metadata)
+  const storyMeta = message.story_metadata || {}
+  const isStoryReaction = Boolean(storyMeta.reaction) || (isStoryReply && ['❤️', '🔥', '😂', '😮', '😢', '👏', '👍', '🥰'].includes(message.content?.trim()))
 
   const photos = attachments.filter((a) => a.attachment_type === 'photo')
   const videos = attachments.filter((a) => a.attachment_type === 'video')
@@ -234,15 +240,51 @@ export default function MessageInteractions({
           </div>
         )}
 
-        {/* 4. Text Content or Caption */}
-        {showContent && (
+        {/* 3.5 Story Reply Card */}
+        {isStoryReply && (
+          <div
+            className="qv-story-reply-card"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenStory?.(message.story_id || storyMeta.story_id, storyMeta)
+            }}
+            role="button"
+            tabIndex={0}
+            title="Click to view story"
+          >
+            <div className="qv-story-reply-header">
+              <Sparkles size={12} aria-hidden="true" />
+              <span>
+                {isStoryReaction
+                  ? (isOwn ? 'You reacted to story' : 'Reacted to your story')
+                  : (isOwn ? 'You replied to story' : 'Replied to your story')}
+              </span>
+            </div>
+            <div className="qv-story-reply-preview">
+              <StoryThumbnail imagePath={storyMeta.image_path} alt="Story preview" />
+              {storyMeta.caption ? (
+                <div className="qv-story-reply-caption-preview">
+                  "{storyMeta.caption}"
+                </div>
+              ) : (
+                <div className="qv-story-reply-caption-preview">
+                  View story
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 4. Text Content, Reaction, or Caption */}
+        {isStoryReaction ? (
+          <div className="qv-story-reply-reaction-text">{message.content}</div>
+        ) : showContent ? (
           <p className={`qv-message-content${hasAttachments ? ' qv-message-caption' : ''}`}>
             {message.content}
           </p>
-        )}
-        {!hasAttachments && !showContent && message.content && (
+        ) : (!hasAttachments && !showContent && message.content) ? (
           <p className="qv-message-content">{message.content}</p>
-        )}
+        ) : null}
 
         {/* Footer: timestamp & receipt */}
         {footer && <div className="qv-message-footer">{footer}</div>}

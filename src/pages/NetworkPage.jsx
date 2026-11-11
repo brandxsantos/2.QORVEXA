@@ -51,10 +51,12 @@ import SharedMediaPanel from '../components/SharedMediaPanel.jsx'
 import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
 import StoriesTab from '../components/instants/StoriesTab.jsx'
 import InstantsTab from '../components/instants/InstantsTab.jsx'
+import StoryViewerModal from '../components/instants/StoryViewerModal.jsx'
+import { getStoryForViewer } from '../lib/instants.js'
 
 const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility, online_status_visibility'
 const requestFields = 'id, sender_id, receiver_id, status, created_at'
-const messageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, created_at'
+const messageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, message_type, story_id, story_metadata, created_at'
 const notificationFields = 'id, user_id, actor_id, type, reference_id, post_id, conversation_id, preview, is_read, created_at, profiles!notifications_actor_id_fkey(username, display_name, avatar_url)'
 const notificationFilters = [
   ['all', 'All notifications'],
@@ -194,6 +196,47 @@ function NetworkPage() {
   const typingTimeoutRef = useRef(null)
   const typingSendTimeoutRef = useRef(null)
   const chatChannelRef = useRef(null)
+  const [referencedStoryViewer, setReferencedStoryViewer] = useState({
+    isOpen: false,
+    userStoryStacks: [],
+  })
+
+  async function handleOpenStoryReference(storyId, storyMetadata) {
+    if (!storyId) {
+      setNotificationToast('This story is no longer available.')
+      return
+    }
+
+    try {
+      const result = await getStoryForViewer(storyId)
+      if (result?.available && result.story) {
+        const stack = {
+          id: result.story.sender?.id || result.story.sender_id,
+          user: result.story.sender,
+          sender: result.story.sender,
+          isOwn: (result.story.sender?.id || result.story.sender_id) === user.id,
+          instants: [result.story],
+        }
+        setReferencedStoryViewer({
+          isOpen: true,
+          userStoryStacks: [stack],
+        })
+      } else {
+        const reason = result?.reason
+        if (reason === 'expired') {
+          setNotificationToast('This story has expired and is no longer available.')
+        } else if (reason === 'unauthorized') {
+          setNotificationToast('You do not have permission to view this story.')
+        } else if (reason === 'blocked') {
+          setNotificationToast('This story is unavailable.')
+        } else {
+          setNotificationToast('This story is no longer available.')
+        }
+      }
+    } catch {
+      setNotificationToast('This story is no longer available.')
+    }
+  }
 
   const pathConversationId = location.pathname.match(/^\/app\/messages\/([^/]+)$/)?.[1]
   const selectedConversationId = pathConversationId || searchParams.get('conversation')
@@ -1603,6 +1646,7 @@ function NetworkPage() {
                                 onReact={handleReactToMessage}
                                 onJump={jumpToMessage}
                                 onOpenMedia={handleOpenMedia}
+                                onOpenStory={handleOpenStoryReference}
                                 footer={
                                   <>
                                     <time dateTime={message.created_at}>{formatTime(message.created_at, true)}</time>
@@ -1826,6 +1870,17 @@ function NetworkPage() {
         <span>QORVEXA <span>·</span> Connect Beyond Limits.</span>
         <span>Signed in as {currentUsername ? `@${currentUsername}` : currentUserName}</span>
       </footer>
+      {referencedStoryViewer.isOpen && (
+        <StoryViewerModal
+          isOpen={referencedStoryViewer.isOpen}
+          userStoryStacks={referencedStoryViewer.userStoryStacks}
+          initialUserIndex={0}
+          initialStoryIndex={0}
+          onClose={() => setReferencedStoryViewer({ isOpen: false, userStoryStacks: [] })}
+          currentUserId={user.id}
+          ownProfile={ownProfile}
+        />
+      )}
       {reportTarget && <ReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />}
     </main>
   )

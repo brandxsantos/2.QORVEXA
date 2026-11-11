@@ -1211,6 +1211,202 @@
   gap: 10px;
 }
 
+/* Modern Story Interaction & Reply Bar */
+.story-interaction-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.story-quick-reactions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 6px;
+  padding: 2px 4px;
+}
+
+.story-react-emoji-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.45rem;
+  line-height: 1;
+  padding: 4px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  user-select: none;
+}
+
+.story-react-emoji-btn:hover {
+  transform: scale(1.3);
+}
+
+.story-react-emoji-btn:active {
+  transform: scale(0.95);
+}
+
+.story-react-emoji-btn.is-active {
+  filter: drop-shadow(0 0 6px rgba(0, 217, 245, 0.6));
+  transform: scale(1.2);
+}
+
+.story-reply-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 28px;
+  padding: 4px 6px 4px 14px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s ease;
+}
+
+.story-reply-form:focus-within {
+  background: rgba(0, 0, 0, 0.6);
+  border-color: rgba(0, 217, 245, 0.5);
+  box-shadow: 0 0 12px rgba(0, 217, 245, 0.25);
+}
+
+.story-reply-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 0.88rem;
+  font-family: inherit;
+  padding: 6px 0;
+}
+
+.story-reply-input::placeholder {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.story-reply-send-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #00d9f5;
+  color: #0b1120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.story-reply-send-action-btn:hover {
+  transform: scale(1.08);
+  background: #38bdf8;
+}
+
+.story-reply-send-action-btn:active {
+  transform: scale(0.92);
+}
+
+.story-reply-feedback-toast {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #00d9f5;
+  background: rgba(0, 217, 245, 0.15);
+  border: 1px solid rgba(0, 217, 245, 0.35);
+  padding: 4px 12px;
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+}
+
+/* Messenger Chat: Story Reply Message Card */
+.qv-story-reply-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+  text-align: left;
+}
+
+.qv-story-reply-card:hover {
+  background: rgba(0, 0, 0, 0.42);
+  border-color: rgba(0, 217, 245, 0.45);
+}
+
+.qv-story-reply-card:active {
+  transform: scale(0.99);
+}
+
+.qv-story-reply-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #00d9f5;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.qv-story-reply-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.qv-story-thumb-img {
+  width: 44px;
+  height: 62px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  flex-shrink: 0;
+  background: #000000;
+}
+
+.qv-story-thumb-placeholder {
+  width: 44px;
+  height: 62px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.qv-story-reply-caption-preview {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  line-height: 1.35;
+  font-style: italic;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.qv-story-reply-reaction-text {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  margin: 4px 0 2px 0;
+}
+
 .story-own-footer {
   display: flex;
   align-items: center;

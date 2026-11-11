@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, MessageSquare, LoaderCircle, AlertCircle, Star, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
-import { consumeAndViewInstant, reactToInstant } from '../../lib/instants.js'
+import { X, MessageSquare, LoaderCircle, AlertCircle, Star, ChevronLeft, ChevronRight, Eye, Send, Sparkles } from 'lucide-react'
+import { consumeAndViewInstant, reactToInstant, sendStoryReply } from '../../lib/instants.js'
 import ProtectedMediaImage from '../ProtectedMediaImage.jsx'
 import './Instants.css'
 
-const QUICK_REACTIONS = ['❤️', '🔥', '😂', '😮', '👏']
+const QUICK_REACTIONS = ['❤️', '🔥', '😂', '😮', '😢', '👏']
 const STORY_DURATION_MS = 5000 // 5 seconds per story
 
 export default function StoryViewerModal({
@@ -28,6 +28,9 @@ export default function StoryViewerModal({
   const [isInteracting, setIsInteracting] = useState(false)
   const [myReaction, setMyReaction] = useState(null)
   const [reacting, setReacting] = useState(false)
+  const [replyText, setReplyText] = useState('')
+  const [sendingReply, setSendingReply] = useState(false)
+  const [replyFeedback, setReplyFeedback] = useState('')
 
   const progressTimerRef = useRef(null)
   const touchStartRef = useRef(null)
@@ -40,6 +43,8 @@ export default function StoryViewerModal({
       setCurrentUserIdx(Math.max(0, Math.min(initialUserIndex, userStoryStacks.length - 1)))
       setCurrentStoryIdx(Math.max(0, initialStoryIndex))
       setProgress(0)
+    setReplyText('')
+    setReplyFeedback('')
       setImageLoaded(false)
       setIsPaused(false)
       setIsInteracting(false)
@@ -60,6 +65,8 @@ export default function StoryViewerModal({
     setImageLoaded(false)
     setError('')
     setProgress(0)
+    setReplyText('')
+    setReplyFeedback('')
 
     async function loadStory() {
       try {
@@ -115,12 +122,16 @@ export default function StoryViewerModal({
       // Advance to next story of the same user
       setCurrentStoryIdx((prev) => prev + 1)
       setProgress(0)
+    setReplyText('')
+    setReplyFeedback('')
       setImageLoaded(false)
     } else if (currentUserIdx + 1 < userStoryStacks.length) {
       // Advance to next user's stories
       setCurrentUserIdx((prev) => prev + 1)
       setCurrentStoryIdx(0)
       setProgress(0)
+    setReplyText('')
+    setReplyFeedback('')
       setImageLoaded(false)
     } else {
       // Finished all available stories!
@@ -132,10 +143,14 @@ export default function StoryViewerModal({
     if (progress > 20) {
       // If watched > 1s, restart current story
       setProgress(0)
+    setReplyText('')
+    setReplyFeedback('')
     } else if (currentStoryIdx > 0) {
       // Go to previous story of current user
       setCurrentStoryIdx((prev) => prev - 1)
       setProgress(0)
+    setReplyText('')
+    setReplyFeedback('')
       setImageLoaded(false)
     } else if (currentUserIdx > 0) {
       // Go to previous user's last story
@@ -143,6 +158,8 @@ export default function StoryViewerModal({
       setCurrentUserIdx((prev) => prev - 1)
       setCurrentStoryIdx(Math.max(0, (prevStack?.instants?.length || 1) - 1))
       setProgress(0)
+    setReplyText('')
+    setReplyFeedback('')
       setImageLoaded(false)
     }
   }, [progress, currentStoryIdx, currentUserIdx, userStoryStacks])
@@ -260,6 +277,8 @@ export default function StoryViewerModal({
           setCurrentUserIdx((prev) => prev + 1)
           setCurrentStoryIdx(0)
           setProgress(0)
+    setReplyText('')
+    setReplyFeedback('')
           setImageLoaded(false)
         } else {
           onClose?.()
@@ -270,37 +289,78 @@ export default function StoryViewerModal({
           setCurrentUserIdx((prev) => prev - 1)
           setCurrentStoryIdx(0)
           setProgress(0)
+    setReplyText('')
+    setReplyFeedback('')
           setImageLoaded(false)
         }
       }
     }
   }
 
-  // Reactions & Replies
-  const handleReact = async (emoji) => {
-    if (!currentInstant || reacting) return
-    const nextEmoji = myReaction === emoji ? null : emoji
-    setMyReaction(nextEmoji)
-    setReacting(true)
+  // Reactions & Replies integrated with Messenger
+  const handleSendReaction = async (emoji) => {
+    if (!currentInstant || sendingReply) return
+    setSendingReply(true)
+    setMyReaction(emoji)
     try {
-      await reactToInstant(currentInstant.id, nextEmoji)
-    } catch {
-      setMyReaction(myReaction)
+      await Promise.all([
+        reactToInstant(currentInstant.id, emoji).catch(() => {}),
+        sendStoryReply({
+          storyId: currentInstant.id,
+          storyOwnerId: storyData?.sender?.id || currentStack?.id,
+          reaction: emoji,
+          content: emoji,
+          storySnapshot: {
+            story_id: currentInstant.id,
+            image_path: storyData?.image_path || currentInstant.image_path,
+            caption: storyData?.caption || currentInstant.caption,
+            sender_id: storyData?.sender?.id || currentStack?.id,
+            expires_at: storyData?.expires_at || currentInstant.expires_at,
+            reaction: emoji,
+          },
+        }),
+      ])
+      setReplyFeedback(`Reacted ${emoji} in Messenger`)
+      setTimeout(() => setReplyFeedback(''), 2500)
+    } catch (err) {
+      console.warn('Reaction error:', err)
     } finally {
-      setReacting(false)
+      setSendingReply(false)
     }
   }
 
-  const handleReplyClick = () => {
-    if (onReply && storyData?.sender) {
-      onReply({
-        peerId: storyData.sender.id,
-        instantId: storyData.id,
-        caption: storyData.caption,
+  const handleSendTextReply = async (e) => {
+    if (e) e.preventDefault()
+    const text = replyText.trim()
+    if (!text || !currentInstant || sendingReply) return
+
+    setSendingReply(true)
+    try {
+      await sendStoryReply({
+        storyId: currentInstant.id,
+        storyOwnerId: storyData?.sender?.id || currentStack?.id,
+        content: text,
+        storySnapshot: {
+          story_id: currentInstant.id,
+          image_path: storyData?.image_path || currentInstant.image_path,
+          caption: storyData?.caption || currentInstant.caption,
+          sender_id: storyData?.sender?.id || currentStack?.id,
+          expires_at: storyData?.expires_at || currentInstant.expires_at,
+        },
       })
+      setReplyText('')
+      setReplyFeedback('Reply sent in Messenger')
+      setTimeout(() => setReplyFeedback(''), 2500)
+    } catch (err) {
+      setReplyFeedback(err.message || 'Could not send reply.')
+      setTimeout(() => setReplyFeedback(''), 3000)
+    } finally {
+      setSendingReply(false)
+      setIsPaused(false)
     }
-    onClose?.()
   }
+
+  const handleReact = handleSendReaction
 
   if (!isOpen || !currentStack) return null
 
@@ -460,18 +520,19 @@ export default function StoryViewerModal({
             )}
 
             {!isOwnStory && (
-              <div className="story-interaction-row">
-                {/* Reactions */}
-                <div className="instant-reactions-strip">
+              <div className="story-interaction-container" onPointerDown={(e) => e.stopPropagation()}>
+                {/* 1. Quick Reactions Row */}
+                <div className="story-quick-reactions-row">
                   {QUICK_REACTIONS.map((emoji) => (
                     <button
                       key={emoji}
                       type="button"
-                      className={`instant-react-btn ${myReaction === emoji ? 'is-active' : ''}`}
+                      className={`story-react-emoji-btn ${myReaction === emoji ? 'is-active' : ''}`}
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleReact(emoji)
+                        handleSendReaction(emoji)
                       }}
+                      disabled={sendingReply}
                       aria-label={`React with ${emoji}`}
                     >
                       {emoji}
@@ -479,19 +540,43 @@ export default function StoryViewerModal({
                   ))}
                 </div>
 
-                {/* Reply */}
-                {storyData.sender?.id !== currentUserId && (
-                  <button
-                    type="button"
-                    className="instant-reply-chat-btn"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleReplyClick()
+                {/* 2. Direct Reply Form */}
+                <form
+                  className="story-reply-form"
+                  onSubmit={handleSendTextReply}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="text"
+                    className="story-reply-input"
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onFocus={() => setIsPaused(true)}
+                    onBlur={() => {
+                      if (!replyText.trim()) setIsPaused(false)
                     }}
-                  >
-                    <MessageSquare size={16} />
-                    <span>Reply</span>
-                  </button>
+                    placeholder={`Reply to ${senderName}...`}
+                    disabled={sendingReply}
+                    maxLength={1000}
+                  />
+                  {replyText.trim() ? (
+                    <button
+                      type="submit"
+                      className="story-reply-send-action-btn"
+                      disabled={sendingReply}
+                      aria-label="Send reply"
+                    >
+                      {sendingReply ? <LoaderCircle size={15} className="spinner" /> : <Send size={15} />}
+                    </button>
+                  ) : null}
+                </form>
+
+                {/* Feedback Toast */}
+                {replyFeedback && (
+                  <div className="story-reply-feedback-toast animate-fade-in">
+                    <Sparkles size={12} />
+                    <span>{replyFeedback}</span>
+                  </div>
                 )}
               </div>
             )}
