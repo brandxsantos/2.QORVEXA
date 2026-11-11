@@ -50,7 +50,6 @@ import MediaLightboxModal from '../components/MediaLightboxModal.jsx'
 import SharedMediaPanel from '../components/SharedMediaPanel.jsx'
 import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
 import StoriesTab from '../components/instants/StoriesTab.jsx'
-import InstantsTab from '../components/instants/InstantsTab.jsx'
 import StoryViewerModal from '../components/instants/StoryViewerModal.jsx'
 import StoriesPreviewTray from '../components/instants/StoriesPreviewTray.jsx'
 import { getStoryForViewer } from '../lib/instants.js'
@@ -149,18 +148,20 @@ function NetworkPage() {
 
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam === 'stories' || tabParam === 'instants' || tabParam === 'chats') {
+    if (tabParam === 'stories' || tabParam === 'chats') {
       setMessagesTab(tabParam)
+    } else if (tabParam === 'instants') {
+      // Gracefully redirect legacy instant queries to stories
+      setMessagesTab('stories')
+      navigate('/app/messages?tab=stories', { replace: true })
     } else if (!tabParam) {
       setMessagesTab('chats')
     }
-  }, [searchParams])
+  }, [searchParams, navigate])
 
   useEffect(() => {
-    if (activeSection === 'stories') {
+    if (activeSection === 'stories' || activeSection === 'instants') {
       navigate('/app/messages?tab=stories', { replace: true })
-    } else if (activeSection === 'instants') {
-      navigate('/app/messages?tab=instants', { replace: true })
     }
   }, [activeSection, navigate])
   const [profiles, setProfiles] = useState([])
@@ -852,6 +853,10 @@ function NetworkPage() {
       navigate(`/app/messages/${encodeURIComponent(notification.conversation_id)}`)
       return
     }
+    if (notification.type === 'story') {
+      navigate('/app/messages?tab=stories')
+      return
+    }
     if (notification.type === 'instant' || notification.type === 'instant_reaction') {
       navigate('/app/messages')
       return
@@ -1398,19 +1403,6 @@ function NetworkPage() {
               <Sparkles size={15} aria-hidden="true" />
               <span>Stories</span>
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={effectiveMessagesTab === 'instants'}
-              className={`network-messages-tab${effectiveMessagesTab === 'instants' ? ' is-active' : ''}`}
-              onClick={() => {
-                setMessagesTab('instants')
-                navigate('/app/messages?tab=instants')
-              }}
-            >
-              <Zap size={15} aria-hidden="true" />
-              <span>Instants</span>
-            </button>
           </div>
         )}
 
@@ -1544,8 +1536,8 @@ function NetworkPage() {
                     : notification.type === 'friend_request' ? 'sent you a friend request.'
                     : notification.type === 'friend_request_accepted' ? 'accepted your friend request.'
                       : notification.type === 'message' ? 'sent you a message.'
-                        : notification.type === 'instant' ? 'sent you an Instant.'
-                          : notification.type === 'instant_reaction' ? 'reacted to your Instant.'
+                        : notification.type === 'story' ? 'shared a new story.'
+                          : notification.type === 'story_reply' ? 'replied to your story.'
                             : notification.type === 'post_like' ? 'liked your post.'
                               : notification.type === 'reply' ? 'replied to your comment.'
                                 : 'commented on your post.'
@@ -1585,12 +1577,6 @@ function NetworkPage() {
                 {effectiveMessagesTab === 'stories' && (
                   <section className="network-stories-tab-view">
                     <StoriesTab user={user} profile={ownProfile} onReply={handleInstantReply} />
-                  </section>
-                )}
-
-                {effectiveMessagesTab === 'instants' && (
-                  <section className="network-instants-tab-view">
-                    <InstantsTab user={user} onReply={handleInstantReply} />
                   </section>
                 )}
 

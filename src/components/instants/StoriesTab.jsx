@@ -1,10 +1,22 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, Users, LoaderCircle, Sparkles, Image as ImageIcon, Camera } from 'lucide-react'
-import { fetchActiveStories, fetchMyActiveStories } from '../../lib/instants.js'
+import {
+  Plus,
+  Users,
+  LoaderCircle,
+  Sparkles,
+  Image as ImageIcon,
+  Camera,
+  Archive,
+  Type,
+  Eye,
+  Star,
+} from 'lucide-react'
+import { fetchActiveStories, fetchMyActiveStories, fetchStoryArchive } from '../../lib/stories.js'
 import { getSupabaseClient } from '../../lib/supabase.js'
 import ProtectedMediaImage from '../ProtectedMediaImage.jsx'
 import StoryThumbnail from './StoryThumbnail.jsx'
-import StoryCreateModal from './StoryCreateModal.jsx'
+import StoryStudioModal from './StoryStudioModal.jsx'
+import StoryArchiveModal from './StoryArchiveModal.jsx'
 import StoryViewerModal from './StoryViewerModal.jsx'
 import StoriesPreviewTray from './StoriesPreviewTray.jsx'
 import './Instants.css'
@@ -23,9 +35,14 @@ export default function StoriesTab({ user, profile, onReply }) {
   const [myStories, setMyStories] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadedProfile, setLoadedProfile] = useState(profile || null)
+  const [archiveStats, setArchiveStats] = useState({ totalStories: 0, totalViews: 0 })
 
-  const [createModalOpen, setCreateModalOpen] = useState(false)
-  const [createModalMode, setCreateModalMode] = useState('choose')
+  // Studio and Archive Modal states
+  const [studioOpen, setStudioOpen] = useState(false)
+  const [studioMode, setStudioMode] = useState('choose') // 'choose' | 'camera' | 'gallery' | 'text'
+  const [archiveOpen, setArchiveOpen] = useState(false)
+
+  // Fullscreen Viewer state
   const [viewerOpen, setViewerOpen] = useState(false)
   const [activeUserIdx, setActiveUserIdx] = useState(0)
   const [activeStoryIdx, setActiveStoryIdx] = useState(0)
@@ -58,14 +75,20 @@ export default function StoriesTab({ user, profile, onReply }) {
       return
     }
     try {
-      const [receivedData, ownData] = await Promise.all([
+      const [receivedData, ownData, archiveData] = await Promise.all([
         fetchActiveStories(),
         fetchMyActiveStories(user.id),
+        fetchStoryArchive(user.id).catch(() => []),
       ])
       setStories(receivedData || [])
       setMyStories(ownData || [])
+
+      if (archiveData && archiveData.length) {
+        const viewsCount = archiveData.reduce((acc, curr) => acc + (curr.view_count || 0), 0)
+        setArchiveStats({ totalStories: archiveData.length, totalViews: viewsCount })
+      }
     } catch (err) {
-      console.error('Failed to load stories:', err)
+      console.warn('[StoriesLounge] Failed to load stories:', err)
     } finally {
       setLoading(false)
     }
@@ -80,24 +103,32 @@ export default function StoriesTab({ user, profile, onReply }) {
   useEffect(() => {
     if (!user?.id) return
     const client = getSupabaseClient()
-    const channelName = `stories-tab-${user.id}`
+    const channelName = `stories-lounge-${user.id}`
     const channel = client
       .channel(channelName)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'instant_recipients',
-        filter: `recipient_id=eq.${user.id}`,
-      }, () => {
-        loadStories()
-      })
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'instants',
-      }, () => {
-        loadStories()
-      })
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'instant_recipients',
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        () => {
+          loadStories()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'instants',
+        },
+        () => {
+          loadStories()
+        }
+      )
       .subscribe()
 
     return () => {
@@ -117,24 +148,33 @@ export default function StoriesTab({ user, profile, onReply }) {
           instants: [],
           hasUnread: false,
           isCloseFriends: false,
+          latestCreatedAt: item.created_at,
         })
       }
       const stack = map.get(senderId)
       stack.instants.push(item)
       if (!item.is_viewed) stack.hasUnread = true
       if (item.audience_type === 'close_friends') stack.isCloseFriends = true
+      if (new Date(item.created_at) > new Date(stack.latestCreatedAt)) {
+        stack.latestCreatedAt = item.created_at
+      }
     }
 
     return Array.from(map.values()).sort((a, b) => {
       if (a.hasUnread && !b.hasUnread) return -1
       if (!a.hasUnread && b.hasUnread) return 1
-      return 0
+      return new Date(b.latestCreatedAt) - new Date(a.latestCreatedAt)
     })
   }, [stories])
 
   const effectiveProfile = profile || loadedProfile
   const avatarPath = effectiveProfile?.avatar_url || user?.user_metadata?.avatar_url
-  const ownDisplayName = effectiveProfile?.display_name || effectiveProfile?.username || user?.user_metadata?.display_name || user?.email || 'You'
+  const ownDisplayName =
+    effectiveProfile?.display_name ||
+    effectiveProfile?.username ||
+    user?.user_metadata?.display_name ||
+    user?.email ||
+    'You'
   const ownInitial = (ownDisplayName.trim()[0] || 'Y').toUpperCase()
   const hasOwnActive = myStories.length > 0
 
@@ -164,8 +204,8 @@ export default function StoriesTab({ user, profile, onReply }) {
       setActiveStoryIdx(0)
       setViewerOpen(true)
     } else {
-      setCreateModalMode('choose')
-      setCreateModalOpen(true)
+      setStudioMode('choose')
+      setStudioOpen(true)
     }
   }
 
@@ -177,9 +217,9 @@ export default function StoriesTab({ user, profile, onReply }) {
     setViewerOpen(true)
   }
 
-  const handleOpenCreate = (mode = 'choose') => {
-    setCreateModalMode(mode)
-    setCreateModalOpen(true)
+  const handleOpenStudio = (mode = 'choose') => {
+    setStudioMode(mode)
+    setStudioOpen(true)
   }
 
   const handleStoryPublished = () => {
@@ -189,214 +229,277 @@ export default function StoriesTab({ user, profile, onReply }) {
   }
 
   return (
-    <div className="stories-tab-container">
-      {/* Header bar */}
-      <div className="stories-tab-header">
-        <div>
-          <h2>Stories</h2>
-          <p>Share moments with your friends</p>
+    <div className="stories-lounge-container">
+      {/* Lounge Header */}
+      <div className="stories-lounge-header">
+        <div className="stories-lounge-title-group">
+          <div className="stories-lounge-badge">
+            <Sparkles size={14} />
+            <span>Stories Lounge</span>
+          </div>
+          <h1>Stories</h1>
+          <p>Share 24-hour visual moments with friends and close circles</p>
         </div>
-        <button
-          type="button"
-          className="stories-add-btn"
-          onClick={() => handleOpenCreate('choose')}
-        >
-          <Plus size={16} />
-          <span>New Story</span>
-        </button>
+
+        <div className="stories-lounge-header-actions">
+          <button
+            type="button"
+            className="stories-lounge-archive-btn"
+            onClick={() => setArchiveOpen(true)}
+            title="Browse Story Archive"
+          >
+            <Archive size={16} />
+            <span>Archive</span>
+            {archiveStats.totalStories > 0 && (
+              <span className="stories-lounge-badge-pill">{archiveStats.totalStories}</span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            className="stories-lounge-studio-btn"
+            onClick={() => handleOpenStudio('choose')}
+          >
+            <Sparkles size={16} />
+            <span>Story Studio</span>
+          </button>
+        </div>
       </div>
 
-      {/* Content */}
-      {loading && stories.length === 0 && myStories.length === 0 ? (
-        <div className="stories-loading-box">
-          <LoaderCircle size={28} className="animate-spin" />
-          <span>Loading stories…</span>
-        </div>
-      ) : (
-        <div className="stories-tab-content">
-          {/* Quick Stories Tray */}
-          <div className="stories-tab-tray-wrapper">
-            <StoriesPreviewTray
-              user={user}
-              profile={effectiveProfile}
-              onReply={onReply}
-            />
-          </div>
+      {/* Quick Visual Stories Preview Tray */}
+      <div className="stories-lounge-tray-section">
+        <StoriesPreviewTray
+          user={user}
+          profile={effectiveProfile}
+          onReply={onReply}
+          className="stories-lounge-tray"
+        />
+      </div>
 
-          {/* Section: Your Stories */}
-          <div className="stories-section">
-            <span className="stories-section-title">Your Stories</span>
-            <div className="stories-your-card">
-              <div
-                className={`stories-your-left ${hasOwnActive ? 'is-active-story' : ''}`}
-                onClick={handleOpenOwnStory}
-                role="button"
-                tabIndex={0}
-                title={hasOwnActive ? 'View your story' : 'Add to your story'}
-              >
-                <div className={`instant-avatar-ring ${hasOwnActive ? 'is-own-active' : 'is-viewed'}`}>
-                  <div className="instant-avatar-inner">
-                    {avatarPath ? (
-                      <ProtectedMediaImage
-                        path={avatarPath}
-                        alt={ownDisplayName}
-                        className="instant-avatar-img"
-                        fallback={<span>{ownInitial}</span>}
-                      />
-                    ) : (
-                      <span>{ownInitial}</span>
-                    )}
-                  </div>
-                  <div
-                    className="instant-create-icon"
-                    role="button"
-                    tabIndex={0}
-                    title="Add Story"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleOpenCreate('choose')
-                    }}
-                  >
-                    <Plus size={13} />
-                  </div>
-                </div>
-                <div className="stories-your-info">
-                  <strong>Your Story</strong>
-                  <span>
-                    {hasOwnActive
-                      ? `${myStories.length} active ${myStories.length === 1 ? 'moment' : 'moments'} · Tap to view`
-                      : 'Share a photo with friends'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Dedicated Creation Actions: Gallery & Camera */}
-              <div className="stories-your-actions">
-                <button
-                  type="button"
-                  className="story-action-btn story-action-gallery"
-                  onClick={() => handleOpenCreate('gallery')}
-                  title="Upload from Gallery"
-                >
-                  <ImageIcon size={15} />
-                  <span>Upload from Gallery</span>
-                </button>
-                <button
-                  type="button"
-                  className="story-action-btn story-action-camera"
-                  onClick={() => handleOpenCreate('camera')}
-                  title="Open Camera"
-                >
-                  <Camera size={15} />
-                  <span>Open Camera</span>
-                </button>
+      {/* Main Lounge Content */}
+      <div className="stories-lounge-content">
+        {/* 1. YOUR STORY SPOTLIGHT CARD */}
+        <div className="stories-spotlight-card">
+          <div
+            className={`stories-spotlight-avatar-box ${hasOwnActive ? 'is-active-ring' : ''}`}
+            onClick={handleOpenOwnStory}
+            role="button"
+            tabIndex={0}
+            title={hasOwnActive ? 'View your story' : 'Add to your story'}
+          >
+            <div className={`instant-avatar-ring instant-avatar-ring--large ${hasOwnActive ? 'is-own-active' : 'is-unseen-empty'}`}>
+              <div className="instant-avatar-inner">
+                {avatarPath ? (
+                  <ProtectedMediaImage
+                    path={avatarPath}
+                    alt={ownDisplayName}
+                    className="instant-avatar-img"
+                    fallback={<span>{ownInitial}</span>}
+                  />
+                ) : (
+                  <span>{ownInitial}</span>
+                )}
               </div>
             </div>
+
+            <button
+              type="button"
+              className="stories-spotlight-add-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleOpenStudio('choose')
+              }}
+              title="Add Story"
+              aria-label="Add Story"
+            >
+              <Plus size={16} strokeWidth={2.8} />
+            </button>
           </div>
 
-          {/* Section: Recent Stories */}
-          <div className="stories-section">
-            <div className="stories-section-header">
-              <span className="stories-section-title">Recent Stories</span>
-              {friendStacks.length > 0 && (
-                <span className="stories-count-badge">{friendStacks.length}</span>
+          <div className="stories-spotlight-info">
+            <div className="stories-spotlight-title-row">
+              <h3>Your Story</h3>
+              {hasOwnActive && (
+                <span className="stories-spotlight-active-tag">Active 24h</span>
               )}
             </div>
 
-            {friendStacks.length > 0 ? (
-              <div className="stories-cards-grid">
-                {friendStacks.map((stack) => {
-                  const senderName = stack.sender?.display_name || stack.sender?.username || 'Member'
-                  const latestStory = stack.instants[stack.instants.length - 1]
-                  const timeAgo = formatTimeAgo(latestStory?.created_at)
+            <p className="stories-spotlight-desc">
+              {hasOwnActive
+                ? `${myStories.length} active ${myStories.length === 1 ? 'update' : 'updates'} published · Tap avatar to view`
+                : 'Share a photo, text update, or creative canvas with your friends.'}
+            </p>
 
-                  return (
-                    <div
-                      key={stack.sender?.id || Math.random()}
-                      className={`story-friend-card ${stack.hasUnread ? 'is-unread-card' : ''}`}
-                      onClick={() => handleOpenFriendStory(stack)}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      {/* Media Preview Thumbnail */}
-                      <div className="story-card-media-wrapper">
-                        {latestStory?.image_path ? (
-                          <StoryThumbnail
-                            imagePath={latestStory.image_path}
-                            alt={`${senderName}'s story`}
-                            className="story-card-thumbnail"
-                          />
-                        ) : (
-                          <div className="story-card-media-fallback">
-                            <Sparkles size={24} />
-                          </div>
-                        )}
-                        <div className="story-card-gradient" />
-                      </div>
+            <div className="stories-spotlight-actions">
+              <button
+                type="button"
+                className="stories-spotlight-action-pill"
+                onClick={() => handleOpenStudio('camera')}
+              >
+                <Camera size={14} />
+                <span>Camera</span>
+              </button>
 
-                      {/* Header overlay: Avatar + Ring + Unread dot */}
-                      <div className="story-card-top">
-                        <div
-                          className={`instant-avatar-ring instant-avatar-ring--small ${
-                            stack.hasUnread ? 'is-unread' : 'is-viewed'
-                          } ${stack.isCloseFriends ? 'is-close-friends' : ''}`}
-                        >
-                          <div className="instant-avatar-inner">
-                            {stack.sender?.avatar_url ? (
-                              <ProtectedMediaImage
-                                path={stack.sender.avatar_url}
-                                alt={senderName}
-                                className="instant-avatar-img"
-                                fallback={<span>{senderName[0].toUpperCase()}</span>}
-                              />
-                            ) : (
-                              <span>{senderName[0].toUpperCase()}</span>
-                            )}
-                          </div>
+              <button
+                type="button"
+                className="stories-spotlight-action-pill"
+                onClick={() => handleOpenStudio('gallery')}
+              >
+                <ImageIcon size={14} />
+                <span>Gallery</span>
+              </button>
+
+              <button
+                type="button"
+                className="stories-spotlight-action-pill"
+                onClick={() => handleOpenStudio('text')}
+              >
+                <Type size={14} />
+                <span>Text Story</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. RECENT STORIES EDITORIAL GRID */}
+        <div className="stories-feed-section">
+          <div className="stories-feed-header">
+            <div className="stories-feed-title-wrap">
+              <h2>Recent Stories</h2>
+              {friendStacks.length > 0 && (
+                <span className="stories-feed-count">{friendStacks.length}</span>
+              )}
+            </div>
+            <span className="stories-feed-subtitle">Stories expire after 24 hours</span>
+          </div>
+
+          {loading && friendStacks.length === 0 ? (
+            <div className="stories-editorial-grid">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="story-card-skeleton animate-pulse">
+                  <div className="story-skeleton-header" />
+                  <div className="story-skeleton-footer" />
+                </div>
+              ))}
+            </div>
+          ) : friendStacks.length > 0 ? (
+            <div className="stories-editorial-grid">
+              {friendStacks.map((stack) => {
+                const senderName = stack.sender?.display_name || stack.sender?.username || 'Member'
+                const latestStory = stack.instants[stack.instants.length - 1]
+                const timeAgo = formatTimeAgo(latestStory?.created_at)
+
+                return (
+                  <div
+                    key={stack.sender?.id || Math.random()}
+                    className={`stories-editorial-card ${stack.hasUnread ? 'is-unread-card' : ''}`}
+                    onClick={() => handleOpenFriendStory(stack)}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    {/* Media Thumbnail */}
+                    <div className="stories-editorial-media-wrapper">
+                      {latestStory?.image_path ? (
+                        <StoryThumbnail
+                          imagePath={latestStory.image_path}
+                          alt={`${senderName}'s story`}
+                          className="stories-editorial-thumbnail"
+                        />
+                      ) : (
+                        <div className="stories-editorial-fallback">
+                          <Sparkles size={28} />
                         </div>
-                        {stack.hasUnread && <span className="story-card-unread-dot" />}
-                      </div>
+                      )}
+                      <div className="stories-editorial-gradient" />
+                    </div>
 
-                      {/* Bottom overlay: Author Name, Caption & Time */}
-                      <div className="story-card-bottom">
-                        <strong className="story-card-sender">{senderName}</strong>
-                        {latestStory?.caption && (
-                          <p className="story-card-caption">{latestStory.caption}</p>
-                        )}
-                        <div className="story-card-meta">
-                          <span className="story-card-time">{timeAgo}</span>
-                          {stack.instants.length > 1 && (
-                            <span className="story-card-count">
-                              {stack.instants.length} updates
-                            </span>
+                    {/* Top Overlay: Avatar + Ring + Unread Dot */}
+                    <div className="stories-editorial-top">
+                      <div
+                        className={`instant-avatar-ring instant-avatar-ring--small ${
+                          stack.hasUnread ? 'is-unread' : 'is-viewed'
+                        } ${stack.isCloseFriends ? 'is-close-friends' : ''}`}
+                      >
+                        <div className="instant-avatar-inner">
+                          {stack.sender?.avatar_url ? (
+                            <ProtectedMediaImage
+                              path={stack.sender.avatar_url}
+                              alt={senderName}
+                              className="instant-avatar-img"
+                              fallback={<span>{senderName[0].toUpperCase()}</span>}
+                            />
+                          ) : (
+                            <span>{senderName[0].toUpperCase()}</span>
                           )}
                         </div>
                       </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="stories-empty-panel">
-                <Users size={32} />
-                <p>No active stories from friends right now.</p>
-                <small>Stories expire after 24 hours.</small>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* Creation Modal */}
-      <StoryCreateModal
-        isOpen={createModalOpen}
-        initialMode={createModalMode}
-        onClose={() => setCreateModalOpen(false)}
+                      {stack.isCloseFriends && (
+                        <span className="story-close-friends-pill">
+                          <Star size={10} /> Close Friends
+                        </span>
+                      )}
+
+                      {stack.hasUnread && <span className="stories-unread-badge" />}
+                    </div>
+
+                    {/* Bottom Overlay: Sender Name, Caption, Time */}
+                    <div className="stories-editorial-bottom">
+                      <strong className="stories-editorial-sender">{senderName}</strong>
+                      {latestStory?.caption && (
+                        <p className="stories-editorial-caption">{latestStory.caption}</p>
+                      )}
+                      <div className="stories-editorial-meta">
+                        <span className="stories-editorial-time">{timeAgo}</span>
+                        {stack.instants.length > 1 && (
+                          <span className="stories-editorial-count">
+                            {stack.instants.length} updates
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="stories-empty-lounge">
+              <div className="stories-empty-icon-wrap">
+                <Users size={36} />
+              </div>
+              <h3>No Active Stories</h3>
+              <p>When friends in your circle share moments, they will appear here in your Lounge.</p>
+              <button
+                type="button"
+                className="stories-empty-create-btn"
+                onClick={() => handleOpenStudio('choose')}
+              >
+                <Plus size={16} />
+                <span>Share a Story</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Story Studio Composer Modal */}
+      <StoryStudioModal
+        isOpen={studioOpen}
+        initialMode={studioMode}
+        onClose={() => setStudioOpen(false)}
         onStoryPublished={handleStoryPublished}
         user={user}
       />
 
-      {/* Continuous Viewer Modal */}
+      {/* Story Archive Modal */}
+      <StoryArchiveModal
+        isOpen={archiveOpen}
+        onClose={() => setArchiveOpen(false)}
+        user={user}
+        onStoryReposted={handleStoryPublished}
+      />
+
+      {/* Fullscreen Story Viewer Modal */}
       <StoryViewerModal
         isOpen={viewerOpen}
         initialUserIndex={activeUserIdx}

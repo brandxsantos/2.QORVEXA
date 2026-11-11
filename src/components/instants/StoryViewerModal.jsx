@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, MessageSquare, LoaderCircle, AlertCircle, Star, ChevronLeft, ChevronRight, Eye, Send, Sparkles, Users } from 'lucide-react'
-import { consumeAndViewInstant, reactToInstant, sendStoryReply, fetchStoryViewers } from '../../lib/instants.js'
+import { X, MessageSquare, LoaderCircle, AlertCircle, Star, ChevronLeft, ChevronRight, Eye, Send, Sparkles, Users, Trash2 } from 'lucide-react'
+import { consumeAndViewInstant, reactToInstant, sendStoryReply, fetchStoryViewers, deleteStory } from '../../lib/stories.js'
 import ProtectedMediaImage from '../ProtectedMediaImage.jsx'
 import './Instants.css'
 
@@ -391,6 +391,23 @@ export default function StoryViewerModal({
 
   const handleReact = handleSendReaction
 
+  const handleDeleteOwnStory = async (e) => {
+    e.stopPropagation()
+    if (!currentInstant || !currentUserId) return
+    if (!confirm('Are you sure you want to delete this story?')) return
+
+    try {
+      await deleteStory(currentInstant.id, currentUserId)
+      if (currentStack.instants.length > 1) {
+        nextStory()
+      } else {
+        onClose?.()
+      }
+    } catch (err) {
+      alert(err.message || 'Could not delete story.')
+    }
+  }
+
   if (!isOpen || !currentStack) return null
 
   const senderInfo = isOwnStory ? ownProfile || currentStack.sender : currentStack.sender
@@ -489,6 +506,17 @@ export default function StoryViewerModal({
           </div>
 
           <div className="story-header-right">
+            {isOwnStory && (
+              <button
+                type="button"
+                className="instant-icon-btn story-delete-btn"
+                onClick={handleDeleteOwnStory}
+                title="Delete this story"
+                aria-label="Delete this story"
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
             <button
               type="button"
               className="instant-icon-btn story-close-btn"
