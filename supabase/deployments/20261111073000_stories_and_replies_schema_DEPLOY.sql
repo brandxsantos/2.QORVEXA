@@ -483,6 +483,49 @@ revoke all on function public.send_story_reply(uuid, text, text) from public, an
 grant execute on function public.send_story_reply(uuid, text, text) to authenticated;
 
 -- ----------------------------------------------------------------------------
+-- 9b. RPC: start_direct_conversation (updates updated_at on existing chat)
+-- ----------------------------------------------------------------------------
+create or replace function public.start_direct_conversation(target_user_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  conversation_id uuid;
+begin
+  if current_user_id is null or current_user_id = target_user_id
+      or qorvexa_private.are_blocked(current_user_id, target_user_id)
+      or not qorvexa_private.are_friends(current_user_id, target_user_id) then
+    raise exception 'You can message accepted friends who have not blocked you.';
+  end if;
+
+  insert into public.conversations (user_low, user_high, last_message_at, updated_at)
+  values (
+    least(current_user_id, target_user_id),
+    greatest(current_user_id, target_user_id),
+    statement_timestamp(),
+    statement_timestamp()
+  )
+  on conflict (user_low, user_high) do update
+  set updated_at = statement_timestamp()
+  returning id into conversation_id;
+
+  if conversation_id is null then
+    select id into conversation_id from public.conversations
+    where user_low = least(current_user_id, target_user_id)
+      and user_high = greatest(current_user_id, target_user_id);
+  end if;
+
+  return conversation_id;
+end;
+$$;
+
+revoke all on function public.start_direct_conversation(uuid) from public, anon;
+grant execute on function public.start_direct_conversation(uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
 -- 10. Data Repair: Flag existing story_ paths as is_story = true
 -- ----------------------------------------------------------------------------
 update public.instants

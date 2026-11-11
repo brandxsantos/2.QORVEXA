@@ -180,6 +180,8 @@ function NetworkPage() {
   const [notifications, setNotifications] = useState([])
   const [notificationFilter, setNotificationFilter] = useState('all')
   const [conversations, setConversations] = useState([])
+  const [directActiveConversation, setDirectActiveConversation] = useState(null)
+  const activeConvRequestIdRef = useRef(0)
   const [messages, setMessages] = useState([])
   const messagesRef = useRef(messages)
   messagesRef.current = messages
@@ -547,15 +549,83 @@ function NetworkPage() {
     }
   }, [presenceTargetIds, user.id])
 
+  // Dedicated immediate resolution for selected conversation
   useEffect(() => {
-    if (!selectedConversationId || activeSection !== 'messages' || status !== 'ready') return undefined
+    if (!selectedConversationId || activeSection !== 'messages') {
+      setDirectActiveConversation(null)
+      return undefined
+    }
+
+    activeConvRequestIdRef.current += 1
+    const currentRequestId = activeConvRequestIdRef.current
+
+    // If already in conversations list, use that immediately
+    const existing = conversations.find((c) => c.id === selectedConversationId)
+    if (existing) {
+      setDirectActiveConversation(existing)
+    }
+
+    let active = true
+    const client = getSupabaseClient()
+
+    async function resolveActiveConversation() {
+      try {
+        const { data: conv, error: convErr } = await client
+          .from('conversations')
+          .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at')
+          .eq('id', selectedConversationId)
+          .maybeSingle()
+
+        if (convErr || !conv || !active || currentRequestId !== activeConvRequestIdRef.current) return
+
+        const peerId = conv.user_low === user.id ? conv.user_high : conv.user_low
+        let peer = profileById[peerId]
+        if (!peer) {
+          const { data: prof } = await client
+            .from('profiles')
+            .select(profileFields)
+            .eq('id', peerId)
+            .maybeSingle()
+          peer = prof
+        }
+
+        const resolved = {
+          ...conv,
+          peer: peer || { id: peerId, display_name: 'QORVEXA Member' },
+          unreadCount: 0,
+          lastMessage: existing?.lastMessage || null,
+          lastActivityAt: conv.updated_at || conv.created_at,
+        }
+
+        if (active && currentRequestId === activeConvRequestIdRef.current) {
+          setDirectActiveConversation(resolved)
+          setConversations((prev) => {
+            if (prev.some((c) => c.id === resolved.id)) {
+              return prev.map((c) => (c.id === resolved.id ? { ...c, ...resolved, peer: resolved.peer || c.peer } : c))
+            }
+            return [resolved, ...prev]
+          })
+        }
+      } catch (err) {
+        console.warn('Could not directly resolve active conversation:', err)
+      }
+    }
+
+    resolveActiveConversation()
+
+    return () => {
+      active = false
+    }
+  }, [activeSection, conversations, profileById, selectedConversationId, user.id])
+
+  useEffect(() => {
+    if (!selectedConversationId || activeSection !== 'messages') return undefined
     let active = true
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
-    // Surface load failures from the active conversation's asynchronous requests.
-    // eslint-disable-next-line react/set-state-in-effect
-    Promise.all([loadMessages(selectedConversationId), loadCallReceipts(selectedConversationId)])
-      .then(() => active ? loadNetwork() : undefined)
-      .catch((loadError) => { if (active) handleMessageLoadError(loadError) })
+
+    // Load messages and call receipts immediately for the selected conversation
+    loadMessages(selectedConversationId).catch((loadError) => { if (active) handleMessageLoadError(loadError) })
+    loadCallReceipts(selectedConversationId).catch((loadError) => { if (active) handleMessageLoadError(loadError) })
 
     const client = getSupabaseClient()
     const channel = client.channel(`conversation-${selectedConversationId}`, { config: { private: true } })
@@ -565,7 +635,7 @@ function NetworkPage() {
         table: 'messages',
         filter: `conversation_id=eq.${selectedConversationId}`,
       }, () => {
-        loadMessages(selectedConversationId).then(loadNetwork).catch((loadError) => setError(loadError.message))
+        loadMessages(selectedConversationId).catch((loadError) => setError(loadError.message))
       })
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -573,7 +643,7 @@ function NetworkPage() {
         table: 'conversations',
         filter: `id=eq.${selectedConversationId}`,
       }, () => {
-        loadNetwork().catch((loadError) => setError(loadError.message))
+        // Conversation metadata updated (e.g. read status)
       })
       .on('postgres_changes', {
         event: '*',
@@ -582,7 +652,6 @@ function NetworkPage() {
         filter: `conversation_id=eq.${selectedConversationId}`,
       }, () => {
         loadCallReceipts(selectedConversationId).catch((loadError) => setError(loadError.message))
-        loadNetwork().catch((loadError) => setError(loadError.message))
       })
       .on('postgres_changes', {
         event: '*',
@@ -619,7 +688,7 @@ function NetworkPage() {
       if (chatChannelRef.current === channel) chatChannelRef.current = null
       client.removeChannel(channel)
     }
-  }, [activeSection, handleMessageLoadError, loadCallReceipts, loadMessages, loadNetwork, refreshMessageInteractions, selectedConversationId, status, user.id])
+  }, [activeSection, handleMessageLoadError, loadCallReceipts, loadMessages, refreshMessageInteractions, selectedConversationId, user.id])
 
   useEffect(() => {
     if (skipNextMessageScrollRef.current) {
@@ -710,7 +779,11 @@ function NetworkPage() {
     .filter((request) => request.sender_id === user.id && request.status === 'pending')
     .map((request) => [request.receiver_id, request]))
   const profileById = useMemo(() => Object.fromEntries(profiles.map((profile) => [profile.id, profile])), [profiles])
-  const activeConversation = conversations.find((conversation) => conversation.id === selectedConversationId)
+  const activeConversation = useMemo(() => {
+    if (!selectedConversationId) return null
+    return conversations.find((conversation) => conversation.id === selectedConversationId)
+      || (directActiveConversation?.id === selectedConversationId ? directActiveConversation : null)
+  }, [conversations, directActiveConversation, selectedConversationId])
   const conversationTimeline = useMemo(() => {
     const callIds = new Set(callReceipts.map((s) => s.id))
     const textMessages = messages.filter(
@@ -817,7 +890,27 @@ function NetworkPage() {
     try {
       const { data, error: rpcError } = await getSupabaseClient().rpc('start_direct_conversation', { target_user_id: profile.id })
       if (rpcError) throw rpcError
-      await loadNetwork()
+
+      // Seed directActiveConversation with profile so the chat window opens on frame 1
+      const initialConv = {
+        id: data,
+        user_low: user.id < profile.id ? user.id : profile.id,
+        user_high: user.id < profile.id ? profile.id : user.id,
+        peer: profile,
+        unreadCount: 0,
+        lastMessage: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      setDirectActiveConversation(initialConv)
+      setConversations((prev) => {
+        if (prev.some((c) => c.id === data)) {
+          return prev.map((c) => (c.id === data ? { ...c, peer: profile } : c))
+        }
+        return [initialConv, ...prev]
+      })
+
+      // Navigate immediately without waiting for any full network reload
       navigate(`/app/messages/${encodeURIComponent(data)}`)
     } catch (actionError) {
       setError(actionError.message || 'Could not open this conversation.')
