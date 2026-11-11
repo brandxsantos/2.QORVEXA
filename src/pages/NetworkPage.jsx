@@ -61,20 +61,26 @@ const fullMessageFields = 'id, conversation_id, sender_id, content, reply_to_mes
 let activeMessageFields = fullMessageFields
 
 async function queryMessagesWithFallback(queryFn) {
-  const primaryResult = await queryFn(activeMessageFields)
-  if (!primaryResult.error) return primaryResult
+  try {
+    const primaryResult = await queryFn(activeMessageFields)
+    if (!primaryResult.error) return primaryResult
 
-  const err = primaryResult.error
-  if (
-    err.code === '42703' ||
-    err.code === 'PGRST204' ||
-    err.message?.includes('schema cache') ||
-    err.message?.includes('does not exist')
-  ) {
-    activeMessageFields = baseMessageFields
-    return await queryFn(baseMessageFields)
+    if (activeMessageFields !== baseMessageFields) {
+      activeMessageFields = baseMessageFields
+      return await queryFn(baseMessageFields)
+    }
+    return primaryResult
+  } catch (err) {
+    if (activeMessageFields !== baseMessageFields) {
+      activeMessageFields = baseMessageFields
+      try {
+        return await queryFn(baseMessageFields)
+      } catch (fallbackErr) {
+        return { data: [], error: fallbackErr }
+      }
+    }
+    return { data: [], error: err }
   }
-  return primaryResult
 }
 const notificationFields = 'id, user_id, actor_id, type, reference_id, post_id, conversation_id, preview, is_read, created_at, profiles!notifications_actor_id_fkey(username, display_name, avatar_url)'
 const notificationFilters = [
@@ -305,7 +311,22 @@ function NetworkPage() {
       if (result.error) throw result.error
     }
 
-    const conversationRows = conversationsResult.data || []
+    let conversationRows = conversationsResult.data || []
+    if (selectedConversationId && !conversationRows.some((conversation) => conversation.id === selectedConversationId)) {
+      try {
+        const { data: directConv } = await client
+          .from('conversations')
+          .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at')
+          .eq('id', selectedConversationId)
+          .maybeSingle()
+        if (directConv) {
+          conversationRows = [directConv, ...conversationRows]
+        }
+      } catch (directErr) {
+        console.warn('Could not fetch direct conversation row:', directErr)
+      }
+    }
+
     let profileById = Object.fromEntries((profilesResult.data || []).map((profile) => [profile.id, profile]))
     const summariesByConversationId = Object.fromEntries((conversationSummariesResult.data || []).map((summary) => [summary.conversation_id, summary]))
     const relatedIds = new Set([
@@ -339,18 +360,18 @@ function NetworkPage() {
 
     setRequests(requestsResult.data || [])
     setFriendships(friendshipsResult.data || [])
-    setBlockedIds(new Set((blocksResult.data || []).map((item) => item.blocked_id)))
+    const blockedSet = new Set((blocksResult.data || []).map((item) => item.blocked_id))
+    setBlockedIds(blockedSet)
     setNotifications(notificationsResult.data || [])
     setUnreadNotificationCount(unreadCountResult.count || 0)
-    const acceptedFriendIds = new Set((friendshipsResult.data || []).map((friendship) => (
-      friendship.user_low === user.id ? friendship.user_high : friendship.user_low
-    )))
-    const activeFriendConversations = conversationRows.filter((conversation) => {
+    
+    // Only exclude blocked peers; Supabase RLS enforces conversation access
+    const activeConversations = conversationRows.filter((conversation) => {
       const peerId = conversation.user_low === user.id ? conversation.user_high : conversation.user_low
-      return acceptedFriendIds.has(peerId)
+      return !blockedSet.has(peerId)
     })
     const updatedConversations = applyCallReceiptsToConversations(
-      activeFriendConversations,
+      activeConversations,
       summariesByConversationId,
       callsResult.data || [],
       user.id,
@@ -358,7 +379,7 @@ function NetworkPage() {
     )
     setConversations(updatedConversations)
     setStatus('ready')
-  }, [user.id])
+  }, [selectedConversationId, user.id])
 
   const handleNetworkLoadError = useCallback((loadError) => {
     setError(loadError.message || 'The network could not be loaded.')
@@ -390,20 +411,26 @@ function NetworkPage() {
     if (queryError) throw queryError
     const loadedMessages = (data || []).reverse()
     setMessages(loadedMessages)
-    await refreshMessageInteractions(loadedMessages)
-    setHasMoreMessages((data || []).length === 100)
-    const { error: notificationReadError } = await getSupabaseClient()
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('user_id', user.id)
-      .eq('type', 'message')
-      .eq('conversation_id', conversationId)
-      .eq('is_read', false)
-    if (notificationReadError) throw notificationReadError
-    const { error: readError } = await getSupabaseClient().rpc('mark_conversation_read', {
-      target_conversation_id: conversationId,
+    refreshMessageInteractions(loadedMessages).catch((intErr) => {
+      console.warn('Non-fatal interactions load failure:', intErr)
     })
-    if (readError) throw readError
+    setHasMoreMessages((data || []).length === 100)
+    
+    // Mark as read non-fatally
+    try {
+      await getSupabaseClient()
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('type', 'message')
+        .eq('conversation_id', conversationId)
+        .eq('is_read', false)
+      await getSupabaseClient().rpc('mark_conversation_read', {
+        target_conversation_id: conversationId,
+      })
+    } catch (readErr) {
+      console.warn('Non-fatal mark_conversation_read failure:', readErr)
+    }
   }, [refreshMessageInteractions, user.id])
 
   const loadCallReceipts = useCallback(async (conversationId) => {
@@ -699,12 +726,10 @@ function NetworkPage() {
     ? undefined
     : availabilityById[profile.id] || 'offline'
   useEffect(() => {
-    if (status === 'ready' && selectedConversationId && !activeConversation) {
-      navigate('/app/messages', { replace: true })
-    } else if (status === 'ready' && !pathConversationId && activeConversation) {
+    if (status === 'ready' && !pathConversationId && activeConversation) {
       navigate(`/app/messages/${encodeURIComponent(activeConversation.id)}`, { replace: true })
     }
-  }, [activeConversation, navigate, pathConversationId, selectedConversationId, status])
+  }, [activeConversation, navigate, pathConversationId, status])
   const unreadMessages = conversations.reduce((total, conversation) => total + conversation.unreadCount, 0)
   const filteredNotifications = notifications.filter((notification) => {
     if (notificationFilter === 'all') return true
@@ -1872,6 +1897,12 @@ function NetworkPage() {
                         onClose={() => setLightboxMedia(null)}
                       />
                     </>
+                  ) : selectedConversationId ? (
+                    <div className="network-chat-empty-state">
+                      <span><MessageSquare size={24} /></span>
+                      <h2>Loading conversation…</h2>
+                      <p>Opening your conversation with this member.</p>
+                    </div>
                   ) : (
                     <div className="network-chat-empty-state">
                       <span><MessageSquare size={24} /></span>

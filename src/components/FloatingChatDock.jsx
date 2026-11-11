@@ -126,10 +126,13 @@ function FloatingChatDock() {
       const peerId = conversation.user_low === user.id
         ? conversation.user_high
         : conversation.user_low
-      return friendIds.has(peerId)
+      return !blockedIds.has(peerId)
     })
 
-    const peerIds = [...friendIds]
+    const peerIds = [...new Set([
+      ...friendIds,
+      ...rows.map((conversation) => (conversation.user_low === user.id ? conversation.user_high : conversation.user_low)),
+    ])]
 
     let profileById = {}
 
@@ -201,22 +204,22 @@ setLoadingIds((current) => current.includes(conversationId)
         [conversationId]: atts,
       }))
 
-      const { error: notificationError } = await client.from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', user.id)
-        .eq('type', 'message')
-        .eq('conversation_id', conversationId)
-        .eq('is_read', false)
+      try {
+        await client.from('notifications')
+          .update({ is_read: true })
+          .eq('user_id', user.id)
+          .eq('type', 'message')
+          .eq('conversation_id', conversationId)
+          .eq('is_read', false)
 
-      if (notificationError) throw notificationError
+        await client.rpc('mark_conversation_read', {
+          target_conversation_id: conversationId,
+        })
+      } catch (readErr) {
+        console.warn('Non-fatal mark_conversation_read failure:', readErr)
+      }
 
-      const { error: readError } = await client.rpc('mark_conversation_read', {
-        target_conversation_id: conversationId,
-      })
-
-      if (readError) throw readError
-
-      await loadConversations()
+      await loadConversations().catch(() => {})
     } catch (loadError) {
       setError(loadError.message || 'Messages could not be loaded.')
     } finally {

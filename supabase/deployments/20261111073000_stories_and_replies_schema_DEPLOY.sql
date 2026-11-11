@@ -47,6 +47,10 @@ create index if not exists messages_story_id_idx
   on public.messages (story_id)
   where story_id is not null;
 
+-- Ensure conversations has last_message_at column for backwards and forward compatibility
+alter table public.conversations
+  add column if not exists last_message_at timestamptz default now();
+
 -- Ensure authenticated role can insert these columns
 grant insert (
   conversation_id,
@@ -429,8 +433,8 @@ begin
     and user_high = greatest(v_sender_id, v_story_owner_id);
 
   if v_conversation_id is null then
-    insert into public.conversations (user_low, user_high, last_message_at)
-    values (least(v_sender_id, v_story_owner_id), greatest(v_sender_id, v_story_owner_id), statement_timestamp())
+    insert into public.conversations (user_low, user_high, last_message_at, updated_at)
+    values (least(v_sender_id, v_story_owner_id), greatest(v_sender_id, v_story_owner_id), statement_timestamp(), statement_timestamp())
     returning id into v_conversation_id;
   end if;
 
