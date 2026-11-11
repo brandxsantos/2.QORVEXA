@@ -27,6 +27,8 @@ import {
   Video,
   Users,
   X,
+  Sparkles,
+  Zap,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
@@ -47,7 +49,8 @@ import { uploadAttachmentFile, loadMessageAttachments } from '../lib/messageAtta
 import MediaLightboxModal from '../components/MediaLightboxModal.jsx'
 import SharedMediaPanel from '../components/SharedMediaPanel.jsx'
 import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
-import InstantsBar from '../components/instants/InstantsBar.jsx'
+import StoriesTab from '../components/instants/StoriesTab.jsx'
+import InstantsTab from '../components/instants/InstantsTab.jsx'
 
 const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility, online_status_visibility'
 const requestFields = 'id, sender_id, receiver_id, status, created_at'
@@ -1239,6 +1242,8 @@ function NetworkPage() {
     discover: 'Discover people',
     notifications: 'Notifications',
     messages: 'Messages',
+    stories: 'Stories',
+    instants: 'Instants',
   }
 
   return (
@@ -1253,6 +1258,8 @@ function NetworkPage() {
           <Link to="/app/explore" className={`network-nav-link${activeSection === 'explore' ? ' is-active' : ''}`}><Compass size={15} aria-hidden="true" />Explore</Link>
           <Link to="/app/discover" className={`network-nav-link${activeSection === 'discover' ? ' is-active' : ''}`}><UserPlus size={15} aria-hidden="true" />Discover</Link>
           <Link to="/app/friends" className={`network-nav-link${activeSection === 'friends' ? ' is-active' : ''}`}><Users size={15} aria-hidden="true" />Friends</Link>
+          <Link to="/app/stories" className={`network-nav-link${activeSection === 'stories' ? ' is-active' : ''}`}><Sparkles size={15} aria-hidden="true" />Stories</Link>
+          <Link to="/app/instants" className={`network-nav-link${activeSection === 'instants' ? ' is-active' : ''}`}><Zap size={15} aria-hidden="true" />Instants</Link>
           <Link to="/app/notifications" className={`network-nav-link${activeSection === 'notifications' ? ' is-active' : ''}`}>
           <Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}
           </Link>
@@ -1439,11 +1446,22 @@ function NetworkPage() {
               </section>
             )}
 
+            {activeSection === 'stories' && (
+              <section className="network-stories-tab-view">
+                <StoriesTab user={user} profile={ownProfile} onReply={handleInstantReply} />
+              </section>
+            )}
+
+            {activeSection === 'instants' && (
+              <section className="network-instants-tab-view">
+                <InstantsTab user={user} onReply={handleInstantReply} />
+              </section>
+            )}
+
             {activeSection === 'messages' && (
               <div className="network-messenger">
                 <aside className={`network-conversation-list${selectedConversationId ? ' network-conversation-list--mobile-hidden' : ''}`}>
                   <div className="network-conversation-heading"><h2>Messages</h2><span>{conversations.length}</span></div>
-                  <InstantsBar user={user} profile={ownProfile} onReply={handleInstantReply} />
                   <label className="network-search network-search--conversation"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations..." /></label>
                   {conversations.filter((conversation) => profileName(conversation.peer).toLowerCase().includes(query.trim().toLowerCase()) || conversation.peer?.username?.toLowerCase().includes(query.trim().toLowerCase())).map((conversation) => (
                     <div
