@@ -712,3 +712,618 @@
   color: #69717D;
 }
 
+
+/* ==========================================================================
+   FLOATING STORIES & INSTANTS DOCK + CONTINUOUS VIEWER STYLES
+   ========================================================================== */
+
+/* 1. Floating Dock Container */
+.floating-dock {
+  background: var(--bg-surface-elevated, #1a2334);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 14px;
+  margin: 6px 8px 10px 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.floating-dock.is-collapsed {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Dock Header */
+.floating-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.floating-dock-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.floating-dock-tab {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--text-muted, #94a3b8);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.floating-dock-tab:hover {
+  color: var(--text-primary, #ffffff);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.floating-dock-tab.is-active {
+  color: var(--accent-cyan, #00d9f5);
+  background: rgba(0, 217, 245, 0.12);
+  font-weight: 600;
+}
+
+.floating-dock-tab--subtle {
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+
+.dock-pill-badge {
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 10px;
+  min-width: 14px;
+  text-align: center;
+}
+
+.dock-pill-badge--glow {
+  background: #00d9f5;
+  color: #080c14;
+  box-shadow: 0 0 8px rgba(0, 217, 245, 0.5);
+}
+
+.dock-pill-count {
+  font-size: 0.7rem;
+  color: var(--text-dim, #64748b);
+}
+
+.floating-dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.instant-icon-btn--small {
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+}
+
+.instant-icon-btn--small svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Collapsed summary pill bar */
+.floating-dock-collapsed-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 0.74rem;
+  color: var(--text-secondary, #cbd5e1);
+  cursor: pointer;
+  background: rgba(0, 217, 245, 0.04);
+  transition: background 0.15s ease;
+}
+
+.floating-dock-collapsed-bar:hover {
+  background: rgba(0, 217, 245, 0.08);
+}
+
+/* Dock Content Area */
+.floating-dock-body {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dock-row-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #94a3b8);
+  margin-bottom: 4px;
+  padding-left: 2px;
+}
+
+.dock-row-subtitle small {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-size: 0.64rem;
+}
+
+.dock-horizontal-scroll {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 2px;
+}
+
+.dock-horizontal-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.dock-empty-hint {
+  padding: 12px 16px;
+  font-size: 0.75rem;
+  color: var(--text-muted, #94a3b8);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+/* Stories multi-count badge */
+.instant-count-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: #ffffff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-surface, #0f172a);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* 2. Instants Compact Card Previews */
+.instant-card-preview {
+  width: 72px;
+  min-width: 72px;
+  height: 84px;
+  border-radius: 12px;
+  background: var(--bg-surface, #141b29);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  position: relative;
+  overflow: hidden;
+  font-family: inherit;
+  color: inherit;
+}
+
+.instant-card-preview:hover {
+  transform: translateY(-2px);
+}
+
+.instant-card-preview:active {
+  transform: scale(0.96);
+}
+
+.instant-card-preview.is-unseen {
+  border-color: rgba(0, 217, 245, 0.45);
+  box-shadow: 0 0 10px rgba(0, 217, 245, 0.18);
+  background: linear-gradient(150deg, rgba(17, 30, 52, 0.85) 0%, rgba(13, 21, 37, 0.95) 100%);
+}
+
+.instant-card-preview.is-unseen.is-close-friends {
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+.instant-card-preview.is-seen {
+  opacity: 0.72;
+}
+
+.instant-card-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.instant-card-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #1e293b;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.instant-card-sender {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40px;
+}
+
+.instant-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.instant-card-icon-wrap {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 217, 245, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-cyan, #00d9f5);
+}
+
+.instant-card-preview.is-close-friends .instant-card-icon-wrap {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.instant-card-tag {
+  font-size: 0.58rem;
+  color: var(--text-muted, #94a3b8);
+  font-weight: 500;
+}
+
+.instant-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.58rem;
+  color: var(--text-dim, #64748b);
+}
+
+.instant-unseen-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #00d9f5;
+  box-shadow: 0 0 5px #00d9f5;
+  flex-shrink: 0;
+}
+
+.instant-seen-check {
+  color: var(--text-dim, #64748b);
+  flex-shrink: 0;
+}
+
+.instant-card-time {
+  white-space: nowrap;
+}
+
+/* 3. CONTINUOUS STORY VIEWER */
+.story-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.94);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.story-viewer-box {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  height: 100%;
+  max-height: 860px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #000000;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
+}
+
+@media (max-width: 600px) {
+  .story-viewer-box {
+    border-radius: 0;
+    max-height: 100vh;
+  }
+}
+
+/* Progress row */
+.story-progress-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 25;
+  display: flex;
+  gap: 4px;
+  padding: 12px 14px 6px 14px;
+}
+
+.story-progress-track {
+  flex: 1;
+  height: 2.5px;
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.story-progress-bar {
+  height: 100%;
+  background: #ffffff;
+  border-radius: 4px;
+  transition: width 0.04s linear;
+}
+
+/* Story Header */
+.story-header {
+  position: absolute;
+  top: 22px;
+  left: 0;
+  right: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0) 100%);
+  color: #ffffff;
+}
+
+.story-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.story-header-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+}
+
+.story-header-meta {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.story-content-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.story-image-element {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000000;
+}
+
+.story-loading-state,
+.story-error-state {
+  text-align: center;
+  color: #ffffff;
+  padding: 24px;
+}
+
+.story-loading-state p {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.story-error-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.story-error-desc {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  margin-bottom: 18px;
+}
+
+/* Bottom Bar */
+.story-bottom-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 25;
+  padding: 16px 16px 20px 16px;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0) 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.story-caption-text {
+  font-size: 0.9rem;
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.story-interaction-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.story-own-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+.story-own-indicator {
+  font-size: 0.78rem;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 4px 12px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* Desktop Prev / Next Nav Buttons */
+.story-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  backdrop-filter: blur(8px);
+}
+
+.story-nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.24);
+  transform: translateY(-50%) scale(1.08);
+}
+
+.story-nav-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.story-nav-btn--prev {
+  left: max(16px, calc(50% - 290px));
+}
+
+.story-nav-btn--next {
+  right: max(16px, calc(50% - 290px));
+}
+
+@media (max-width: 680px) {
+  .story-nav-btn {
+    display: none;
+  }
+}
+
+/* Press-and-hold (is-holding): Hide all UI overlays seamlessly */
+.story-viewer-overlay.is-holding .story-header,
+.story-viewer-overlay.is-holding .story-progress-row,
+.story-viewer-overlay.is-holding .story-bottom-bar,
+.story-viewer-overlay.is-holding .story-nav-btn {
+  opacity: 0 !important;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* Instant Counter Pill */
+.instant-counter-pill {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+
+/* Light Theme overrides for Floating Dock */
+:root[data-theme="light"] .floating-dock {
+  background: #FFFFFF;
+  border-color: #DFE2E6;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme="light"] .floating-dock-header {
+  border-bottom-color: #F1F2F4;
+  background: #F9FAFB;
+}
+
+:root[data-theme="light"] .floating-dock-tab {
+  color: #69717D;
+}
+
+:root[data-theme="light"] .floating-dock-tab.is-active {
+  color: #0284c7;
+  background: #E0F2FE;
+}
+
+:root[data-theme="light"] .instant-card-preview {
+  background: #FAFAFB;
+  border-color: #DFE2E6;
+}
+
+:root[data-theme="light"] .instant-card-preview.is-unseen {
+  background: linear-gradient(150deg, #F0F9FF 0%, #E0F2FE 100%);
+  border-color: #38BDF8;
+}
+
+:root[data-theme="light"] .instant-card-sender {
+  color: #252A32;
+}
