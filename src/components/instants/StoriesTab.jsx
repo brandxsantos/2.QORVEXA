@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, Users, LoaderCircle, Sparkles, BookOpen } from 'lucide-react'
+import { Plus, Users, LoaderCircle, Sparkles, Image as ImageIcon, Camera } from 'lucide-react'
 import { fetchActiveStories, fetchMyActiveStories } from '../../lib/instants.js'
 import { getSupabaseClient } from '../../lib/supabase.js'
 import ProtectedMediaImage from '../ProtectedMediaImage.jsx'
+import StoryThumbnail from './StoryThumbnail.jsx'
 import StoryCreateModal from './StoryCreateModal.jsx'
 import StoryViewerModal from './StoryViewerModal.jsx'
 import './Instants.css'
@@ -23,6 +24,7 @@ export default function StoriesTab({ user, profile, onReply }) {
   const [loadedProfile, setLoadedProfile] = useState(profile || null)
 
   const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createModalMode, setCreateModalMode] = useState('choose')
   const [viewerOpen, setViewerOpen] = useState(false)
   const [activeUserIdx, setActiveUserIdx] = useState(0)
   const [activeStoryIdx, setActiveStoryIdx] = useState(0)
@@ -51,7 +53,6 @@ export default function StoriesTab({ user, profile, onReply }) {
 
   const loadStories = useCallback(async () => {
     if (!user?.id) return
-    setLoading(true)
     try {
       const [receivedData, ownData] = await Promise.all([
         fetchActiveStories(),
@@ -67,6 +68,7 @@ export default function StoriesTab({ user, profile, onReply }) {
   }, [user?.id])
 
   useEffect(() => {
+    setLoading(true)
     loadStories()
   }, [loadStories])
 
@@ -158,16 +160,28 @@ export default function StoriesTab({ user, profile, onReply }) {
       setActiveStoryIdx(0)
       setViewerOpen(true)
     } else {
+      setCreateModalMode('choose')
       setCreateModalOpen(true)
     }
   }
 
   const handleOpenFriendStory = (stack) => {
-    const stackIdx = userStoryStacks.findIndex((s) => s.sender.id === stack.sender.id)
+    const stackIdx = userStoryStacks.findIndex((s) => s.sender?.id === stack.sender?.id)
     const firstUnreadIdx = Math.max(0, stack.instants.findIndex((i) => !i.is_viewed))
     setActiveUserIdx(stackIdx >= 0 ? stackIdx : 0)
     setActiveStoryIdx(firstUnreadIdx)
     setViewerOpen(true)
+  }
+
+  const handleOpenCreate = (mode = 'choose') => {
+    setCreateModalMode(mode)
+    setCreateModalOpen(true)
+  }
+
+  const handleStoryPublished = () => {
+    loadStories()
+    setTimeout(loadStories, 600)
+    setTimeout(loadStories, 1800)
   }
 
   return (
@@ -176,35 +190,36 @@ export default function StoriesTab({ user, profile, onReply }) {
       <div className="stories-tab-header">
         <div>
           <h2>Stories</h2>
-          <p>24-hour visual posts from friends (repeat viewing supported)</p>
+          <p>Share moments with your friends</p>
         </div>
         <button
           type="button"
           className="stories-add-btn"
-          onClick={() => setCreateModalOpen(true)}
+          onClick={() => handleOpenCreate('choose')}
         >
           <Plus size={16} />
-          <span>Add Story</span>
+          <span>New Story</span>
         </button>
       </div>
 
       {/* Content */}
-      {loading ? (
+      {loading && stories.length === 0 && myStories.length === 0 ? (
         <div className="stories-loading-box">
           <LoaderCircle size={28} className="animate-spin" />
           <span>Loading stories…</span>
         </div>
       ) : (
         <div className="stories-tab-content">
-          {/* Section: Your Story */}
+          {/* Section: Your Stories */}
           <div className="stories-section">
-            <span className="stories-section-title">Your Story</span>
-            <div className="stories-cards-row">
+            <span className="stories-section-title">Your Stories</span>
+            <div className="stories-your-card">
               <div
-                className={`story-profile-card ${hasOwnActive ? 'is-active-story' : 'is-create-story'}`}
+                className={`stories-your-left ${hasOwnActive ? 'is-active-story' : ''}`}
                 onClick={handleOpenOwnStory}
                 role="button"
                 tabIndex={0}
+                title={hasOwnActive ? 'View your story' : 'Add to your story'}
               >
                 <div className={`instant-avatar-ring ${hasOwnActive ? 'is-own-active' : 'is-viewed'}`}>
                   <div className="instant-avatar-inner">
@@ -226,23 +241,55 @@ export default function StoriesTab({ user, profile, onReply }) {
                     title="Add Story"
                     onClick={(e) => {
                       e.stopPropagation()
-                      setCreateModalOpen(true)
+                      handleOpenCreate('choose')
                     }}
                   >
                     <Plus size={13} />
                   </div>
                 </div>
-                <div className="story-profile-details">
+                <div className="stories-your-info">
                   <strong>Your Story</strong>
-                  <span>{hasOwnActive ? `${myStories.length} active story` : 'Tap to add story'}</span>
+                  <span>
+                    {hasOwnActive
+                      ? `${myStories.length} active ${myStories.length === 1 ? 'moment' : 'moments'} · Tap to view`
+                      : 'Share a photo with friends'}
+                  </span>
                 </div>
+              </div>
+
+              {/* Dedicated Creation Actions: Gallery & Camera */}
+              <div className="stories-your-actions">
+                <button
+                  type="button"
+                  className="story-action-btn story-action-gallery"
+                  onClick={() => handleOpenCreate('gallery')}
+                  title="Upload from Gallery"
+                >
+                  <ImageIcon size={15} />
+                  <span>Upload from Gallery</span>
+                </button>
+                <button
+                  type="button"
+                  className="story-action-btn story-action-camera"
+                  onClick={() => handleOpenCreate('camera')}
+                  title="Open Camera"
+                >
+                  <Camera size={15} />
+                  <span>Open Camera</span>
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Section: Friends' Stories */}
+          {/* Section: Recent Stories */}
           <div className="stories-section">
-            <span className="stories-section-title">Friends' Updates ({friendStacks.length})</span>
+            <div className="stories-section-header">
+              <span className="stories-section-title">Recent Stories</span>
+              {friendStacks.length > 0 && (
+                <span className="stories-count-badge">{friendStacks.length}</span>
+              )}
+            </div>
+
             {friendStacks.length > 0 ? (
               <div className="stories-cards-grid">
                 {friendStacks.map((stack) => {
@@ -252,40 +299,66 @@ export default function StoriesTab({ user, profile, onReply }) {
 
                   return (
                     <div
-                      key={stack.sender.id}
+                      key={stack.sender?.id || Math.random()}
                       className={`story-friend-card ${stack.hasUnread ? 'is-unread-card' : ''}`}
                       onClick={() => handleOpenFriendStory(stack)}
                       role="button"
                       tabIndex={0}
                     >
-                      <div
-                        className={`instant-avatar-ring ${stack.hasUnread ? 'is-unread' : 'is-viewed'} ${
-                          stack.isCloseFriends ? 'is-close-friends' : ''
-                        }`}
-                      >
-                        <div className="instant-avatar-inner">
-                          {stack.sender?.avatar_url ? (
-                            <ProtectedMediaImage
-                              path={stack.sender.avatar_url}
-                              alt={senderName}
-                              className="instant-avatar-img"
-                              fallback={<span>{senderName[0].toUpperCase()}</span>}
-                            />
-                          ) : (
-                            <span>{senderName[0].toUpperCase()}</span>
-                          )}
-                        </div>
-                        {stack.instants.length > 1 && (
-                          <div className="instant-count-badge">
-                            {stack.instants.length}
+                      {/* Media Preview Thumbnail */}
+                      <div className="story-card-media-wrapper">
+                        {latestStory?.image_path ? (
+                          <StoryThumbnail
+                            imagePath={latestStory.image_path}
+                            alt={`${senderName}'s story`}
+                            className="story-card-thumbnail"
+                          />
+                        ) : (
+                          <div className="story-card-media-fallback">
+                            <Sparkles size={24} />
                           </div>
                         )}
+                        <div className="story-card-gradient" />
                       </div>
-                      <div className="story-friend-info">
-                        <strong>{senderName}</strong>
-                        <span>{timeAgo}</span>
+
+                      {/* Header overlay: Avatar + Ring + Unread dot */}
+                      <div className="story-card-top">
+                        <div
+                          className={`instant-avatar-ring instant-avatar-ring--small ${
+                            stack.hasUnread ? 'is-unread' : 'is-viewed'
+                          } ${stack.isCloseFriends ? 'is-close-friends' : ''}`}
+                        >
+                          <div className="instant-avatar-inner">
+                            {stack.sender?.avatar_url ? (
+                              <ProtectedMediaImage
+                                path={stack.sender.avatar_url}
+                                alt={senderName}
+                                className="instant-avatar-img"
+                                fallback={<span>{senderName[0].toUpperCase()}</span>}
+                              />
+                            ) : (
+                              <span>{senderName[0].toUpperCase()}</span>
+                            )}
+                          </div>
+                        </div>
+                        {stack.hasUnread && <span className="story-card-unread-dot" />}
                       </div>
-                      {stack.hasUnread && <span className="story-card-unread-dot" />}
+
+                      {/* Bottom overlay: Author Name, Caption & Time */}
+                      <div className="story-card-bottom">
+                        <strong className="story-card-sender">{senderName}</strong>
+                        {latestStory?.caption && (
+                          <p className="story-card-caption">{latestStory.caption}</p>
+                        )}
+                        <div className="story-card-meta">
+                          <span className="story-card-time">{timeAgo}</span>
+                          {stack.instants.length > 1 && (
+                            <span className="story-card-count">
+                              {stack.instants.length} updates
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )
                 })}
@@ -304,8 +377,9 @@ export default function StoriesTab({ user, profile, onReply }) {
       {/* Creation Modal */}
       <StoryCreateModal
         isOpen={createModalOpen}
+        initialMode={createModalMode}
         onClose={() => setCreateModalOpen(false)}
-        onStoryPublished={loadStories}
+        onStoryPublished={handleStoryPublished}
         user={user}
       />
 

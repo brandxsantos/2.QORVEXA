@@ -3,7 +3,7 @@ import { X, Image as ImageIcon, Camera, LoaderCircle, Star, Users, Check, Refres
 import { createStory } from '../../lib/instants.js'
 import './Instants.css'
 
-export default function StoryCreateModal({ isOpen, onClose, onStoryPublished, user }) {
+export default function StoryCreateModal({ isOpen, onClose, onStoryPublished, user, initialMode = 'choose' }) {
   const [mode, setMode] = useState('choose') // 'choose' | 'camera' | 'preview'
   const [imageBlob, setImageBlob] = useState(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState('')
@@ -31,6 +31,7 @@ export default function StoryCreateModal({ isOpen, onClose, onStoryPublished, us
     }
   }
 
+  // Handle open/close and initial mode
   useEffect(() => {
     if (!isOpen) {
       stopCamera()
@@ -39,8 +40,21 @@ export default function StoryCreateModal({ isOpen, onClose, onStoryPublished, us
       setImagePreviewUrl('')
       setCaption('')
       setError('')
+    } else {
+      setError('')
+      if (initialMode === 'camera') {
+        startCamera()
+      } else if (initialMode === 'gallery') {
+        setMode('choose')
+        const timer = setTimeout(() => {
+          fileInputRef.current?.click()
+        }, 80)
+        return () => clearTimeout(timer)
+      } else {
+        setMode('choose')
+      }
     }
-  }, [isOpen])
+  }, [isOpen, initialMode])
 
   // Start camera mode
   const startCamera = async () => {

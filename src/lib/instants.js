@@ -38,7 +38,6 @@ export async function fetchActiveStories() {
         profiles:sender_id (id, username, display_name, avatar_url)
       )
     `)
-    .eq('instants.is_story', true)
     .gt('instants.expires_at', now)
 
   if (error) {
@@ -46,18 +45,25 @@ export async function fetchActiveStories() {
     return []
   }
 
-  return (data || []).map((row) => ({
-    id: row.instants.id,
-    sender_id: row.instants.sender_id,
-    audience_type: row.instants.audience_type,
-    caption: row.instants.caption,
-    created_at: row.instants.created_at,
-    expires_at: row.instants.expires_at,
-    is_viewed: row.is_viewed,
-    viewed_at: row.viewed_at,
-    is_story: true,
-    sender: row.instants.profiles,
-  }))
+  return (data || [])
+    .filter((row) => row.instants && (row.instants.is_story || row.instants.image_path?.includes('/story_')))
+    .map((row) => ({
+      id: row.instants.id,
+      sender_id: row.instants.sender_id,
+      audience_type: row.instants.audience_type,
+      caption: row.instants.caption,
+      created_at: row.instants.created_at,
+      expires_at: row.instants.expires_at,
+      is_viewed: row.is_viewed,
+      viewed_at: row.viewed_at,
+      is_story: true,
+      sender: row.instants.profiles || {
+        id: row.instants.sender_id,
+        username: 'Member',
+        display_name: 'Member',
+        avatar_url: null,
+      },
+    }))
 }
 
 export async function fetchMyActiveStories(userId) {
@@ -65,6 +71,7 @@ export async function fetchMyActiveStories(userId) {
   try {
     const { data, error } = await client.rpc('get_my_active_stories')
     if (!error && Array.isArray(data)) return data
+    if (error) console.warn('[stories] get_my_active_stories RPC warning:', error.message)
   } catch (_) {}
 
   if (!userId) return []
@@ -73,7 +80,7 @@ export async function fetchMyActiveStories(userId) {
     .from('instants')
     .select('id, sender_id, image_path, caption, audience_type, created_at, expires_at, is_story')
     .eq('sender_id', userId)
-    .eq('is_story', true)
+    .or('is_story.eq.true,image_path.like.%/story_%')
     .gt('expires_at', now)
     .order('created_at', { ascending: true })
 
@@ -109,22 +116,69 @@ export async function createStory({ imageBlob, caption = '', audienceType = 'fri
       p_caption: caption.trim() || null,
       p_audience_type: audienceType,
     })
-    if (!rpcError) return data
-  } catch (_) {}
-
-  // Fallback to create_instant if create_story RPC is pending
-  const { data, error: fbError } = await client.rpc('create_instant', {
-    p_image_path: imagePath,
-    p_caption: caption.trim() || null,
-    p_audience_type: audienceType,
-  })
-
-  if (fbError) {
-    await client.storage.from('qorvexa-instants').remove([imagePath]).catch(() => {})
-    throw fbError
+    if (!rpcError && data) return data
+    if (rpcError) console.warn('[stories] create_story RPC returned error, attempting fallback insert:', rpcError.message)
+  } catch (rpcEx) {
+    console.warn('[stories] create_story RPC exception:', rpcEx)
   }
 
-  return data
+  // 3. Resilient Fallback Direct Insert (ensures is_story = true)
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  const { data: storyRow, error: insertError } = await client
+    .from('instants')
+    .insert({
+      sender_id: userId,
+      image_path: imagePath,
+      caption: caption.trim() || null,
+      audience_type: audienceType,
+      is_story: true,
+      expires_at: expiresAt,
+    })
+    .select('id, expires_at')
+    .single()
+
+  if (insertError) {
+    await client.storage.from('qorvexa-instants').remove([imagePath]).catch(() => {})
+    throw insertError
+  }
+
+  // Populate recipients for fallback
+  try {
+    if (audienceType === 'close_friends') {
+      const { data: closeFriends } = await client
+        .from('close_friends')
+        .select('friend_id')
+        .eq('user_id', userId)
+
+      if (closeFriends?.length) {
+        const recipients = closeFriends.map((cf) => ({
+          instant_id: storyRow.id,
+          recipient_id: cf.friend_id,
+        }))
+        await client.from('instant_recipients').insert(recipients).catch(() => {})
+      }
+    } else {
+      const { data: friendships } = await client
+        .from('friendships')
+        .select('user_low, user_high')
+        .or(`user_low.eq.${userId},user_high.eq.${userId}`)
+
+      if (friendships?.length) {
+        const recipients = friendships.map((f) => ({
+          instant_id: storyRow.id,
+          recipient_id: f.user_low === userId ? f.user_high : f.user_low,
+        }))
+        await client.from('instant_recipients').insert(recipients).catch(() => {})
+      }
+    }
+  } catch (recipErr) {
+    console.warn('[stories] Fallback recipient population warning:', recipErr)
+  }
+
+  return {
+    story_id: storyRow.id,
+    expires_at: storyRow.expires_at,
+  }
 }
 
 // ==========================================

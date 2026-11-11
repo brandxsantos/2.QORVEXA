@@ -1595,14 +1595,284 @@
   gap: 10px;
 }
 
+.stories-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .stories-section-title {
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--text-muted, #94a3b8);
 }
 
+.stories-count-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(0, 217, 245, 0.15);
+  color: #00d9f5;
+  border: 1px solid rgba(0, 217, 245, 0.3);
+}
+
+/* Your Stories container */
+.stories-your-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--bg-surface-elevated, #1a2334);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+.stories-your-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s ease;
+}
+
+.stories-your-left:hover {
+  opacity: 0.9;
+}
+
+.stories-your-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.stories-your-info strong {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary, #ffffff);
+}
+
+.stories-your-info span {
+  font-size: 0.76rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.stories-your-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.story-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #ffffff);
+  transition: all 0.18s ease;
+  font-family: inherit;
+}
+
+.story-action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.story-action-gallery:hover {
+  background: rgba(0, 217, 245, 0.12);
+  border-color: rgba(0, 217, 245, 0.4);
+  color: #00d9f5;
+  box-shadow: 0 2px 10px rgba(0, 217, 245, 0.2);
+}
+
+.story-action-camera:hover {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.4);
+  color: #60a5fa;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.2);
+}
+
+/* Recent Stories Cards Grid */
+.stories-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .stories-cards-grid {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scroll-snap-type: x mandatory;
+    gap: 12px;
+  }
+}
+
+.story-friend-card {
+  position: relative;
+  height: 220px;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--bg-surface-elevated, #1a2334);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  flex-shrink: 0;
+  min-width: 140px;
+  scroll-snap-align: start;
+}
+
+.story-friend-card:hover {
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.story-friend-card.is-unread-card {
+  border-color: rgba(0, 217, 245, 0.45);
+  box-shadow: 0 4px 16px rgba(0, 217, 245, 0.18);
+}
+
+/* Media wrapper & thumbnail */
+.story-card-media-wrapper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #0b111e;
+  overflow: hidden;
+}
+
+.story-card-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s ease;
+}
+
+.story-friend-card:hover .story-card-thumbnail {
+  transform: scale(1.05);
+}
+
+.story-card-media-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted, #94a3b8);
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+}
+
+.story-card-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.05) 45%, rgba(0, 0, 0, 0.88) 100%);
+  pointer-events: none;
+}
+
+/* Top overlay: Avatar & unread status */
+.story-card-top {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.instant-avatar-ring--small {
+  width: 38px;
+  height: 38px;
+  padding: 2px;
+}
+
+.instant-avatar-ring--small .instant-avatar-inner {
+  width: 100%;
+  height: 100%;
+}
+
+.story-card-unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00d9f5;
+  box-shadow: 0 0 8px #00d9f5;
+}
+
+/* Bottom overlay: Sender name, caption & time */
+.story-card-bottom {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.story-card-sender {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.story-card-caption {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.story-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.story-card-time {
+  font-weight: 500;
+}
+
+.story-card-count {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 1px 5px;
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+
+/* Legacy fallback card styling */
 .story-profile-card {
   display: flex;
   align-items: center;
@@ -1620,78 +1890,6 @@
 .story-profile-card:hover {
   background: var(--bg-hover, rgba(148, 163, 184, 0.1));
   transform: translateY(-1px);
-}
-
-.story-profile-details {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.story-profile-details strong {
-  font-size: 0.9rem;
-  color: var(--text-primary, #ffffff);
-}
-
-.story-profile-details span {
-  font-size: 0.74rem;
-  color: var(--text-muted, #94a3b8);
-}
-
-.stories-cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.story-friend-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: var(--bg-surface-elevated, #1a2334);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  cursor: pointer;
-  position: relative;
-  transition: all 0.15s ease;
-}
-
-.story-friend-card:hover {
-  background: var(--bg-hover, rgba(148, 163, 184, 0.1));
-  transform: translateY(-1px);
-}
-
-.story-friend-card.is-unread-card {
-  border-color: rgba(0, 217, 245, 0.35);
-  box-shadow: 0 0 10px rgba(0, 217, 245, 0.1);
-}
-
-.story-friend-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.story-friend-info strong {
-  font-size: 0.88rem;
-  color: var(--text-primary, #ffffff);
-}
-
-.story-friend-info span {
-  font-size: 0.72rem;
-  color: var(--text-muted, #94a3b8);
-}
-
-.story-card-unread-dot {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #00d9f5;
-  box-shadow: 0 0 6px #00d9f5;
 }
 
 .stories-empty-panel {
