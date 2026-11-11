@@ -11369,8 +11369,10 @@
   flex-direction: column;
   gap: 0.35rem;
   margin-bottom: 0.25rem;
-  min-width: 220px;
+  min-width: 0;
+  width: 100%;
   max-width: 300px;
+  overflow: visible;
 }
 
 .qv-voice-player {
@@ -11382,6 +11384,10 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 1.25rem;
   user-select: none;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 .qv-voice-player.is-own {
@@ -11424,11 +11430,13 @@
   height: 22px;
   cursor: pointer;
   width: 100%;
+  min-width: 0;
+  overflow: visible;
 }
 
 .qv-voice-bar {
   flex: 1;
-  min-width: 2px;
+  min-width: 1px;
   background: #64748b;
   border-radius: 2px;
   border: none;

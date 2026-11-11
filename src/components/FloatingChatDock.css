@@ -199,54 +199,89 @@
 
 .floating-chat-compose {
   display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-  padding: 0.7rem;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem 0.65rem;
   background: #171d2b;
   border-top: 1px solid rgb(255 255 255 / 9%);
 }
 
-.floating-chat-compose textarea {
+.floating-chat-compose-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   width: 100%;
-  min-height: 38px;
-  max-height: 100px;
+}
+
+.floating-chat-compose-inputs textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  max-height: 90px;
   resize: vertical;
-  padding: 0.6rem 0.7rem;
+  padding: 0.5rem 0.65rem;
   border: 1px solid rgb(255 255 255 / 13%);
-  border-radius: 10px;
+  border-radius: 9px;
   outline: none;
   background: #263247;
   color: #f8fafc;
   font: inherit;
   font-size: 0.82rem;
+  line-height: 1.35;
 }
 
-.floating-chat-compose textarea:focus {
+.floating-chat-compose-inputs textarea:focus {
   border-color: #60a5fa;
 }
 
-.floating-chat-compose textarea::placeholder {
+.floating-chat-compose-inputs textarea::placeholder {
   color: #94a3b8;
 }
 
-.floating-chat-compose button {
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
+.floating-chat-compose-action-btn {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 10px;
+  border-radius: 7px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  transition: all 120ms ease;
+}
+
+.floating-chat-compose-action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #38bdf8;
+}
+
+.floating-chat-compose-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.floating-chat-compose button[type="submit"] {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
   background: #2563eb;
   color: white;
   cursor: pointer;
+  transition: background 120ms ease, opacity 120ms ease;
 }
 
-.floating-chat-compose button:hover:not(:disabled) {
+.floating-chat-compose button[type="submit"]:hover:not(:disabled) {
   background: #1d4ed8;
 }
 
-.floating-chat-compose button:disabled {
+.floating-chat-compose button[type="submit"]:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -1025,7 +1060,11 @@
 }
 
 .floating-chat-message-row .qv-message-layout {
-  max-width: 84%;
+  max-width: 86%;
+}
+
+.floating-chat-message-row .qv-message-layout.has-attachments {
+  max-width: 94%;
 }
 
 .floating-chat-message-row.is-own-message .qv-message-layout {
@@ -1042,10 +1081,190 @@
   line-height: 1.45;
 }
 
+.floating-chat-message-row .floating-chat-message-bubble.qv-message-bubble--with-attachments {
+  padding: 0.35rem 0.45rem;
+  max-width: 100%;
+  overflow: visible;
+}
+
 .floating-chat-message-row.is-own-message .floating-chat-message-bubble {
   border-radius: 13px 13px 4px 13px;
   background: #2563eb;
   color: white;
+}
+
+/* Voice message player display without clipping */
+.floating-chat-message-row .qv-bubble-voice-list {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.floating-chat-message-row .qv-voice-player {
+  width: 100%;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  overflow: visible;
+  min-height: auto;
+}
+
+.floating-chat-message-row .qv-voice-play-btn {
+  width: 2.1rem;
+  height: 2.1rem;
+  min-width: 2.1rem;
+  flex-shrink: 0;
+}
+
+.floating-chat-message-row .qv-voice-waveform-container {
+  min-width: 0;
+  flex: 1;
+  overflow: visible;
+}
+
+.floating-chat-message-row .qv-voice-waveform {
+  width: 100%;
+  min-width: 0;
+  gap: 1.5px;
+  height: 20px;
+  overflow: visible;
+}
+
+.floating-chat-message-row .qv-voice-bar {
+  min-width: 1px;
+  flex: 1;
+}
+
+.floating-chat-message-row .qv-voice-meta-row {
+  font-size: 0.68rem;
+  line-height: 1.1;
+}
+
+.floating-chat-message-row .qv-voice-speed-pill {
+  padding: 1px 6px;
+  font-size: 0.62rem;
+}
+
+/* Voice recording in floating chat */
+.floating-chat-recording-bar {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.35rem 0.5rem;
+  border-radius: 9px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.floating-chat-record-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.floating-chat-record-preview-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+/* Voice preview bar */
+.floating-chat-voice-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border-radius: 9px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  box-sizing: border-box;
+}
+
+.floating-chat-voice-preview-player {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.floating-chat-preview-audio {
+  width: 100%;
+  height: 32px;
+}
+
+/* Attachment tray inside floating chat */
+.floating-chat-compose .qv-composer-attachments-tray {
+  padding: 0.2rem 0;
+  max-width: 100%;
+}
+
+.floating-chat-compose .qv-composer-attachment-item {
+  max-width: 9.5rem;
+  padding: 0.25rem 0.4rem;
+}
+
+.floating-chat-compose .qv-composer-attachment-thumb,
+.floating-chat-compose .qv-composer-attachment-file-badge {
+  width: 1.7rem;
+  height: 1.7rem;
+}
+
+.floating-chat-compose .qv-composer-attachment-name {
+  max-width: 5rem;
+  font-size: 0.72rem;
+}
+
+/* Light mode support */
+:root[data-theme="light"] .floating-chat-compose {
+  background: #F8FAFC;
+  border-top-color: #DFE2E6;
+}
+
+:root[data-theme="light"] .floating-chat-compose-inputs textarea {
+  background: #FFFFFF;
+  border-color: #DFE2E6;
+  color: #1E293B;
+}
+
+:root[data-theme="light"] .floating-chat-compose-inputs textarea:focus {
+  border-color: #38BDF8;
+}
+
+:root[data-theme="light"] .floating-chat-compose-action-btn {
+  color: #64748B;
+}
+
+:root[data-theme="light"] .floating-chat-compose-action-btn:hover:not(:disabled) {
+  background: #E2E8F0;
+  color: #0284C7;
+}
+
+:root[data-theme="light"] .floating-chat-record-preview-btn {
+  background: #E2E8F0;
+  color: #334155;
+}
+
+:root[data-theme="light"] .floating-chat-record-preview-btn:hover {
+  background: #CBD5E1;
+  color: #0F172A;
+}
+
+:root[data-theme="light"] .floating-chat-voice-preview-bar {
+  background: #E0F2FE;
+  border-color: #BAE6FD;
 }
 
 .floating-chat-message-row .qv-message-content {

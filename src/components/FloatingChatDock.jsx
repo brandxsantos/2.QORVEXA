@@ -1,6 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { GripVertical, MessageCircle, Minus, Phone, Search, Send, Video, X } from 'lucide-react'
+import {
+  GripVertical,
+  Image as ImageIcon,
+  LoaderCircle,
+  MessageCircle,
+  Mic,
+  Minus,
+  Paperclip,
+  Pause,
+  Phone,
+  Search,
+  Send,
+  Trash2,
+  Video,
+  X,
+} from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
 import { useCall } from '../context/useCall.js'
 import { getSupabaseClient, authorizeRealtimeSession } from '../lib/supabase.js'
@@ -10,13 +25,25 @@ import CallReceipt from './CallReceipt.jsx'
 import EmojiPicker from './EmojiPicker.jsx'
 import MessageInteractions from './MessageInteractions.jsx'
 import { loadMessageInteractions, toggleMessageReaction } from '../lib/messageInteractions.js'
-import { loadMessageAttachments } from '../lib/messageAttachments.js'
+import {
+  loadMessageAttachments,
+  uploadAttachmentFile,
+  detectAttachmentType,
+  getFileExtension,
+} from '../lib/messageAttachments.js'
 import MediaLightboxModal from './MediaLightboxModal.jsx'
 import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
 import './FloatingChatDock.css'
 
 const profileFields = 'id, username, display_name, avatar_url, online_status_visibility'
 const messageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, created_at'
+
+function formatVoiceTime(seconds) {
+  if (!seconds || isNaN(seconds) || seconds <= 0) return '0:00'
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
 
 function displayName(profile) {
   return profile?.display_name || profile?.username || 'QORVEXA member'
@@ -51,6 +78,15 @@ function FloatingChatDock() {
   const [drafts, setDrafts] = useState({})
   const [loadingIds, setLoadingIds] = useState([])
   const [sendingIds, setSendingIds] = useState([])
+  const [pendingFilesByConversation, setPendingFilesByConversation] = useState({})
+  const [uploadProgressByConversation, setUploadProgressByConversation] = useState({})
+  const [voiceState, setVoiceState] = useState(null)
+  const photoInputRefs = useRef({})
+  const fileInputRefs = useRef({})
+  const audioStreamRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
+  const audioChunksRef = useRef([])
+  const recordingTimerRef = useRef(null)
   const [error, setError] = useState('')
   const [inboxOpen, setInboxOpen] = useState(false)
   const [inboxTab, setInboxTab] = useState('recent')
@@ -312,7 +348,18 @@ setLoadingIds((current) => current.includes(conversationId)
                   .catch((loadError) => setError(loadError.message))
               }
             }
-          })          .on('postgres_changes', {
+          })
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'message_attachments',
+          }, () => {
+            openIdsRef.current.forEach((conversationId) => {
+              refreshFloatingInteractionsRef.current(conversationId)
+                .catch(() => {})
+            })
+          })
+          .on('postgres_changes', {
             event: '*',
             schema: 'public',
             table: 'call_sessions',
@@ -706,11 +753,40 @@ setLoadingIds((current) => current.includes(conversationId)
     document.getElementById(`floating-chat-message-${messageId}`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
+
+  function cancelVoiceRecording() {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current)
+      recordingTimerRef.current = null
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.onstop = null
+      mediaRecorderRef.current.stop()
+    }
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach((t) => t.stop())
+      audioStreamRef.current = null
+    }
+    if (voiceState?.audioUrl) {
+      try {
+        URL.revokeObjectURL(voiceState.audioUrl)
+      } catch (_) {}
+    }
+    audioChunksRef.current = []
+    setVoiceState(null)
+  }
+
   function minimizeChat(conversationId) {
+    if (voiceState?.conversationId === conversationId) {
+      cancelVoiceRecording()
+    }
     setOpenIds((current) => current.filter((id) => id !== conversationId))
   }
 
   function hideChat(conversationId) {
+    if (voiceState?.conversationId === conversationId) {
+      cancelVoiceRecording()
+    }
     setOpenIds((current) => current.filter((id) => id !== conversationId))
     setHiddenIds((current) => [...new Set([...current, conversationId])])
 
@@ -726,30 +802,392 @@ setLoadingIds((current) => current.includes(conversationId)
     })
   }
 
-  async function sendMessage(event, conversation) {
-    event.preventDefault()
+  // Cleanup voice recording on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((t) => t.stop())
+      }
+    }
+  }, [])
 
-    const conversationId = conversation.id
-    const content = (drafts[conversationId] || '').trim()
+  function handleSelectPhotos(event, conversationId) {
+    const files = Array.from(event.target.files || [])
+    if (!files.length) return
 
-    if (!content || sendingIds.includes(conversationId)) return
+    const newItems = files.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      name: file.name,
+      size: file.size,
+      type: detectAttachmentType(file),
+      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+    }))
+
+    setPendingFilesByConversation((current) => ({
+      ...current,
+      [conversationId]: [...(current[conversationId] || []), ...newItems],
+    }))
+
+    event.target.value = ''
+  }
+
+  function handleSelectFiles(event, conversationId) {
+    const files = Array.from(event.target.files || [])
+    if (!files.length) return
+
+    const newItems = files.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      name: file.name,
+      size: file.size,
+      type: detectAttachmentType(file),
+      previewUrl: null,
+    }))
+
+    setPendingFilesByConversation((current) => ({
+      ...current,
+      [conversationId]: [...(current[conversationId] || []), ...newItems],
+    }))
+
+    event.target.value = ''
+  }
+
+  function removePendingFile(conversationId, fileId) {
+    setPendingFilesByConversation((current) => {
+      const list = current[conversationId] || []
+      const toRemove = list.find((item) => item.id === fileId)
+      if (toRemove?.previewUrl) {
+        try {
+          URL.revokeObjectURL(toRemove.previewUrl)
+        } catch (_) {}
+      }
+      return {
+        ...current,
+        [conversationId]: list.filter((item) => item.id !== fileId),
+      }
+    })
+  }
+
+  async function startVoiceRecording(conversationId) {
+    if (voiceState) {
+      cancelVoiceRecording()
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      audioStreamRef.current = stream
+      audioChunksRef.current = []
+
+      let mimeType = 'audio/webm;codecs=opus'
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm'
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4'
+        } else {
+          mimeType = ''
+        }
+      }
+
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      mediaRecorderRef.current = recorder
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data)
+        }
+      }
+
+      recorder.start(250)
+      setVoiceState({
+        conversationId,
+        status: 'recording',
+        duration: 0,
+        audioBlob: null,
+        audioUrl: null,
+        audioFile: null,
+      })
+
+      recordingTimerRef.current = setInterval(() => {
+        setVoiceState((prev) => {
+          if (!prev || prev.status !== 'recording') return prev
+          return { ...prev, duration: prev.duration + 1 }
+        })
+      }, 1000)
+    } catch (err) {
+      console.error('[FloatingChatDock] Microphone error:', err)
+      setError('Microphone permission is required to record voice messages.')
+    }
+  }
+
+  async function stopAndPreviewVoiceRecording() {
+    if (!mediaRecorderRef.current || !voiceState || voiceState.status !== 'recording') return
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current)
+      recordingTimerRef.current = null
+    }
+
+    const recorder = mediaRecorderRef.current
+    const convId = voiceState.conversationId
+    const finalDuration = voiceState.duration
+
+    await new Promise((resolve) => {
+      recorder.onstop = resolve
+      if (recorder.state !== 'inactive') {
+        recorder.stop()
+      } else {
+        resolve()
+      }
+    })
+
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach((t) => t.stop())
+      audioStreamRef.current = null
+    }
+
+    const chunks = audioChunksRef.current || []
+    if (!chunks.length) {
+      setVoiceState(null)
+      return
+    }
+
+    const mimeType = recorder.mimeType || 'audio/webm'
+    const audioBlob = new Blob(chunks, { type: mimeType })
+    const ext = mimeType.includes('mp4') ? 'm4a' : 'webm'
+    const audioFile = new File([audioBlob], `voice-message-${Date.now()}.${ext}`, { type: audioBlob.type })
+    const audioUrl = URL.createObjectURL(audioBlob)
+
+    setVoiceState({
+      conversationId: convId,
+      status: 'preview',
+      duration: finalDuration,
+      audioBlob,
+      audioUrl,
+      audioFile,
+    })
+  }
+
+  async function sendVoiceRecording(conversationId) {
+    if (!voiceState || voiceState.conversationId !== conversationId) return
+    if (sendingIds.includes(conversationId)) return
+
+    let fileToSend = voiceState.audioFile
+
+    if (voiceState.status === 'recording') {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+        recordingTimerRef.current = null
+      }
+
+      const recorder = mediaRecorderRef.current
+      if (recorder) {
+        await new Promise((resolve) => {
+          recorder.onstop = resolve
+          if (recorder.state !== 'inactive') {
+            recorder.stop()
+          } else {
+            resolve()
+          }
+        })
+      }
+
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((t) => t.stop())
+        audioStreamRef.current = null
+      }
+
+      const chunks = audioChunksRef.current || []
+      if (!chunks.length) {
+        setVoiceState(null)
+        return
+      }
+
+      const mimeType = recorder?.mimeType || 'audio/webm'
+      const audioBlob = new Blob(chunks, { type: mimeType })
+      const ext = mimeType.includes('mp4') ? 'm4a' : 'webm'
+      fileToSend = new File([audioBlob], `voice-message-${Date.now()}.${ext}`, { type: audioBlob.type })
+    }
+
+    if (!fileToSend) {
+      cancelVoiceRecording()
+      return
+    }
 
     setSendingIds((current) => [...current, conversationId])
     setError('')
 
     try {
-      const { data, error: insertError } = await getSupabaseClient()
+      const client = getSupabaseClient()
+      setUploadProgressByConversation((current) => ({
+        ...current,
+        [conversationId]: { current: 1, total: 1, percent: 50, name: 'Voice message' },
+      }))
+
+      const uploaded = await uploadAttachmentFile(client, conversationId, user.id, fileToSend)
+
+      setUploadProgressByConversation((current) => ({
+        ...current,
+        [conversationId]: { current: 1, total: 1, percent: 100, name: 'Voice message' },
+      }))
+
+      const { data, error: insertError } = await client
         .from('messages')
         .insert({
           conversation_id: conversationId,
           sender_id: user.id,
-          content,
+          content: '🎙️ Voice message',
           reply_to_message_id: replyingToByConversation[conversationId]?.id || null,
         })
         .select(messageFields)
         .single()
 
       if (insertError) throw insertError
+
+      const { error: attInsertError } = await client
+        .from('message_attachments')
+        .insert([{
+          message_id: data.id,
+          conversation_id: conversationId,
+          sender_id: user.id,
+          storage_path: uploaded.storage_path,
+          original_filename: uploaded.original_filename,
+          file_size: uploaded.file_size,
+          mime_type: uploaded.mime_type,
+          attachment_type: 'audio',
+          metadata: uploaded.metadata || {},
+        }])
+
+      if (attInsertError) throw attInsertError
+
+      if (voiceState?.audioUrl) {
+        try {
+          URL.revokeObjectURL(voiceState.audioUrl)
+        } catch (_) {}
+      }
+      audioChunksRef.current = []
+      setVoiceState(null)
+      setReplyingToByConversation((current) => ({ ...current, [conversationId]: null }))
+
+      setMessagesByConversation((current) => ({
+        ...current,
+        [conversationId]: [
+          ...(current[conversationId] || []).filter((m) => m.id !== data.id),
+          data,
+        ],
+      }))
+
+      await refreshFloatingInteractions(conversationId)
+      await loadConversations()
+    } catch (sendError) {
+      setError(sendError.message || 'Voice message could not be sent.')
+    } finally {
+      setSendingIds((current) => current.filter((id) => id !== conversationId))
+      setUploadProgressByConversation((current) => ({
+        ...current,
+        [conversationId]: null,
+      }))
+    }
+  }
+
+  async function sendMessage(event, conversation) {
+    event?.preventDefault?.()
+
+    const conversationId = conversation.id
+    const content = (drafts[conversationId] || '').trim()
+    const pendingFiles = pendingFilesByConversation[conversationId] || []
+
+    if ((!content && pendingFiles.length === 0) || sendingIds.includes(conversationId)) return
+
+    setSendingIds((current) => [...current, conversationId])
+    setError('')
+
+    try {
+      const client = getSupabaseClient()
+      const uploadedAttachments = []
+
+      if (pendingFiles.length > 0) {
+        for (let i = 0; i < pendingFiles.length; i++) {
+          const item = pendingFiles[i]
+          setUploadProgressByConversation((current) => ({
+            ...current,
+            [conversationId]: {
+              current: i + 1,
+              total: pendingFiles.length,
+              percent: Math.round((i / pendingFiles.length) * 100),
+              name: item.name,
+            },
+          }))
+          const uploaded = await uploadAttachmentFile(
+            client,
+            conversationId,
+            user.id,
+            item.file
+          )
+          uploadedAttachments.push(uploaded)
+        }
+        setUploadProgressByConversation((current) => ({
+          ...current,
+          [conversationId]: {
+            current: pendingFiles.length,
+            total: pendingFiles.length,
+            percent: 100,
+            name: '',
+          },
+        }))
+      }
+
+      const messageContent = content || (
+        uploadedAttachments[0]?.attachment_type === 'photo' || uploadedAttachments[0]?.attachment_type === 'image'
+          ? (uploadedAttachments.length > 1 ? `${uploadedAttachments.length} Photos` : 'Photo')
+          : uploadedAttachments[0]?.attachment_type === 'video'
+            ? 'Video'
+            : uploadedAttachments[0]?.attachment_type === 'audio'
+              ? '🎙️ Voice message'
+              : uploadedAttachments[0]?.original_filename || 'Attachment'
+      )
+
+      const { data, error: insertError } = await client
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: user.id,
+          content: messageContent,
+          reply_to_message_id: replyingToByConversation[conversationId]?.id || null,
+        })
+        .select(messageFields)
+        .single()
+
+      if (insertError) throw insertError
+
+      if (uploadedAttachments.length > 0) {
+        const rowsToInsert = uploadedAttachments.map((att) => ({
+          message_id: data.id,
+          conversation_id: conversationId,
+          sender_id: user.id,
+          storage_path: att.storage_path,
+          original_filename: att.original_filename,
+          file_size: att.file_size,
+          mime_type: att.mime_type,
+          attachment_type: att.attachment_type === 'image' ? 'photo' : (att.attachment_type || 'file'),
+          metadata: att.metadata || {},
+        }))
+        const { error: attInsertError } = await client
+          .from('message_attachments')
+          .insert(rowsToInsert)
+        if (attInsertError) throw attInsertError
+      }
+
+      pendingFiles.forEach((item) => {
+        if (item.previewUrl) {
+          try { URL.revokeObjectURL(item.previewUrl) } catch (_) {}
+        }
+      })
+
+      setPendingFilesByConversation((current) => ({ ...current, [conversationId]: [] }))
+      setDrafts((current) => ({ ...current, [conversationId]: '' }))
+      setReplyingToByConversation((current) => ({ ...current, [conversationId]: null }))
 
       setMessagesByConversation((current) => ({
         ...current,
@@ -759,13 +1197,16 @@ setLoadingIds((current) => current.includes(conversationId)
         ],
       }))
 
-      setDrafts((current) => ({ ...current, [conversationId]: '' }))
-      setReplyingToByConversation((current) => ({ ...current, [conversationId]: null }))
+      await refreshFloatingInteractions(conversationId)
       await loadConversations()
     } catch (sendError) {
       setError(sendError.message || 'Message could not be sent.')
     } finally {
       setSendingIds((current) => current.filter((id) => id !== conversationId))
+      setUploadProgressByConversation((current) => ({
+        ...current,
+        [conversationId]: null,
+      }))
     }
   }
 
@@ -909,36 +1350,236 @@ setLoadingIds((current) => current.includes(conversationId)
                     </button>
                   </div>
                 )}
-                <textarea
-                  aria-label={`Message ${name}`}
-                  rows={1}
-                  maxLength={4000}
-                  placeholder="Write a message…"
-                  value={drafts[conversationId] || ''}
-                  onChange={(event) => setDrafts((current) => ({
-                    ...current,
-                    [conversationId]: event.target.value,
-                  }))}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                      event.preventDefault()
-                      event.currentTarget.form.requestSubmit()
-                    }
-                  }}
+
+                {/* Pre-send attachments tray */}
+                {(pendingFilesByConversation[conversationId] || []).length > 0 && (
+                  <div className="qv-composer-attachments-tray">
+                    {(pendingFilesByConversation[conversationId] || []).map((item) => (
+                      <div key={item.id} className="qv-composer-attachment-item">
+                        {item.previewUrl ? (
+                          <img src={item.previewUrl} alt={item.name} className="qv-composer-attachment-thumb" />
+                        ) : (
+                          <div className="qv-composer-attachment-file-badge">
+                            <span className="qv-composer-attachment-ext">{getFileExtension(item.name)}</span>
+                          </div>
+                        )}
+                        <span className="qv-composer-attachment-name" title={item.name}>{item.name}</span>
+                        <button
+                          type="button"
+                          className="qv-composer-attachment-remove"
+                          onClick={() => removePendingFile(conversationId, item.id)}
+                          title="Remove attachment"
+                          aria-label={`Remove ${item.name}`}
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Upload progress indicator */}
+                {uploadProgressByConversation[conversationId] && (
+                  <div className="qv-composer-upload-progress">
+                    <div className="qv-composer-upload-progress-info">
+                      <LoaderCircle size={13} className="spinner" />
+                      <span>
+                        Uploading {uploadProgressByConversation[conversationId].current} of {uploadProgressByConversation[conversationId].total}
+                        {uploadProgressByConversation[conversationId].name ? ` — ${uploadProgressByConversation[conversationId].name}` : ''} ({uploadProgressByConversation[conversationId].percent}%)
+                      </span>
+                    </div>
+                    <div className="qv-composer-upload-bar">
+                      <div
+                        className="qv-composer-upload-bar-fill"
+                        style={{ width: `${uploadProgressByConversation[conversationId].percent}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Hidden file inputs */}
+                <input
+                  type="file"
+                  ref={(el) => { photoInputRefs.current[conversationId] = el }}
+                  accept="image/*,video/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleSelectPhotos(e, conversationId)}
                 />
-                <EmojiPicker
-                  onSelect={(emoji) => setDrafts((current) => ({
-                    ...current,
-                    [conversationId]: `${current[conversationId] || ''}${emoji}`,
-                  }))}
+                <input
+                  type="file"
+                  ref={(el) => { fileInputRefs.current[conversationId] = el }}
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleSelectFiles(e, conversationId)}
                 />
-                <button
-                  type="submit"
-                  disabled={!(drafts[conversationId] || '').trim() || sendingIds.includes(conversationId)}
-                  aria-label="Send message"
-                >
-                  <Send size={17} />
-                </button>
+
+                {/* Voice recording bar OR voice preview bar OR standard inputs */}
+                {voiceState?.conversationId === conversationId && voiceState.status === 'recording' ? (
+                  <div className="qv-recording-bar floating-chat-recording-bar">
+                    <div className="qv-recording-status">
+                      <div className="qv-recording-dot" />
+                      <span className="qv-recording-time">{formatVoiceTime(voiceState.duration)}</span>
+                      <div className="qv-recording-waves">
+                        <span /><span /><span /><span /><span />
+                      </div>
+                    </div>
+                    <div className="qv-recording-actions">
+                      <button
+                        type="button"
+                        className="qv-recording-cancel-btn"
+                        onClick={cancelVoiceRecording}
+                        title="Discard recording"
+                        aria-label="Discard recording"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="floating-chat-record-preview-btn"
+                        onClick={stopAndPreviewVoiceRecording}
+                        title="Stop and preview voice message"
+                        aria-label="Stop and preview voice message"
+                      >
+                        <Pause size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        className="qv-recording-send-btn"
+                        onClick={() => sendVoiceRecording(conversationId)}
+                        title="Send voice message"
+                        aria-label="Send voice message"
+                        disabled={sendingIds.includes(conversationId)}
+                      >
+                        {sendingIds.includes(conversationId) ? (
+                          <LoaderCircle size={16} className="spinner" />
+                        ) : (
+                          <Send size={16} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : voiceState?.conversationId === conversationId && voiceState.status === 'preview' ? (
+                  <div className="floating-chat-voice-preview-bar">
+                    <div className="floating-chat-voice-preview-player">
+                      <audio
+                        src={voiceState.audioUrl}
+                        controls
+                        controlsList="nodownload noplaybackrate"
+                        className="floating-chat-preview-audio"
+                      />
+                    </div>
+                    <div className="qv-recording-actions">
+                      <button
+                        type="button"
+                        className="qv-recording-cancel-btn"
+                        onClick={cancelVoiceRecording}
+                        title="Discard recording"
+                        aria-label="Discard recording"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="qv-recording-send-btn"
+                        onClick={() => sendVoiceRecording(conversationId)}
+                        title="Send voice message"
+                        aria-label="Send voice message"
+                        disabled={sendingIds.includes(conversationId)}
+                      >
+                        {sendingIds.includes(conversationId) ? (
+                          <LoaderCircle size={16} className="spinner" />
+                        ) : (
+                          <Send size={16} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="floating-chat-compose-inputs">
+                    {/* 1. Photo / Video Button */}
+                    <button
+                      type="button"
+                      className="floating-chat-compose-action-btn"
+                      onClick={() => photoInputRefs.current[conversationId]?.click()}
+                      aria-label="Attach photos or videos"
+                      title="Photo / Video"
+                      disabled={sendingIds.includes(conversationId)}
+                    >
+                      <ImageIcon size={17} />
+                    </button>
+
+                    {/* 2. Voice Message Button */}
+                    <button
+                      type="button"
+                      className="floating-chat-compose-action-btn"
+                      onClick={() => startVoiceRecording(conversationId)}
+                      aria-label="Record voice message"
+                      title="Voice message"
+                      disabled={sendingIds.includes(conversationId)}
+                    >
+                      <Mic size={17} />
+                    </button>
+
+                    {/* 3. Document / File Button */}
+                    <button
+                      type="button"
+                      className="floating-chat-compose-action-btn"
+                      onClick={() => fileInputRefs.current[conversationId]?.click()}
+                      aria-label="Attach document or file"
+                      title="Attach file"
+                      disabled={sendingIds.includes(conversationId)}
+                    >
+                      <Paperclip size={17} />
+                    </button>
+
+                    <textarea
+                      aria-label={`Message ${name}`}
+                      rows={1}
+                      maxLength={4000}
+                      placeholder={
+                        (pendingFilesByConversation[conversationId] || []).length > 0
+                          ? "Add a caption... (optional)"
+                          : "Write a message…"
+                      }
+                      value={drafts[conversationId] || ''}
+                      onChange={(event) => setDrafts((current) => ({
+                        ...current,
+                        [conversationId]: event.target.value,
+                      }))}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                          event.preventDefault()
+                          event.currentTarget.form.requestSubmit()
+                        }
+                      }}
+                    />
+
+                    <EmojiPicker
+                      onSelect={(emoji) => setDrafts((current) => ({
+                        ...current,
+                        [conversationId]: `${current[conversationId] || ''}${emoji}`,
+                      }))}
+                    />
+
+                    <button
+                      type="submit"
+                      disabled={
+                        (!(drafts[conversationId] || '').trim() &&
+                          (pendingFilesByConversation[conversationId] || []).length === 0) ||
+                        sendingIds.includes(conversationId)
+                      }
+                      aria-label="Send message"
+                    >
+                      {sendingIds.includes(conversationId) ? (
+                        <LoaderCircle size={16} className="spinner" />
+                      ) : (
+                        <Send size={16} />
+                      )}
+                    </button>
+                  </div>
+                )}
               </form>
             </section>
           )
