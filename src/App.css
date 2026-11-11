@@ -11537,3 +11537,76 @@
   background: #E0F2FE;
   color: #0284C7;
 }
+
+/* ============================================================================
+   QORVEXA Messenger Delivery Status Indicators (Sent, Delivered, Seen)
+   ============================================================================ */
+
+.qv-message-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  line-height: 1;
+  margin-left: 0.25rem;
+  user-select: none;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.qv-message-status-indicator.is-sent {
+  color: #94a3b8;
+  opacity: 0.75;
+}
+
+.qv-message-status-indicator.is-delivered {
+  color: #cbd5e1;
+  opacity: 0.95;
+}
+
+.qv-message-status-indicator.is-seen {
+  color: #38bdf8;
+}
+
+.qv-message-status-seen-avatar {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(56, 189, 248, 0.7);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.qv-message-status-seen-initials {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  border-radius: 50%;
+  background: #0284c7;
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  vertical-align: middle;
+}
+
+/* Light mode support for status indicators */
+:root[data-theme="light"] .qv-message-status-indicator.is-sent {
+  color: #64748b;
+  opacity: 0.7;
+}
+
+:root[data-theme="light"] .qv-message-status-indicator.is-delivered {
+  color: #334155;
+  opacity: 0.9;
+}
+
+:root[data-theme="light"] .qv-message-status-indicator.is-seen {
+  color: #0284c7;
+}

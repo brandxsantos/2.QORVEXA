@@ -33,10 +33,23 @@ import {
 } from '../lib/messageAttachments.js'
 import MediaLightboxModal from './MediaLightboxModal.jsx'
 import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
+import MessageStatusIndicator from './MessageStatusIndicator.jsx'
+import {
+  conversationPeerReadAt,
+  conversationPeerDeliveredAt,
+  findLastSeenMessageId,
+  markConversationDelivered,
+  markConversationsDelivered,
+} from '../lib/messageDelivery.js'
 import './FloatingChatDock.css'
 
 const profileFields = 'id, username, display_name, avatar_url, online_status_visibility'
 const messageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, created_at'
+
+function formatTime(value) {
+  if (!value) return ''
+  return new Intl.DateTimeFormat([], { timeStyle: 'short' }).format(new Date(value))
+}
 
 function formatVoiceTime(seconds) {
   if (!seconds || isNaN(seconds) || seconds <= 0) return '0:00'
@@ -127,7 +140,7 @@ function FloatingChatDock() {
         .limit(200),
 
       client.from('conversations')
-        .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at')
+        .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, user_low_last_delivered_at, user_high_last_delivered_at, created_at, updated_at')
         .or(`user_low.eq.${user.id},user_high.eq.${user.id}`)
         .order('updated_at', { ascending: false })
         .limit(100),
@@ -149,6 +162,11 @@ function FloatingChatDock() {
     if (conversationsResult.error) throw conversationsResult.error
     if (summariesResult.error) throw summariesResult.error
     if (blocksResult.error) throw blocksResult.error
+
+    const conversationData = conversationsResult.data || []
+    if (conversationData.length) {
+      markConversationsDelivered(client, conversationData.map((c) => c.id)).catch(() => {})
+    }
 
     const blockedIds = new Set((blocksResult.data || []).map((item) => item.blocked_id))
 
@@ -326,7 +344,17 @@ setLoadingIds((current) => current.includes(conversationId)
             event: '*',
             schema: 'public',
             table: 'messages',
-          }, () => {
+          }, (payload) => {
+            const msg = payload?.new
+            if (payload?.eventType === 'INSERT' && msg && msg.sender_id !== user.id) {
+              if (openIdsRef.current.includes(msg.conversation_id)) {
+                getSupabaseClient().rpc('mark_conversation_read', {
+                  target_conversation_id: msg.conversation_id,
+                }).catch(() => {})
+              } else {
+                markConversationDelivered(getSupabaseClient(), msg.conversation_id).catch(() => {})
+              }
+            }
             loadConversations().catch((loadError) => setError(loadError.message))
 
             openIdsRef.current.forEach((conversationId) => {
@@ -382,7 +410,10 @@ setLoadingIds((current) => current.includes(conversationId)
             event: '*',
             schema: 'public',
             table: 'conversations',
-          }, () => {
+          }, (payload) => {
+            if (payload?.new) {
+              setConversations((current) => current.map((c) => (c.id === payload.new.id ? { ...c, ...payload.new } : c)))
+            }
             loadConversations().catch((loadError) => setError(loadError.message))
           })
           .subscribe((status) => {
@@ -1245,6 +1276,10 @@ setLoadingIds((current) => current.includes(conversationId)
             ...callReceipts.map((session) => ({ ...session, timelineType: 'call' })),
           ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 
+          const peerReadAt = conversationPeerReadAt(conversation, user?.id)
+          const peerDeliveredAt = conversationPeerDeliveredAt(conversation, user?.id)
+          const lastSeenId = findLastSeenMessageId(textMessages, user?.id, peerReadAt)
+
           return (
             <section
               className="floating-chat-window"
@@ -1322,6 +1357,20 @@ setLoadingIds((current) => current.includes(conversationId)
                         reactions={reactionsByConversation[conversationId]?.[item.id] || []}
                         attachments={attachmentsByConversation[conversationId]?.[item.id] || []}
                         currentUserId={user.id}
+                        footer={
+                          <>
+                            <time dateTime={item.created_at}>{formatTime(item.created_at)}</time>
+                            {item.sender_id === user.id && (
+                              <MessageStatusIndicator
+                                message={item}
+                                peerReadAt={peerReadAt}
+                                peerDeliveredAt={peerDeliveredAt}
+                                peer={peer}
+                                isLastSeen={lastSeenId === item.id}
+                              />
+                            )}
+                          </>
+                        }
                         onReply={(message) => setReplyingToByConversation((current) => ({
                           ...current,
                           [conversationId]: message,

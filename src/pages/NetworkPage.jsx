@@ -49,6 +49,14 @@ import { uploadAttachmentFile, loadMessageAttachments } from '../lib/messageAtta
 import MediaLightboxModal from '../components/MediaLightboxModal.jsx'
 import SharedMediaPanel from '../components/SharedMediaPanel.jsx'
 import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
+import MessageStatusIndicator from '../components/MessageStatusIndicator.jsx'
+import {
+  conversationPeerReadAt,
+  conversationPeerDeliveredAt,
+  findLastSeenMessageId,
+  markConversationDelivered,
+  markConversationsDelivered,
+} from '../lib/messageDelivery.js'
 import StoriesTab from '../components/instants/StoriesTab.jsx'
 import StoryViewerModal from '../components/instants/StoryViewerModal.jsx'
 import StoriesPreviewTray from '../components/instants/StoriesPreviewTray.jsx'
@@ -112,12 +120,6 @@ function formatTime(value, compact = false) {
 
 function profileName(profile) {
   return profile?.display_name || profile?.username || 'QORVEXA member'
-}
-
-function conversationPeerReadAt(conversation, userId) {
-  return conversation.user_low === userId
-    ? conversation.user_high_last_read_at
-    : conversation.user_low_last_read_at
 }
 
 function UserIdentity({ profile, availability, small = false, onClick }) {
@@ -324,7 +326,7 @@ function NetworkPage() {
       client.from('friend_requests').select(requestFields).or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
       client.from('friendships').select('user_low, user_high, created_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
       client.from('notifications').select(notificationFields).eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
-      client.from('conversations').select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('updated_at', { ascending: false }).limit(100),
+      client.from('conversations').select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, user_low_last_delivered_at, user_high_last_delivered_at, created_at, updated_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('updated_at', { ascending: false }).limit(100),
       client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
       client.rpc('get_conversation_summaries'),
       client.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
@@ -345,7 +347,7 @@ function NetworkPage() {
       try {
         const { data: directConv } = await client
           .from('conversations')
-          .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at')
+          .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, user_low_last_delivered_at, user_high_last_delivered_at, created_at, updated_at')
           .eq('id', currentSelectedId)
           .maybeSingle()
         if (directConv) {
@@ -354,6 +356,11 @@ function NetworkPage() {
       } catch (directErr) {
         console.warn('Could not fetch direct conversation row:', directErr)
       }
+    }
+
+    // Mark delivery for synchronized conversations
+    if (conversationRows.length) {
+      markConversationsDelivered(client, conversationRows.map((c) => c.id)).catch(() => {})
     }
 
     let profileById = Object.fromEntries((profilesResult.data || []).map((profile) => [profile.id, profile]))
@@ -599,7 +606,7 @@ function NetworkPage() {
       try {
         const { data: conv, error: convErr } = await client
           .from('conversations')
-          .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at')
+          .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, user_low_last_delivered_at, user_high_last_delivered_at, created_at, updated_at')
           .eq('id', selectedConversationId)
           .maybeSingle()
 
@@ -670,16 +677,24 @@ function NetworkPage() {
         schema: 'public',
         table: 'messages',
         filter: `conversation_id=eq.${selectedConversationId}`,
-      }, () => {
+      }, (payload) => {
         loadMessages(selectedConversationId).catch((loadError) => setError(loadError.message))
+        if (payload?.eventType === 'INSERT' && payload?.new?.sender_id !== user.id) {
+          getSupabaseClient().rpc('mark_conversation_read', {
+            target_conversation_id: selectedConversationId,
+          }).catch(() => {})
+        }
       })
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'conversations',
         filter: `id=eq.${selectedConversationId}`,
-      }, () => {
-        // Conversation metadata updated (e.g. read status)
+      }, (payload) => {
+        if (payload?.new) {
+          setActiveConversation((current) => current ? { ...current, ...payload.new } : current)
+          setConversations((current) => current.map((c) => c.id === payload.new.id ? { ...c, ...payload.new } : c))
+        }
       })
       .on('postgres_changes', {
         event: '*',
@@ -782,7 +797,17 @@ function NetworkPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
         loadNetwork().catch((loadError) => setError(loadError.message))
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+        const msg = payload?.new
+        if (payload?.eventType === 'INSERT' && msg && msg.sender_id !== user.id) {
+          if (msg.conversation_id === selectedConversationIdRef.current) {
+            getSupabaseClient().rpc('mark_conversation_read', {
+              target_conversation_id: msg.conversation_id,
+            }).catch(() => {})
+          } else {
+            markConversationDelivered(getSupabaseClient(), msg.conversation_id).catch(() => {})
+          }
+        }
         loadNetwork().catch((loadError) => setError(loadError.message))
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'call_sessions' }, () => {
@@ -818,6 +843,13 @@ function NetworkPage() {
       ...callReceipts.map((session) => ({ ...session, timelineType: 'call' })),
     ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }, [messages, callReceipts])
+
+  const peerReadAt = conversationPeerReadAt(activeConversation, user?.id)
+  const peerDeliveredAt = conversationPeerDeliveredAt(activeConversation, user?.id)
+  const lastSeenMessageId = useMemo(
+    () => findLastSeenMessageId(messages, user?.id, peerReadAt),
+    [messages, user?.id, peerReadAt]
+  )
   const watchedPresenceIds = new Set(presenceTargetIds.split(',').filter(Boolean))
   const profileAvailability = (profile) => !profile || !watchedPresenceIds.has(profile.id)
     ? undefined
@@ -1840,11 +1872,13 @@ function NetworkPage() {
                                   <>
                                     <time dateTime={message.created_at}>{formatTime(message.created_at, true)}</time>
                                     {message.sender_id === user.id && (
-                                      <span className="network-message-receipt" title="Read status based on recipient's last opened time">
-                                        {new Date(conversationPeerReadAt(activeConversation, user.id)) >= new Date(message.created_at)
-                                          ? <CheckCheck size={12} aria-label="Read" />
-                                          : <Check size={12} aria-label="Sent" />}
-                                      </span>
+                                      <MessageStatusIndicator
+                                        message={message}
+                                        peerReadAt={peerReadAt}
+                                        peerDeliveredAt={peerDeliveredAt}
+                                        peer={activeConversation?.peer}
+                                        isLastSeen={lastSeenMessageId === message.id}
+                                      />
                                     )}
                                     {message.sender_id === user.id && (
                                       <button type="button" aria-label="Delete message" onClick={() => deleteMessage(message)} disabled={workingId === message.id}>
