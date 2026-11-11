@@ -41,6 +41,7 @@ function App() {
       <Route path="/post/:postId" element={<AccountAccess />} />
       <Route path="/hashtag/:tag" element={<AccountAccess />} />
       <Route path="/app" element={<AccountAccess />} />
+      <Route path="/app/messages" element={<AccountAccess />} />
       <Route path="/app/messages/:conversationId" element={<AccountAccess />} />
       <Route path="/app/*" element={<AccountAccess />} />
       <Route path="/admin/*" element={<AccountAccess />} />

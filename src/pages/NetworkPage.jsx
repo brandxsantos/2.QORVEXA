@@ -30,7 +30,7 @@ import {
   Sparkles,
   Zap,
 } from 'lucide-react'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
 import CallReceipt from '../components/CallReceipt.jsx'
 import { useAuth } from '../context/useAuth.js'
@@ -206,6 +206,7 @@ function NetworkPage() {
   const [reactionWorkingId, setReactionWorkingId] = useState('')
   const [callReceipts, setCallReceipts] = useState([])
   const [hasMoreMessages, setHasMoreMessages] = useState(false)
+  const [loadingMessages, setLoadingMessages] = useState(false)
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
   const [query, setQuery] = useState('')
   const [draft, setDraft] = useState('')
@@ -267,12 +268,15 @@ function NetworkPage() {
     }
   }
 
+  const { conversationId: routeConversationId } = useParams()
   const pathMatch = location.pathname.match(/^\/app\/messages(?:\/([^/?#]+))?/)
   const rawPathConversationId = pathMatch?.[1]
   const pathConversationId = (rawPathConversationId && rawPathConversationId !== 'messages')
     ? decodeURIComponent(rawPathConversationId)
     : ''
-  const selectedConversationId = pathConversationId || searchParams.get('conversation') || ''
+  const selectedConversationId = routeConversationId || pathConversationId || searchParams.get('conversation') || ''
+  const selectedConversationIdRef = useRef(selectedConversationId)
+  selectedConversationIdRef.current = selectedConversationId
   const currentUserName = user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
   const currentUsername = user.user_metadata?.username
 
@@ -336,12 +340,13 @@ function NetworkPage() {
     }
 
     let conversationRows = conversationsResult.data || []
-    if (selectedConversationId && !conversationRows.some((conversation) => conversation.id === selectedConversationId)) {
+    const currentSelectedId = selectedConversationIdRef.current
+    if (currentSelectedId && !conversationRows.some((conversation) => conversation.id === currentSelectedId)) {
       try {
         const { data: directConv } = await client
           .from('conversations')
           .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at')
-          .eq('id', selectedConversationId)
+          .eq('id', currentSelectedId)
           .maybeSingle()
         if (directConv) {
           conversationRows = [directConv, ...conversationRows]
@@ -403,7 +408,7 @@ function NetworkPage() {
     )
     setConversations(updatedConversations)
     setStatus('ready')
-  }, [selectedConversationId, user.id])
+  }, [user.id])
 
   const handleNetworkLoadError = useCallback((loadError) => {
     setError(loadError.message || 'The network could not be loaded.')
@@ -641,12 +646,21 @@ function NetworkPage() {
   }, [activeSection, selectedConversationId, user.id])
 
   useEffect(() => {
-    if (!selectedConversationId || activeSection !== 'messages') return undefined
+    if (!selectedConversationId || activeSection !== 'messages') {
+      setLoadingMessages(false)
+      return undefined
+    }
     let active = true
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
 
+    setLoadingMessages(true)
+    setMessages([])
+    setCallReceipts([])
+
     // Load messages and call receipts immediately for the selected conversation
-    loadMessages(selectedConversationId).catch((loadError) => { if (active) handleMessageLoadError(loadError) })
+    loadMessages(selectedConversationId)
+      .catch((loadError) => { if (active) handleMessageLoadError(loadError) })
+      .finally(() => { if (active) setLoadingMessages(false) })
     loadCallReceipts(selectedConversationId).catch((loadError) => { if (active) handleMessageLoadError(loadError) })
 
     const client = getSupabaseClient()
@@ -730,9 +744,10 @@ function NetworkPage() {
         filter: `user_id=eq.${user.id}`,
       }, (payload) => {
         const notification = payload.new
+        const currentSelectedId = selectedConversationIdRef.current
         const isCurrentConversationMessage = notification?.type === 'message'
           && activeSection === 'messages'
-          && notification.conversation_id === selectedConversationId
+          && notification.conversation_id === currentSelectedId
         if (payload.eventType === 'INSERT' && notification?.actor_id !== user.id && !isCurrentConversationMessage) {
           setNotificationToast(notificationToastText(notification?.type))
         }
@@ -756,7 +771,7 @@ function NetworkPage() {
         }
       })
     return () => { client.removeChannel(channel) }
-  }, [activeSection, loadNetwork, selectedConversationId, user.id])
+  }, [activeSection, loadNetwork, user.id])
 
   useEffect(() => {
     const client = getSupabaseClient()
@@ -930,13 +945,9 @@ function NetworkPage() {
 
   const handleSelectConversation = useCallback((conv) => {
     if (!conv?.id) return
-    if (conv.id !== selectedConversationId) {
-      setMessages([])
-      setCallReceipts([])
-    }
     setDirectActiveConversation(conv)
     navigate(`/app/messages/${encodeURIComponent(conv.id)}`)
-  }, [navigate, selectedConversationId])
+  }, [navigate])
 
   function handleStoryReply({ peerId, caption }) {
     openConversation({ id: peerId }).then(() => {
@@ -1848,7 +1859,11 @@ function NetworkPage() {
                         })}
                         {typingConversationId === selectedConversationId && <div className="network-typing"><Link to={`/profile/${encodeURIComponent(activeConversation.peer?.username || '')}`}>{profileName(activeConversation.peer)}</Link> is typing...</div>}
                         <div ref={messagesEndRef} />
-                        {!conversationTimeline.length && <div className="network-chat-empty">Say hello and start the conversation.</div>}
+                        {loadingMessages ? (
+                          <div className="network-chat-empty"><LoaderCircle size={18} className="spinner" aria-hidden="true" /><span>Loading messages…</span></div>
+                        ) : !conversationTimeline.length ? (
+                          <div className="network-chat-empty">Say hello and start the conversation.</div>
+                        ) : null}
                       </div>
                       <form className="network-message-form" onSubmit={handleSendMessage}>
                         {replyingTo && (
