@@ -193,9 +193,6 @@ function FloatingChatDock() {
     if (blocksResult.error) throw blocksResult.error
 
     const conversationData = conversationsResult.data || []
-    if (conversationData.length) {
-      markConversationsDelivered(client, conversationData.map((c) => c.id)).catch(() => {})
-    }
 
     const blockedIds = new Set((blocksResult.data || []).map((item) => item.blocked_id))
 
@@ -364,6 +361,14 @@ setLoadingIds((current) => current.includes(conversationId)
     let active = true
     let channel
 
+    let debounceTimer = null
+    const triggerDebouncedConversations = () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        loadConversations().catch((loadError) => setError(loadError.message))
+      }, 350)
+    }
+
     authorizeRealtimeSession(client)
       .then(() => {
         if (!active) return
@@ -384,7 +389,7 @@ setLoadingIds((current) => current.includes(conversationId)
                 markConversationDelivered(getSupabaseClient(), msg.conversation_id).catch(() => {})
               }
             }
-            loadConversations().catch((loadError) => setError(loadError.message))
+            triggerDebouncedConversations()
 
             openIdsRef.current.forEach((conversationId) => {
               loadMessagesRef.current(conversationId)
@@ -421,7 +426,7 @@ setLoadingIds((current) => current.includes(conversationId)
             schema: 'public',
             table: 'call_sessions',
           }, (payload) => {
-            loadConversations().catch((loadError) => setError(loadError.message))
+            triggerDebouncedConversations()
             const conversationId = payload.new?.conversation_id || payload.old?.conversation_id
             if (conversationId && openIdsRef.current.includes(conversationId)) {
               loadCallReceiptsRef.current(conversationId)
@@ -433,7 +438,7 @@ setLoadingIds((current) => current.includes(conversationId)
             schema: 'public',
             table: 'friendships',
           }, () => {
-            loadConversations().catch((loadError) => setError(loadError.message))
+            triggerDebouncedConversations()
           })
           .on('postgres_changes', {
             event: '*',
@@ -443,7 +448,9 @@ setLoadingIds((current) => current.includes(conversationId)
             if (payload?.new) {
               setConversations((current) => current.map((c) => (c.id === payload.new.id ? { ...c, ...payload.new } : c)))
             }
-            loadConversations().catch((loadError) => setError(loadError.message))
+            if (payload?.eventType !== 'UPDATE') {
+              triggerDebouncedConversations()
+            }
           })
           .subscribe((status) => {
             if (['CHANNEL_ERROR', 'TIMED_OUT'].includes(status)) {
@@ -458,12 +465,13 @@ setLoadingIds((current) => current.includes(conversationId)
       })
 
     const handleCallSessionUpdate = () => {
-      loadConversations().catch((loadError) => setError(loadError.message))
+      triggerDebouncedConversations()
     }
     window.addEventListener('qorvexa:call-session-updated', handleCallSessionUpdate)
 
     return () => {
       active = false
+      if (debounceTimer) clearTimeout(debounceTimer)
       window.removeEventListener('qorvexa:call-session-updated', handleCallSessionUpdate)
       if (channel) client.removeChannel(channel)
     }

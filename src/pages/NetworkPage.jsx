@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -347,7 +347,7 @@ function NetworkPage() {
   const loadNetwork = useCallback(async () => {
     const client = getSupabaseClient()
     const [profilesResult, ownProfileResult, ownSettingsResult, requestsResult, friendshipsResult, notificationsResult, conversationsResult, unreadCountResult, conversationSummariesResult, blocksResult, callsResult] = await Promise.all([
-      client.from('profiles').select(profileFields).neq('id', user.id).order('created_at', { ascending: false }).range(0, 199),
+      client.from('profiles').select(profileFields).neq('id', user.id).order('created_at', { ascending: false }).range(0, 49),
       client.from('profiles').select('id, username, display_name, avatar_url').eq('id', user.id).maybeSingle(),
       client.rpc('get_own_profile_settings'),
       client.from('friend_requests').select(requestFields).or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
@@ -389,11 +389,6 @@ function NetworkPage() {
       }
     }
 
-    // Mark delivery for synchronized conversations
-    if (conversationRows.length) {
-      markConversationsDelivered(client, conversationRows.map((c) => c.id)).catch(() => {})
-    }
-
     let profileById = Object.fromEntries((profilesResult.data || []).map((profile) => [profile.id, profile]))
     const summariesByConversationId = Object.fromEntries((conversationSummariesResult.data || []).map((summary) => [summary.conversation_id, summary]))
     const relatedIds = new Set([
@@ -423,7 +418,7 @@ function NetworkPage() {
     setOwnUsername(ownProfileResult.data?.username || '')
     setAvailabilityById((current) => ({ ...current, [user.id]: ownSettingsResult.data?.[0]?.availability_status || 'online' }))
     setDiscoveryLoadedCount(profilesResult.data?.length || 0)
-    setHasMoreDiscoverProfiles((profilesResult.data?.length || 0) === 200)
+    setHasMoreDiscoverProfiles((profilesResult.data?.length || 0) === 50)
 
     setRequests(requestsResult.data || [])
     setFriendships(friendshipsResult.data || [])
@@ -483,21 +478,21 @@ function NetworkPage() {
     })
     setHasMoreMessages((data || []).length === 100)
     
-    // Mark as read non-fatally
-    try {
-      await getSupabaseClient()
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', user.id)
-        .eq('type', 'message')
-        .eq('conversation_id', conversationId)
-        .eq('is_read', false)
-      await getSupabaseClient().rpc('mark_conversation_read', {
-        target_conversation_id: conversationId,
-      })
-    } catch (readErr) {
-      console.warn('Non-fatal mark_conversation_read failure:', readErr)
-    }
+    // Mark as read non-fatally in the background (fire-and-forget, do not block message display)
+    const client = getSupabaseClient()
+    client
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', user.id)
+      .eq('type', 'message')
+      .eq('conversation_id', conversationId)
+      .eq('is_read', false)
+      .then(() => {})
+      .catch((notifErr) => console.warn('Non-fatal notifications read update failure:', notifErr))
+
+    client.rpc('mark_conversation_read', {
+      target_conversation_id: conversationId,
+    }).catch((readErr) => console.warn('Non-fatal mark_conversation_read failure:', readErr))
   }, [refreshMessageInteractions, user.id])
 
   const loadCallReceipts = useCallback(async (conversationId) => {
@@ -827,12 +822,20 @@ function NetworkPage() {
 
   useEffect(() => {
     const client = getSupabaseClient()
+    let debounceTimer = null
+    const triggerDebouncedLoad = () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        loadNetwork().catch((loadError) => setError(loadError.message))
+      }, 350)
+    }
+
     const channel = client.channel(`user-network-updates-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, () => {
-        loadNetwork().catch((loadError) => setError(loadError.message))
+        triggerDebouncedLoad()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
-        loadNetwork().catch((loadError) => setError(loadError.message))
+        triggerDebouncedLoad()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         const msg = payload?.new
@@ -845,13 +848,18 @@ function NetworkPage() {
             markConversationDelivered(getSupabaseClient(), msg.conversation_id).catch(() => {})
           }
         }
-        loadNetwork().catch((loadError) => setError(loadError.message))
+        triggerDebouncedLoad()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'call_sessions' }, () => {
-        loadNetwork().catch((loadError) => setError(loadError.message))
+        triggerDebouncedLoad()
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
-        loadNetwork().catch((loadError) => setError(loadError.message))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, (payload) => {
+        if (payload?.eventType === 'UPDATE' && payload?.new) {
+          setConversations((current) => current.map((c) => (c.id === payload.new.id ? { ...c, ...payload.new } : c)))
+          setDirectActiveConversation((current) => (current?.id === payload.new.id ? { ...current, ...payload.new } : current))
+          return
+        }
+        triggerDebouncedLoad()
       })
       .subscribe((channelStatus) => {
         if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
@@ -860,11 +868,12 @@ function NetworkPage() {
       })
 
     const handleCallSessionUpdate = () => {
-      loadNetwork().catch((loadError) => setError(loadError.message))
+      triggerDebouncedLoad()
     }
     window.addEventListener('qorvexa:call-session-updated', handleCallSessionUpdate)
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
       window.removeEventListener('qorvexa:call-session-updated', handleCallSessionUpdate)
       client.removeChannel(channel)
     }
@@ -921,11 +930,11 @@ function NetworkPage() {
         .select(profileFields)
         .neq('id', user.id)
         .order('created_at', { ascending: false })
-        .range(discoveryLoadedCount, discoveryLoadedCount + 199)
+        .range(discoveryLoadedCount, discoveryLoadedCount + 49)
       if (queryError) throw queryError
       setProfiles((current) => [...new Map([...current, ...(data || [])].map((profile) => [profile.id, profile])).values()])
       setDiscoveryLoadedCount((count) => count + (data?.length || 0))
-      setHasMoreDiscoverProfiles((data?.length || 0) === 200)
+      setHasMoreDiscoverProfiles((data?.length || 0) === 50)
     } catch (loadError) {
       setError(loadError.message || 'More people could not be loaded.')
     }
