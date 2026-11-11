@@ -1,6 +1,6 @@
 import AccountMenu from '../components/AccountMenu.jsx'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import {
   AlertCircle,
   Compass,
@@ -76,13 +76,17 @@ function profileInitials(profile) {
 }
 
 function PublicProfilePage() {
+  const location = useLocation()
   const { username: routeUsername = '', postId: routePostId = '' } = useParams()
+  const pathUsername = location.pathname.match(/^\/profile\/([^/?#]+)/)?.[1]
+  const pathPostId = location.pathname.match(/^\/post\/([^/?#]+)/)?.[1]
   const [directPostUsername, setDirectPostUsername] = useState('')
-  const username = (routeUsername || directPostUsername).toLowerCase()
+  const username = decodeURIComponent(routeUsername || pathUsername || directPostUsername || '').toLowerCase()
+  const activePostId = routePostId || pathPostId || ''
   const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const selectedPostId = searchParams.get('post') || routePostId
+  const selectedPostId = searchParams.get('post') || activePostId
   const selectedCommentId = searchParams.get('comment')
   const previewRequested = searchParams.get('view') === 'public'
   const [profile, setProfile] = useState(null)
@@ -222,6 +226,10 @@ function PublicProfilePage() {
     setError('')
     setProfile(null)
     setPosts([])
+    if (!username) {
+      setLoading(false)
+      return
+    }
     try {
       const client = getSupabaseClient()
       const { data: profileRows, error: profileError } = await client.rpc('get_public_profile', {
@@ -414,7 +422,7 @@ function PublicProfilePage() {
   }, [previewRequested, selectedPostId, user, username])
 
   useEffect(() => {
-    if (!routePostId) return undefined
+    if (!activePostId) return undefined
 
     let cancelled = false
     setLoading(true)
@@ -426,7 +434,7 @@ function PublicProfilePage() {
         const { data, error: postError } = await getSupabaseClient()
           .from('posts')
           .select('id, profiles!posts_author_id_fkey(username)')
-          .eq('id', routePostId)
+          .eq('id', activePostId)
           .maybeSingle()
 
         if (postError) throw postError
@@ -454,13 +462,13 @@ function PublicProfilePage() {
 
     void resolveDirectPost()
     return () => { cancelled = true }
-  }, [routePostId])
+  }, [activePostId])
 
   useEffect(() => {
-    if (routePostId && !directPostUsername) return undefined
+    if (activePostId && !directPostUsername) return undefined
     const timer = window.setTimeout(() => { void loadProfile() }, 0)
     return () => window.clearTimeout(timer)
-  }, [loadProfile, routePostId, directPostUsername])
+  }, [loadProfile, activePostId, directPostUsername])
   useEffect(() => {
     if (!selectedPostId) return undefined
 

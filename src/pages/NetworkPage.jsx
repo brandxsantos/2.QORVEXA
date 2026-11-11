@@ -267,8 +267,12 @@ function NetworkPage() {
     }
   }
 
-  const pathConversationId = location.pathname.match(/^\/app\/messages\/([^/]+)$/)?.[1]
-  const selectedConversationId = pathConversationId || searchParams.get('conversation')
+  const pathMatch = location.pathname.match(/^\/app\/messages(?:\/([^/?#]+))?/)
+  const rawPathConversationId = pathMatch?.[1]
+  const pathConversationId = (rawPathConversationId && rawPathConversationId !== 'messages')
+    ? decodeURIComponent(rawPathConversationId)
+    : ''
+  const selectedConversationId = pathConversationId || searchParams.get('conversation') || ''
   const currentUserName = user.user_metadata?.display_name || user.user_metadata?.username || 'QORVEXA member'
   const currentUsername = user.user_metadata?.username
 
@@ -923,6 +927,16 @@ function NetworkPage() {
       setWorkingId('')
     }
   }
+
+  const handleSelectConversation = useCallback((conv) => {
+    if (!conv?.id) return
+    if (conv.id !== selectedConversationId) {
+      setMessages([])
+      setCallReceipts([])
+    }
+    setDirectActiveConversation(conv)
+    navigate(`/app/messages/${encodeURIComponent(conv.id)}`)
+  }, [navigate, selectedConversationId])
 
   function handleStoryReply({ peerId, caption }) {
     openConversation({ id: peerId }).then(() => {
@@ -1718,13 +1732,32 @@ function NetworkPage() {
                     <div
                       className={`network-conversation-row${conversation.id === selectedConversationId ? ' is-selected' : ''}`}
                       key={conversation.id}
-                      onClick={() => navigate(`/app/messages/${encodeURIComponent(conversation.id)}`)}
+                      onClick={() => handleSelectConversation(conversation)}
                     >
-                      <UserIdentity profile={conversation.peer} availability={profileAvailability(conversation.peer)} small onClick={(event) => event.stopPropagation()} />
-                      <Link className="network-conversation-summary" to={`/app/messages/${encodeURIComponent(conversation.id)}`} onClick={(event) => event.stopPropagation()}>
+                      <UserIdentity
+                        profile={conversation.peer}
+                        availability={profileAvailability(conversation.peer)}
+                        small
+                        onClick={(event) => event.stopPropagation()}
+                      />
+                      <div
+                        className="network-conversation-summary"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          handleSelectConversation(conversation)
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            handleSelectConversation(conversation)
+                          }
+                        }}
+                      >
                         <span>{conversation.lastMessage?.content || 'Start a conversation'}<small>Open conversation</small></span>
                         {conversation.unreadCount > 0 && <b>{conversation.unreadCount}</b>}
-                      </Link>
+                      </div>
                     </div>
                   ))}
                   {!conversations.length && <div className="network-inline-empty"><MessageCircle size={20} /><p>Message an accepted friend to start a conversation.</p></div>}

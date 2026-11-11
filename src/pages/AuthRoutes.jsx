@@ -35,7 +35,7 @@ function ProtectedRoute({ children }) {
 function AuthRoutes() {
   const { pathname } = useLocation()
   const memberPage = pathname.startsWith('/profile/') || pathname.startsWith('/post/')
-    ? <PublicProfilePage />
+    ? <PublicProfilePage key={pathname} />
     : pathname.startsWith('/hashtag/')
       ? <HashtagPage />
     : pathname === '/app'
