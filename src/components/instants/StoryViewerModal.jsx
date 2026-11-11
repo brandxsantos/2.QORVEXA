@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, MessageSquare, LoaderCircle, AlertCircle, Star, ChevronLeft, ChevronRight, Eye, Send, Sparkles } from 'lucide-react'
-import { consumeAndViewInstant, reactToInstant, sendStoryReply } from '../../lib/instants.js'
+import { X, MessageSquare, LoaderCircle, AlertCircle, Star, ChevronLeft, ChevronRight, Eye, Send, Sparkles, Users } from 'lucide-react'
+import { consumeAndViewInstant, reactToInstant, sendStoryReply, fetchStoryViewers } from '../../lib/instants.js'
 import ProtectedMediaImage from '../ProtectedMediaImage.jsx'
 import './Instants.css'
 
@@ -31,6 +31,9 @@ export default function StoryViewerModal({
   const [replyText, setReplyText] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
   const [replyFeedback, setReplyFeedback] = useState('')
+  const [viewers, setViewers] = useState([])
+  const [viewersLoading, setViewersLoading] = useState(false)
+  const [showViewers, setShowViewers] = useState(false)
 
   const progressTimerRef = useRef(null)
   const touchStartRef = useRef(null)
@@ -43,8 +46,9 @@ export default function StoryViewerModal({
       setCurrentUserIdx(Math.max(0, Math.min(initialUserIndex, userStoryStacks.length - 1)))
       setCurrentStoryIdx(Math.max(0, initialStoryIndex))
       setProgress(0)
-    setReplyText('')
-    setReplyFeedback('')
+      setReplyText('')
+      setReplyFeedback('')
+      setShowViewers(false)
       setImageLoaded(false)
       setIsPaused(false)
       setIsInteracting(false)
@@ -54,6 +58,31 @@ export default function StoryViewerModal({
   const currentStack = userStoryStacks[currentUserIdx] || null
   const currentInstant = currentStack?.instants?.[currentStoryIdx] || null
   const totalSegments = currentStack?.instants?.length || 1
+  const isOwnStory = !!currentStack?.isOwn
+
+  // Load viewers for own story
+  useEffect(() => {
+    if (!isOpen || !isOwnStory || !currentInstant?.id) {
+      setViewers([])
+      return
+    }
+    let active = true
+    setViewersLoading(true)
+    fetchStoryViewers(currentInstant.id)
+      .then((data) => {
+        if (active) {
+          setViewers(data || [])
+          setViewersLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) setViewersLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [isOpen, isOwnStory, currentInstant?.id])
 
   // Load and claim current story
   useEffect(() => {
@@ -364,7 +393,6 @@ export default function StoryViewerModal({
 
   if (!isOpen || !currentStack) return null
 
-  const isOwnStory = !!currentStack.isOwn
   const senderInfo = isOwnStory ? ownProfile || currentStack.sender : currentStack.sender
   const senderName = isOwnStory ? 'Your Story' : senderInfo?.display_name || senderInfo?.username || 'Member'
   const senderAvatar = senderInfo?.avatar_url || null
@@ -583,12 +611,102 @@ export default function StoryViewerModal({
 
             {isOwnStory && (
               <div className="story-own-footer">
-                <span className="story-own-indicator">
-                  <Eye size={14} style={{ marginRight: 6 }} />
-                  Your Active Story
-                </span>
+                <button
+                  type="button"
+                  className="story-viewers-toggle-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsPaused(true)
+                    setShowViewers((prev) => !prev)
+                  }}
+                  title="View story viewers"
+                >
+                  <Eye size={15} />
+                  <span>
+                    {viewers.length > 0
+                      ? `${viewers.length} ${viewers.length === 1 ? 'view' : 'views'}`
+                      : '0 views'}
+                  </span>
+                </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Viewers Bottom Sheet for Own Story */}
+        {isOwnStory && showViewers && (
+          <div className="story-viewers-sheet story-no-click" onClick={(e) => e.stopPropagation()}>
+            <div className="story-viewers-header">
+              <div className="story-viewers-title">
+                <Eye size={16} />
+                <span>Viewers ({viewers.length})</span>
+              </div>
+              <button
+                type="button"
+                className="story-viewers-close-btn"
+                onClick={() => {
+                  setShowViewers(false)
+                  setIsPaused(false)
+                }}
+                aria-label="Close viewers list"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="story-viewers-body">
+              {viewersLoading ? (
+                <div className="story-viewers-loading">
+                  <LoaderCircle size={22} className="animate-spin" />
+                  <span>Loading viewers…</span>
+                </div>
+              ) : viewers.length === 0 ? (
+                <div className="story-viewers-empty">
+                  <Users size={28} />
+                  <p>No views yet</p>
+                  <small>When friends view your story, they will show up here.</small>
+                </div>
+              ) : (
+                <div className="story-viewers-list">
+                  {viewers.map((viewer) => {
+                    const vName = viewer.display_name || viewer.username || 'Member'
+                    const vInitial = (vName.trim()[0] || '?').toUpperCase()
+                    const timeAgo = viewer.viewed_at
+                      ? Math.floor((Date.now() - new Date(viewer.viewed_at).getTime()) / 60000)
+                      : null
+                    const timeStr =
+                      timeAgo === null
+                        ? ''
+                        : timeAgo < 1
+                        ? 'Just now'
+                        : timeAgo < 60
+                        ? `${timeAgo}m ago`
+                        : `${Math.floor(timeAgo / 60)}h ago`
+
+                    return (
+                      <div key={viewer.id || viewer.username} className="story-viewer-row">
+                        <div className="story-viewer-avatar">
+                          {viewer.avatar_url ? (
+                            <ProtectedMediaImage
+                              path={viewer.avatar_url}
+                              alt={vName}
+                              fallback={<span>{vInitial}</span>}
+                            />
+                          ) : (
+                            <span>{vInitial}</span>
+                          )}
+                        </div>
+                        <div className="story-viewer-info">
+                          <span className="story-viewer-name">{vName}</span>
+                          {viewer.username && <span className="story-viewer-username">@{viewer.username}</span>}
+                        </div>
+                        {timeStr && <span className="story-viewer-timestamp">{timeStr}</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

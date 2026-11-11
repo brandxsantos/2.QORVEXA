@@ -52,6 +52,7 @@ import { applyCallReceiptsToConversations } from '../lib/callPreview.js'
 import StoriesTab from '../components/instants/StoriesTab.jsx'
 import InstantsTab from '../components/instants/InstantsTab.jsx'
 import StoryViewerModal from '../components/instants/StoryViewerModal.jsx'
+import StoriesPreviewTray from '../components/instants/StoriesPreviewTray.jsx'
 import { getStoryForViewer } from '../lib/instants.js'
 
 const profileFields = 'id, username, display_name, bio, avatar_url, profile_visibility, online_status_visibility'
@@ -1597,6 +1598,12 @@ function NetworkPage() {
                   <div className="network-messenger">
                 <aside className={`network-conversation-list${selectedConversationId ? ' network-conversation-list--mobile-hidden' : ''}`}>
                   <div className="network-conversation-heading"><h2>Messages</h2><span>{conversations.length}</span></div>
+                  <StoriesPreviewTray
+                    user={user}
+                    profile={ownProfile}
+                    onReply={handleInstantReply}
+                    className="network-stories-preview-tray"
+                  />
                   <label className="network-search network-search--conversation"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations..." /></label>
                   {conversations.filter((conversation) => profileName(conversation.peer).toLowerCase().includes(query.trim().toLowerCase()) || conversation.peer?.username?.toLowerCase().includes(query.trim().toLowerCase())).map((conversation) => (
                     <div

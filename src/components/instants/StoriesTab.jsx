@@ -6,6 +6,7 @@ import ProtectedMediaImage from '../ProtectedMediaImage.jsx'
 import StoryThumbnail from './StoryThumbnail.jsx'
 import StoryCreateModal from './StoryCreateModal.jsx'
 import StoryViewerModal from './StoryViewerModal.jsx'
+import StoriesPreviewTray from './StoriesPreviewTray.jsx'
 import './Instants.css'
 
 function formatTimeAgo(isoString) {
@@ -52,7 +53,10 @@ export default function StoriesTab({ user, profile, onReply }) {
   }, [user?.id, profile])
 
   const loadStories = useCallback(async () => {
-    if (!user?.id) return
+    if (!user?.id) {
+      setLoading(false)
+      return
+    }
     try {
       const [receivedData, ownData] = await Promise.all([
         fetchActiveStories(),
@@ -210,6 +214,15 @@ export default function StoriesTab({ user, profile, onReply }) {
         </div>
       ) : (
         <div className="stories-tab-content">
+          {/* Quick Stories Tray */}
+          <div className="stories-tab-tray-wrapper">
+            <StoriesPreviewTray
+              user={user}
+              profile={effectiveProfile}
+              onReply={onReply}
+            />
+          </div>
+
           {/* Section: Your Stories */}
           <div className="stories-section">
             <span className="stories-section-title">Your Stories</span>

@@ -569,3 +569,41 @@ export async function getStoryForViewer(storyId) {
   }
 }
 
+export async function fetchStoryViewers(storyId) {
+  if (!storyId) return []
+  const client = getSupabaseClient()
+  try {
+    const { data, error } = await client
+      .from('instant_recipients')
+      .select(`
+        recipient_id,
+        viewed_at,
+        profiles:recipient_id (
+          id,
+          username,
+          display_name,
+          avatar_url
+        )
+      `)
+      .eq('instant_id', storyId)
+      .eq('is_viewed', true)
+      .order('viewed_at', { ascending: false })
+
+    if (error) {
+      console.warn('[stories] Error fetching story viewers:', error.message)
+      return []
+    }
+
+    return (data || []).map((row) => ({
+      id: row.profiles?.id || row.recipient_id,
+      username: row.profiles?.username || 'member',
+      display_name: row.profiles?.display_name || row.profiles?.username || 'Member',
+      avatar_url: row.profiles?.avatar_url,
+      viewed_at: row.viewed_at,
+    }))
+  } catch (err) {
+    console.warn('[stories] fetchStoryViewers exception:', err)
+    return []
+  }
+}
+
