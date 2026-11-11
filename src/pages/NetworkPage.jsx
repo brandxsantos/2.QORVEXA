@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -67,6 +67,33 @@ const requestFields = 'id, sender_id, receiver_id, status, created_at'
 const baseMessageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, created_at'
 const fullMessageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, message_type, story_id, story_metadata, created_at'
 let activeMessageFields = fullMessageFields
+
+const baseConversationFields = 'id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at'
+const fullConversationFields = 'id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, user_low_last_delivered_at, user_high_last_delivered_at, created_at, updated_at'
+let activeConversationFields = fullConversationFields
+
+async function queryConversationsWithFallback(queryFn) {
+  try {
+    const primaryResult = await queryFn(activeConversationFields)
+    if (!primaryResult.error) return primaryResult
+
+    if (activeConversationFields !== baseConversationFields) {
+      activeConversationFields = baseConversationFields
+      return await queryFn(baseConversationFields)
+    }
+    return primaryResult
+  } catch (err) {
+    if (activeConversationFields !== baseConversationFields) {
+      activeConversationFields = baseConversationFields
+      try {
+        return await queryFn(baseConversationFields)
+      } catch (fallbackErr) {
+        return { data: [], error: fallbackErr }
+      }
+    }
+    return { data: [], error: err }
+  }
+}
 
 async function queryMessagesWithFallback(queryFn) {
   try {
@@ -326,7 +353,9 @@ function NetworkPage() {
       client.from('friend_requests').select(requestFields).or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
       client.from('friendships').select('user_low, user_high, created_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('created_at', { ascending: false }).limit(200),
       client.from('notifications').select(notificationFields).eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
-      client.from('conversations').select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, user_low_last_delivered_at, user_high_last_delivered_at, created_at, updated_at').or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('updated_at', { ascending: false }).limit(100),
+      queryConversationsWithFallback((fields) =>
+        client.from('conversations').select(fields).or(`user_low.eq.${user.id},user_high.eq.${user.id}`).order('updated_at', { ascending: false }).limit(100)
+      ),
       client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
       client.rpc('get_conversation_summaries'),
       client.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
@@ -345,11 +374,13 @@ function NetworkPage() {
     const currentSelectedId = selectedConversationIdRef.current
     if (currentSelectedId && !conversationRows.some((conversation) => conversation.id === currentSelectedId)) {
       try {
-        const { data: directConv } = await client
-          .from('conversations')
-          .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, user_low_last_delivered_at, user_high_last_delivered_at, created_at, updated_at')
-          .eq('id', currentSelectedId)
-          .maybeSingle()
+        const { data: directConv } = await queryConversationsWithFallback((fields) =>
+          client
+            .from('conversations')
+            .select(fields)
+            .eq('id', currentSelectedId)
+            .maybeSingle()
+        )
         if (directConv) {
           conversationRows = [directConv, ...conversationRows]
         }
@@ -604,11 +635,13 @@ function NetworkPage() {
 
     async function resolveActiveConversation() {
       try {
-        const { data: conv, error: convErr } = await client
-          .from('conversations')
-          .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, user_low_last_delivered_at, user_high_last_delivered_at, created_at, updated_at')
-          .eq('id', selectedConversationId)
-          .maybeSingle()
+        const { data: conv, error: convErr } = await queryConversationsWithFallback((fields) =>
+          client
+            .from('conversations')
+            .select(fields)
+            .eq('id', selectedConversationId)
+            .maybeSingle()
+        )
 
         if (convErr || !conv || !active || currentRequestId !== activeConvRequestIdRef.current) return
 
@@ -692,7 +725,11 @@ function NetworkPage() {
         filter: `id=eq.${selectedConversationId}`,
       }, (payload) => {
         if (payload?.new) {
-          setActiveConversation((current) => current ? { ...current, ...payload.new } : current)
+        setDirectActiveConversation((current) =>
+  current?.id === payload.new.id
+    ? { ...current, ...payload.new }
+    : current
+)
           setConversations((current) => current.map((c) => c.id === payload.new.id ? { ...c, ...payload.new } : c))
         }
       })
@@ -1319,7 +1356,11 @@ function NetworkPage() {
       setReplyingTo(null)
       await refreshMessageInteractions(updated)
     } catch (sendError) {
-      setError(sendError.message || 'Voice message could not be sent.')
+      const msg = sendError?.message || ''
+      const friendlyError = msg.includes('Failed to fetch')
+        ? 'Could not send voice message. Please check your connection and try again.'
+        : msg || 'Voice message could not be sent.'
+      setError(friendlyError)
     } finally {
       setSending(false)
       setUploadProgress(null)
@@ -1336,7 +1377,7 @@ function NetworkPage() {
   async function handleSendMessage(event) {
     event?.preventDefault?.()
     const content = draft.trim()
-    if ((!content && pendingFiles.length === 0) || sending || !activeConversation) return
+    if ((!content && pendingFiles.length === 0) || sending || !activeConversation?.id) return
     setSending(true)
     setError('')
     try {
@@ -1426,7 +1467,11 @@ function NetworkPage() {
       setTypingConversationId('')
       await refreshMessageInteractions(updated)
     } catch (sendError) {
-      setError(sendError.message || 'Message could not be sent.')
+      const msg = sendError?.message || ''
+      const friendlyError = msg.includes('Failed to fetch')
+        ? 'Could not send message. Please check your connection and try again.'
+        : msg || 'Message could not be sent.'
+      setError(friendlyError)
     } finally {
       setSending(false)
       setUploadProgress(null)

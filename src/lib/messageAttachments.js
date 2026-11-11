@@ -101,7 +101,12 @@ export async function uploadAttachmentFile(client, conversationIdOrOptions, send
       upsert: false,
     })
 
-  if (uploadError) throw uploadError
+  if (uploadError) {
+    if (uploadError.message?.includes('Bucket not found') || uploadError.statusCode === '404' || uploadError.code === 'NoSuchBucket') {
+      throw new Error('Attachment storage is currently unavailable. Please verify storage bucket setup.')
+    }
+    throw uploadError
+  }
 
   return {
     storage_path: storagePath,

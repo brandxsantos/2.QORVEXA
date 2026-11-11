@@ -435,10 +435,73 @@ export function CallProvider({ children }) {
       const client = clientRef.current || getSupabaseClient()
       clientRef.current = client
 
-      const { data, error } = await client.rpc('start_call', {
+      // Proactively clean up any lingering active sessions for this conversation
+      try {
+        const { data: lingering } = await client
+          .from('call_sessions')
+          .select('id, caller_id, callee_id, status')
+          .eq('conversation_id', conversationId)
+          .in('status', ['ringing', 'accepted'])
+
+        if (lingering && lingering.length > 0) {
+          for (const s of lingering) {
+            try {
+              if (s.status === 'accepted') {
+                await client.rpc('respond_to_call', {
+                  target_call_id: s.id,
+                  target_action: 'end',
+                })
+              } else if (s.status === 'ringing') {
+                await client.rpc('respond_to_call', {
+                  target_call_id: s.id,
+                  target_action: s.caller_id === user.id ? 'cancel' : 'decline',
+                })
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
+
+      let { data, error } = await client.rpc('start_call', {
         target_conversation_id: conversationId,
         target_call_type: callType,
       })
+
+      // If constraint was hit, attempt forced cleanup and retry once
+      if (error && error.message?.includes('call_sessions_one_active_per_conversation')) {
+        try {
+          const { data: lingeringRetry } = await client
+            .from('call_sessions')
+            .select('id, caller_id, callee_id, status')
+            .eq('conversation_id', conversationId)
+            .in('status', ['ringing', 'accepted'])
+
+          if (lingeringRetry && lingeringRetry.length > 0) {
+            for (const s of lingeringRetry) {
+              try {
+                await client.rpc('respond_to_call', {
+                  target_call_id: s.id,
+                  target_action: s.status === 'accepted' ? 'end' : 'cancel',
+                })
+              } catch {
+                await client.rpc('respond_to_call', {
+                  target_call_id: s.id,
+                  target_action: 'decline',
+                }).catch(() => {})
+              }
+            }
+          }
+
+          const retryRes = await client.rpc('start_call', {
+            target_conversation_id: conversationId,
+            target_call_type: callType,
+          })
+          data = retryRes.data
+          error = retryRes.error
+        } catch (retryErr) {
+          error = retryErr
+        }
+      }
 
       if (error) throw error
 
@@ -458,7 +521,13 @@ export function CallProvider({ children }) {
       callRef.current = session
     } catch (error) {
       await closeConnection()
-      setCallError(error.message || 'Unable to start the call.')
+      const msg = error.message || ''
+      const friendlyMessage = msg.includes('call_sessions_one_active_per_conversation')
+        ? 'A call is already active in this conversation. Please wait a few seconds and try again.'
+        : msg.includes('Failed to fetch')
+          ? 'Could not connect to the call service. Please check your connection and try again.'
+          : msg || 'Unable to start the call.'
+      setCallError(friendlyMessage)
       throw error
     } finally {
       startCallInProgressRef.current = false

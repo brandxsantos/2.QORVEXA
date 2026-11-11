@@ -46,6 +46,33 @@ import './FloatingChatDock.css'
 const profileFields = 'id, username, display_name, avatar_url, online_status_visibility'
 const messageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, created_at'
 
+const baseConversationFields = 'id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at'
+const fullConversationFields = 'id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, user_low_last_delivered_at, user_high_last_delivered_at, created_at, updated_at'
+let activeFloatingConvFields = fullConversationFields
+
+async function queryFloatingConversationsWithFallback(queryFn) {
+  try {
+    const primaryResult = await queryFn(activeFloatingConvFields)
+    if (!primaryResult.error) return primaryResult
+
+    if (activeFloatingConvFields !== baseConversationFields) {
+      activeFloatingConvFields = baseConversationFields
+      return await queryFn(baseConversationFields)
+    }
+    return primaryResult
+  } catch (err) {
+    if (activeFloatingConvFields !== baseConversationFields) {
+      activeFloatingConvFields = baseConversationFields
+      try {
+        return await queryFn(baseConversationFields)
+      } catch (fallbackErr) {
+        return { data: [], error: fallbackErr }
+      }
+    }
+    return { data: [], error: err }
+  }
+}
+
 function formatTime(value) {
   if (!value) return ''
   return new Intl.DateTimeFormat([], { timeStyle: 'short' }).format(new Date(value))
@@ -139,11 +166,13 @@ function FloatingChatDock() {
         .or(`user_low.eq.${user.id},user_high.eq.${user.id}`)
         .limit(200),
 
-      client.from('conversations')
-        .select('id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, user_low_last_delivered_at, user_high_last_delivered_at, created_at, updated_at')
-        .or(`user_low.eq.${user.id},user_high.eq.${user.id}`)
-        .order('updated_at', { ascending: false })
-        .limit(100),
+      queryFloatingConversationsWithFallback((fields) =>
+        client.from('conversations')
+          .select(fields)
+          .or(`user_low.eq.${user.id},user_high.eq.${user.id}`)
+          .order('updated_at', { ascending: false })
+          .limit(100)
+      ),
 
       client.rpc('get_conversation_summaries'),
 
@@ -1231,7 +1260,11 @@ setLoadingIds((current) => current.includes(conversationId)
       await refreshFloatingInteractions(conversationId)
       await loadConversations()
     } catch (sendError) {
-      setError(sendError.message || 'Message could not be sent.')
+      const msg = sendError?.message || ''
+      const friendlyError = msg.includes('Failed to fetch')
+        ? 'Could not send message. Please check your connection and try again.'
+        : msg || 'Message could not be sent.'
+      setError(friendlyError)
     } finally {
       setSendingIds((current) => current.filter((id) => id !== conversationId))
       setUploadProgressByConversation((current) => ({

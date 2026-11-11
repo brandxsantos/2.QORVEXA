@@ -33,52 +33,13 @@ export async function authorizeRealtimeSession(client = getSupabaseClient()) {
   const { data, error } = await client.auth.getSession()
   if (error) throw error
 
-  const session = data.session
+  const session = data?.session
   const accessToken = session?.access_token
-  if (accessToken) { const jwtHeader = JSON.parse(
-  atob(accessToken.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'))
-)
-
-console.log('[QORVEXA JWT HEADER]', {
-  alg: jwtHeader.alg,
-  kid: jwtHeader.kid,
-  typ: jwtHeader.typ,
-})
-  const claims = JSON.parse(atob(accessToken.split('.')[1]))
-
-  console.log('[QORVEXA JWT Debug]', {
-  role: claims.role,
-  sub: claims.sub,
-  aud: claims.aud,
-  expiresAt: claims.exp,
-})
-
-console.log('JWT ROLE:', claims.role)
-console.log('JWT SUBJECT:', claims.sub)
-console.log('JWT AUDIENCE:', claims.aud)
-}
 
   if (!accessToken) {
-    throw new Error('A signed-in session is required for Realtime presence.')
+    throw new Error('A signed-in session is required to authorize Realtime subscriptions.')
   }
 
-  console.log('[QORVEXA Presence Debug] Session:', {
-    sessionUserId: session.user?.id,
-    hasAccessToken: Boolean(accessToken),
-    expiresAt: session.expires_at,
-  })
-
-  const { data: verified, error: verifyError } =
-    await client.auth.getUser(accessToken)
-
-  if (verifyError) throw verifyError
-
-  console.log('[QORVEXA Presence Debug] Verified user:', {
-    verifiedUserId: verified.user?.id,
-    matchesSession: verified.user?.id === session.user?.id,
-  })
-
   await client.realtime.setAuth(accessToken)
-
-  console.log('[QORVEXA Presence Debug] Realtime auth token set.')
+  return accessToken
 }
