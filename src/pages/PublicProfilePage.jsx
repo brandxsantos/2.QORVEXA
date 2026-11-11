@@ -1,4 +1,4 @@
-import AccountMenu from '../components/AccountMenu.jsx'
+import AppHeader from '../components/AppHeader.jsx'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import {
@@ -32,8 +32,10 @@ import {
 UserRound,
   Pencil,
   Plus,
+  Trash2,
 } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
+import { useNotifications } from '../context/useNotifications.js'
 import { authorizeRealtimeSession, getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import ProfilePhotoCropModal from '../components/ProfilePhotoCropModal.jsx'
@@ -73,6 +75,29 @@ function profileInitials(profile) {
     .slice(0, 2)
     .map((part) => part[0].toUpperCase())
     .join('')
+}
+
+function shouldKeepPostAfterDelete(item, deletedPost) {
+  if (!item || !deletedPost) return true
+  if (item.id && deletedPost.id && item.id === deletedPost.id) {
+    return false
+  }
+  if (
+    typeof item.feed_entry_id === 'string' &&
+    item.feed_entry_id &&
+    typeof deletedPost.feed_entry_id === 'string' &&
+    deletedPost.feed_entry_id &&
+    item.feed_entry_id === deletedPost.feed_entry_id
+  ) {
+    return false
+  }
+  if (item.original_post_id && deletedPost.id && item.original_post_id === deletedPost.id) {
+    return false
+  }
+  if (item.post_id && deletedPost.id && item.post_id === deletedPost.id) {
+    return false
+  }
+  return true
 }
 
 function PublicProfilePage() {
@@ -127,7 +152,7 @@ function PublicProfilePage() {
   }, [commentsOpen])
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [availability, setAvailability] = useState('offline')
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
+  const { unreadNotificationCount } = useNotifications()
   const [unreadMessageCount, setUnreadMessageCount] = useState(0)
   const [notificationToast, setNotificationToast] = useState('')
   const [reportTarget, setReportTarget] = useState(null)
@@ -210,13 +235,8 @@ function PublicProfilePage() {
   const loadUnreadCounts = useCallback(async () => {
     if (!user) return
     const client = getSupabaseClient()
-    const [notificationsResult, conversationsResult] = await Promise.all([
-      client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
-      client.rpc('get_conversation_summaries'),
-    ])
-    if (notificationsResult.error) throw notificationsResult.error
+    const conversationsResult = await client.rpc('get_conversation_summaries')
     if (conversationsResult.error) throw conversationsResult.error
-    setUnreadNotificationCount(notificationsResult.count || 0)
     setUnreadMessageCount((conversationsResult.data || []).reduce((total, item) => total + Number(item.unread_count || 0), 0))
   }, [user])
 
@@ -563,6 +583,17 @@ function PublicProfilePage() {
   }, [notificationToast])
 
   useEffect(() => {
+    function handleRealtimeNotification(event) {
+      const payload = event.detail
+      if (payload?.eventType === 'INSERT' && payload.new?.actor_id !== user?.id) {
+        setNotificationToast(notificationToastText(payload.new?.type))
+      }
+    }
+    window.addEventListener('qorvexa:notification-realtime', handleRealtimeNotification)
+    return () => window.removeEventListener('qorvexa:notification-realtime', handleRealtimeNotification)
+  }, [user?.id])
+
+  useEffect(() => {
     if (!user) return undefined
     let active = true
     const client = getSupabaseClient()
@@ -570,12 +601,6 @@ function PublicProfilePage() {
       loadUnreadCounts().catch((loadError) => { if (active) setError(loadError.message || 'Unread counts could not be loaded.') })
     }, 0)
     const channel = client.channel(`profile-live-badges-${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload) => {
-        if (payload.eventType === 'INSERT' && payload.new?.actor_id !== user.id) {
-          setNotificationToast(notificationToastText(payload.new?.type))
-        }
-        loadUnreadCounts().catch((loadError) => { if (active) setError(loadError.message || 'Notification counts could not be updated.') })
-      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
         loadUnreadCounts().catch((loadError) => { if (active) setError(loadError.message || 'Message counts could not be updated.') })
       })
@@ -914,11 +939,13 @@ function PublicProfilePage() {
   }
 
   async function blockProfile() {
-    if (!window.confirm(`Block ${profile.display_name}? They will no longer be able to view your profile or posts, send friend requests, or access your conversations.`)) return
+    if (!profile || working) return
+    const memberName = profile.display_name || profile.username || 'this member'
+    if (!window.confirm(`Block ${memberName}? They will no longer be able to view your profile or posts, send friend requests, or access your conversations.`)) return
     await runAction(async () => {
       const { error: rpcError } = await getSupabaseClient().rpc('block_member', { target_user_id: profile.id })
       if (rpcError) throw rpcError
-      navigate('/app/privacy')
+      navigate('/app/privacy', { state: { notice: `${memberName} has been blocked.` } })
     })
   }
 
@@ -971,6 +998,68 @@ function PublicProfilePage() {
       setWorking(false)
     }
   }
+
+  async function handleDeletePost(post) {
+    if (!post || !user || post.author_id !== user.id) return
+    const confirmed = window.confirm('Are you sure you want to delete this post? This action cannot be undone.')
+    if (!confirmed) return
+
+    setWorking(true)
+    setError('')
+    try {
+      const client = getSupabaseClient()
+      const profileId = profile?.id || user.id
+
+      const { count: profileRepostCount, error: repostCountError } = await client
+        .from('post_reposts')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', profileId)
+        .eq('post_id', post.id)
+
+      if (repostCountError) throw repostCountError
+      const totalProfileRepostsCount = Number(profileRepostCount || 0)
+
+      const { error: deleteError } = await client
+        .from('posts')
+        .delete()
+        .eq('id', post.id)
+        .eq('author_id', user.id)
+
+      if (deleteError) throw deleteError
+
+      const removedEntries = posts.filter((item) => !shouldKeepPostAfterDelete(item, post))
+      const removedTotalCount = removedEntries.length
+      const removedAuthoredCount = removedEntries.filter((item) => !item.is_repost).length
+      const removedRepostCount = removedEntries.filter((item) => Boolean(item.is_repost)).length
+
+      setPosts((current) => current.filter((item) => shouldKeepPostAfterDelete(item, post)))
+
+      const isProfileAuthor = !profile || profile.id === post.author_id
+      const postCountDecrement = (isProfileAuthor ? 1 : 0) + totalProfileRepostsCount
+      if (postCountDecrement > 0) {
+        setPostCount((count) => Math.max(0, count - postCountDecrement))
+      }
+      if (removedTotalCount > 0) {
+        setLoadedPostCount((count) => Math.max(0, count - removedTotalCount))
+      }
+      if (removedAuthoredCount > 0) {
+        setLoadedAuthoredPostCount((count) => Math.max(0, count - removedAuthoredCount))
+      }
+      if (removedRepostCount > 0) {
+        setLoadedRepostCount((count) => Math.max(0, count - removedRepostCount))
+      }
+
+      setNotice('Post deleted.')
+      if (selectedPostId === post.id) {
+        navigate(`/profile/${encodeURIComponent(profile.username)}`, { replace: true })
+      }
+    } catch (err) {
+      setError(err.message || 'The post could not be deleted.')
+    } finally {
+      setWorking(false)
+    }
+  }
+
   async function submitComment(event, postId, parentId = null) {
     event.preventDefault()
     if (isPublicPreview && isProfileOwner) return
@@ -1035,19 +1124,11 @@ function PublicProfilePage() {
       <div className="ambient ambient--one" aria-hidden="true" />
       <div className="matrix-grid" aria-hidden="true" />
       {user && <NotificationToast message={notificationToast} onDismiss={() => setNotificationToast('')} />}
-      <header className="member-header member-feed-header">
-        <Link className="brand-link" to={user ? '/app' : '/'} aria-label="QORVEXA home"><BrandMark /></Link>
-       <nav className="network-nav" aria-label="Community navigation">
-  {user ? <>
-    <Link className="network-nav-link" to="/app"><Rss size={15} aria-hidden="true" />Feed</Link>
-    <Link className="network-nav-link" to="/app/discover"><UserPlus size={15} aria-hidden="true" />Discover</Link>
-    <Link className="network-nav-link" to="/app/friends"><Users size={15} aria-hidden="true" />Friends</Link>
-    <Link className="network-nav-link" to="/app/notifications"><Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}</Link>
-    <Link className="network-nav-link" to="/app/messages"><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessageCount > 0 && <span className="network-badge">{unreadMessageCount}</span>}</Link>
-    <AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
-  </> : <><Link className="network-nav-link" to="/login">Sign in</Link><Link className="network-nav-link" to="/signup">Join QORVEXA</Link></>}
-</nav>
-      </header>
+      <AppHeader
+        unreadMessageCount={unreadMessageCount}
+        onSignOut={handleSignOut}
+        signingOut={signingOut}
+      />
 
       <section className="public-profile-shell">
         {loading || authLoading ? (
@@ -1361,6 +1442,14 @@ function PublicProfilePage() {
                                   label: 'Open post',
                                   icon: ExternalLink,
                                   to: `/post/${post.id}`,
+                                },
+                                user && post.author_id === user.id && !post.is_repost && !(isPublicPreview && isProfileOwner) && {
+                                  id: 'delete-post',
+                                  label: 'Delete post',
+                                  icon: Trash2,
+                                  danger: true,
+                                  disabled: working,
+                                  onClick: () => handleDeletePost(post),
                                 },
                                 user && post.author_id !== user.id && !(isPublicPreview && isProfileOwner) && {
                                   id: 'report',

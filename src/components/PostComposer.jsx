@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, ImagePlus, LoaderCircle, ChevronDown, Check, Globe, Users, Lock } from 'lucide-react'
+import { ArrowUp, ImagePlus, LoaderCircle, ChevronDown, Check, Globe, Users, Lock, X } from 'lucide-react'
 import { getSupabaseClient } from '../lib/supabase.js'
 import SmartTextInput from './social/SmartTextInput.jsx'
 
@@ -13,12 +13,13 @@ function PostComposer({ userId, onPublished, onError, idPrefix = 'post' }) {
   const [mediaFile, setMediaFile] = useState(null)
   const [mediaPreview, setMediaPreview] = useState('')
   const [publishing, setPublishing] = useState(false)
-    const [visibilityOpen, setVisibilityOpen] = useState(false)
+  const [visibilityOpen, setVisibilityOpen] = useState(false)
   const visibilityRef = useRef(null)
 
   useEffect(() => {
     return () => { if (mediaPreview) URL.revokeObjectURL(mediaPreview) }
   }, [mediaPreview])
+
   useEffect(() => {
     function handleOutsideClick(event) {
       if (visibilityRef.current && !visibilityRef.current.contains(event.target)) {
@@ -46,6 +47,7 @@ function PostComposer({ userId, onPublished, onError, idPrefix = 'post' }) {
   ]
 
   const selectedVisibility = visibilityOptions.find(option => option.value === visibility) || visibilityOptions[0]
+
   function chooseImage(event) {
     const file = event.target.files?.[0] || null
     setMediaFile(file)
@@ -119,79 +121,123 @@ function PostComposer({ userId, onPublished, onError, idPrefix = 'post' }) {
 
   return (
     <form className="member-composer" onSubmit={handlePublish}>
-      <label className="member-composer-label" htmlFor={`${idPrefix}-content`}>What’s on your mind?</label>
-      <SmartTextInput as="textarea"
-        id={`${idPrefix}-content`}
-        maxLength={1000}
-        onChange={setDraft}
-        placeholder="Share an idea, a moment, or something you’re working on…"
-        rows={4}
-        value={draft}
-      />
-           <div className="member-post-visibility" ref={visibilityRef}>
-        <span className="member-audience-label">Post audience</span>
+      <div className="member-composer-top">
+        <label className="member-composer-label" htmlFor={`${idPrefix}-content`}>
+          Create a post
+        </label>
+        <div className={`member-post-visibility${visibilityOpen ? ' is-open' : ''}`} ref={visibilityRef}>
+          <div className="audience-dropdown">
+            <button
+              type="button"
+              className="audience-trigger"
+              aria-haspopup="listbox"
+              aria-expanded={visibilityOpen}
+              onClick={() => setVisibilityOpen(open => !open)}
+              title="Post audience"
+            >
+              <selectedVisibility.Icon size={14} aria-hidden="true" />
+              <span>{selectedVisibility.label}</span>
+              <ChevronDown size={14} className={visibilityOpen ? 'is-open' : ''} aria-hidden="true" />
+            </button>
 
-        <div className="audience-dropdown">
-          <button
-            type="button"
-            className="audience-trigger"
-            aria-haspopup="listbox"
-            aria-expanded={visibilityOpen}
-            onClick={() => setVisibilityOpen(open => !open)}
-          >
-            <selectedVisibility.Icon size={17} />
-            <span>{selectedVisibility.label}</span>
-            <ChevronDown size={16} className={visibilityOpen ? 'is-open' : ''} />
-          </button>
+            {visibilityOpen && (
+              <div className="audience-menu" role="listbox" aria-label="Post audience">
+                {visibilityOptions.map(option => {
+                  const Icon = option.Icon
+                  const selected = visibility === option.value
 
-          {visibilityOpen && (
-            <div className="audience-menu" role="listbox" aria-label="Post audience">
-              {visibilityOptions.map(option => {
-                const Icon = option.Icon
-                const selected = visibility === option.value
-
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="option"
-                    aria-selected={selected}
-                                className={`audience-option${selected ? ' is-selected' : ''}`}
-                    title={option.description}
-                    onClick={() => {
-                      setVisibility(option.value)
-                      setVisibilityOpen(false)
-                    }}
-                  >
-                    <span className="audience-option-icon"><Icon size={18} /></span>
-                                        <span className="audience-option-copy">
-                      <strong>{option.label}</strong>
-                    </span>
-                    {selected && <Check size={17} className="audience-check" />}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      className={`audience-option${selected ? ' is-selected' : ''}`}
+                      title={option.description}
+                      onClick={() => {
+                        setVisibility(option.value)
+                        setVisibilityOpen(false)
+                      }}
+                    >
+                      <span className="audience-option-icon"><Icon size={16} /></span>
+                      <span className="audience-option-copy">
+                        <strong>{option.label}</strong>
+                        <small>{option.description}</small>
+                      </span>
+                      {selected && <Check size={16} className="audience-check" />}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      <div className="member-composer-input-wrapper">
+        <SmartTextInput
+          as="textarea"
+          id={`${idPrefix}-content`}
+          maxLength={1000}
+          onChange={setDraft}
+          placeholder="What's on your mind? Share an idea, project, or update..."
+          rows={3}
+          value={draft}
+        />
+      </div>
+
       {mediaPreview && (
         <div className="member-media-preview">
           <img src={mediaPreview} alt="Selected post image preview" />
-          <button type="button" onClick={() => { setMediaFile(null); setMediaPreview('') }}>Remove image</button>
+          <button
+            type="button"
+            className="member-media-remove-btn"
+            onClick={() => { setMediaFile(null); setMediaPreview('') }}
+            aria-label="Remove image"
+            title="Remove image"
+          >
+            <X size={15} aria-hidden="true" />
+          </button>
         </div>
       )}
-      <div className="member-media-picker">
-        <label className="member-comments-toggle" htmlFor={`${idPrefix}-media-file`}><ImagePlus size={15} />Add an image</label>
-        <input id={`${idPrefix}-media-file`} type="file" accept={imageTypes.join(',')} onChange={chooseImage} />
-        <span>JPG, PNG, WebP, or GIF · up to 8 MB</span>
-      </div>
-      <div className="member-composer-footer">
-        <span>{draft.length}/1000</span>
-        <button className="member-publish-button" type="submit" disabled={publishing || (!draft.trim() && !mediaFile)}>
-          {publishing ? <LoaderCircle size={16} className="spinner" aria-hidden="true" /> : <ArrowUp size={16} aria-hidden="true" />}
-          {publishing ? 'Publishing…' : 'Publish post'}
-        </button>
+
+      <div className="member-composer-bottom">
+        <div className="member-composer-actions">
+          <label className="member-composer-action-btn" htmlFor={`${idPrefix}-media-file`} title="Attach a photo">
+            <ImagePlus size={16} aria-hidden="true" />
+            <span>Photo</span>
+          </label>
+          <input
+            id={`${idPrefix}-media-file`}
+            type="file"
+            accept={imageTypes.join(',')}
+            onChange={chooseImage}
+            className="member-composer-file-input"
+          />
+          {mediaFile && (
+            <span className="member-composer-file-name" title={mediaFile.name}>
+              {mediaFile.name.length > 22 ? `${mediaFile.name.slice(0, 20)}…` : mediaFile.name}
+            </span>
+          )}
+        </div>
+
+        <div className="member-composer-footer">
+          <span className={`member-composer-count${draft.length > 900 ? ' is-warning' : ''}`}>
+            {draft.length}/1000
+          </span>
+          <button
+            className="member-publish-button"
+            type="submit"
+            disabled={publishing || (!draft.trim() && !mediaFile)}
+          >
+            {publishing ? (
+              <LoaderCircle size={15} className="spinner" aria-hidden="true" />
+            ) : (
+              <ArrowUp size={15} aria-hidden="true" />
+            )}
+            <span>{publishing ? 'Publishing…' : 'Publish'}</span>
+          </button>
+        </div>
       </div>
     </form>
   )

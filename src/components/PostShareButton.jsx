@@ -35,9 +35,9 @@ export default function PostShareButton({ url, title = 'Post on QORVEXA' }) {
   }
 
   return (
-    <button className="member-comments-toggle" type="button" onClick={handleShare}>
+    <button className="member-comments-toggle member-post-action-btn" type="button" onClick={handleShare}>
       <Share2 size={14} aria-hidden="true" />
-      <span>{status || 'Share'}</span>
+      <span className="member-action-label">{status || 'Share'}</span>
     </button>
   )
 }

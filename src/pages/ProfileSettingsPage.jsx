@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import {
   AlertCircle,
   LoaderCircle,
@@ -23,17 +23,21 @@ import {
   Lock,
   Users,
   Eye,
+  EyeOff,
   Sparkles,
+  UserX,
+  Shield,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/useAuth.js'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import BrandMark from '../components/BrandMark.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
-import AccountMenu from '../components/AccountMenu.jsx'
+import AppHeader from '../components/AppHeader.jsx'
 import CustomSelect from '../components/CustomSelect.jsx'
+import DatePicker from '../components/DatePicker.jsx'
 import ProfilePhotoCropModal from '../components/ProfilePhotoCropModal.jsx'
 import { isReservedUsername, isReservedDisplayName } from '../lib/reservedNames.js'
 import './ProfileSettingsPage.css'
@@ -74,12 +78,41 @@ const PRIVACY_OPTIONS_PROFILE = [
   { value: 'private', label: 'Private', description: 'Profile is private and requires approval' },
 ]
 
-function ProfileSettingsPage() {
+function formatBlockedDate(dateStr) {
+  if (!dateStr) return ''
+  try {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(dateStr))
+  } catch {
+    return ''
+  }
+}
+
+function getMemberInitials(name) {
+  if (!name) return '?'
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((word) => word[0])
+      .join('')
+      .toUpperCase() || '?'
+  )
+}
+
+function ProfileSettingsPage({ initialTab = null }) {
   const { user } = useAuth()
   const { themePreference, setThemePreference } = useTheme()
+  const routerLocation = useLocation()
+  const [searchParams] = useSearchParams()
+
+  const defaultTab =
+    initialTab ||
+    searchParams.get('tab') ||
+    (routerLocation.pathname === '/app/privacy' ? 'privacy' : 'profile')
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState('profile') // 'profile' | 'privacy' | 'activity' | 'appearance'
+  const [activeTab, setActiveTab] = useState(defaultTab)
 
   // Profile data
   const [profile, setProfile] = useState(null)
@@ -108,6 +141,24 @@ function ProfileSettingsPage() {
   const [educationVisibility, setEducationVisibility] = useState('public')
   const [workplaceVisibility, setWorkplaceVisibility] = useState('public')
 
+  // Blocked members state
+  const [blockedMembers, setBlockedMembers] = useState([])
+  const [loadingBlocked, setLoadingBlocked] = useState(false)
+  const [blockedLoaded, setBlockedLoaded] = useState(false)
+  const [blockedError, setBlockedError] = useState('')
+  const [unblockingId, setUnblockingId] = useState(null)
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [passwordLoading, setPasswordLoading] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordNotice, setPasswordNotice] = useState('')
+
   // Media files & modals
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState('')
@@ -126,6 +177,143 @@ function ProfileSettingsPage() {
   // Hidden file inputs
   const avatarInputRef = useRef(null)
   const coverInputRef = useRef(null)
+
+  // Synchronize active tab from route or search parameters
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab)
+    } else if (routerLocation.pathname === '/app/privacy') {
+      setActiveTab('privacy')
+    } else {
+      const tabParam = searchParams.get('tab')
+      if (tabParam) {
+        setActiveTab(tabParam)
+      }
+    }
+  }, [initialTab, routerLocation.pathname, searchParams])
+
+  // Consume notice passed via navigation state (e.g. after blocking a user)
+  useEffect(() => {
+    if (routerLocation.state?.notice) {
+      setNotice(routerLocation.state.notice)
+      window.history.replaceState({}, document.title)
+    }
+  }, [routerLocation.state])
+
+  const loadBlockedMembers = useCallback(async () => {
+    setLoadingBlocked(true)
+    setBlockedError('')
+    try {
+      const client = getSupabaseClient()
+      const { data, error: fetchError } = await client.rpc('get_blocked_members')
+      if (fetchError) throw fetchError
+      setBlockedMembers(data || [])
+      setBlockedLoaded(true)
+    } catch (err) {
+      setBlockedError(err.message || 'Could not load blocked members.')
+    } finally {
+      setLoadingBlocked(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === 'privacy' && !blockedLoaded && !loadingBlocked) {
+      loadBlockedMembers()
+    }
+  }, [activeTab, blockedLoaded, loadingBlocked, loadBlockedMembers])
+
+  async function handleUnblock(member) {
+    if (!member || !member.user_id || unblockingId) return
+    const name = member.display_name || member.username || 'this member'
+    const confirmed = window.confirm(
+      `Unblock ${name}? They will be able to view your public profile and posts again, and may interact with your content.`
+    )
+    if (!confirmed) return
+
+    setUnblockingId(member.user_id)
+    setBlockedError('')
+    try {
+      const client = getSupabaseClient()
+      const { error: unblockError } = await client.rpc('unblock_member', {
+        target_user_id: member.user_id,
+      })
+      if (unblockError) throw unblockError
+
+      setBlockedMembers((current) => current.filter((m) => m.user_id !== member.user_id))
+      setNotice(`${name} has been unblocked.`)
+    } catch (err) {
+      setBlockedError(err.message || `Failed to unblock ${name}.`)
+    } finally {
+      setUnblockingId(null)
+    }
+  }
+
+  // Change password
+  async function handlePasswordChange(e) {
+    e.preventDefault()
+    if (passwordLoading) return
+
+    setPasswordError('')
+    setPasswordNotice('')
+
+    if (!currentPassword) {
+      setPasswordError('Please enter your current password.')
+      return
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('Choose a new password with at least 8 characters.')
+      return
+    }
+    if (newPassword.length > 128) {
+      setPasswordError('New password must not exceed 128 characters.')
+      return
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError('Your new password cannot be the same as your current password.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Those passwords do not match.')
+      return
+    }
+    if (!user?.email) {
+      setPasswordError('Account email could not be determined. Please sign in again.')
+      return
+    }
+
+    setPasswordLoading(true)
+    try {
+      const client = getSupabaseClient()
+      const { error: verifyError } = await client.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      })
+      if (verifyError) {
+        const msg = verifyError.message?.toLowerCase() || ''
+        if (msg.includes('invalid') || msg.includes('credential') || verifyError.status === 400) {
+          throw new Error('Incorrect current password. Please try again.')
+        }
+        throw verifyError
+      }
+
+      const { error: updateError } = await client.auth.updateUser({
+        password: newPassword,
+      })
+      if (updateError) throw updateError
+
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setShowCurrentPassword(false)
+      setShowNewPassword(false)
+      setShowConfirmPassword(false)
+      setPasswordNotice('Your password has been changed successfully.')
+    } catch (err) {
+      setPasswordError(err.message || 'Unable to update password. Please try again.')
+    } finally {
+      setPasswordLoading(false)
+    }
+  }
 
   // Clean object URLs
   useEffect(() => {
@@ -525,15 +713,10 @@ function ProfileSettingsPage() {
       <div className="matrix-grid" aria-hidden="true" />
 
       {/* TOP HEADER */}
-      <header className="member-header member-feed-header">
-        <Link className="brand-link" to="/app" aria-label="QORVEXA feed">
-          <BrandMark />
-        </Link>
-        <nav className="network-nav" aria-label="Community navigation">
-          <Link className="network-nav-link" to="/app">Feed</Link>
-          <AccountMenu />
-        </nav>
-      </header>
+      <AppHeader
+        activeSection="account"
+        username={username}
+      />
 
       <AccountRestrictionNotice userId={user.id} />
 
@@ -800,17 +983,11 @@ function ProfileSettingsPage() {
 
                     <div className="settings-field-group">
                       <label htmlFor="settings-birthdate">Birthdate</label>
-                      <div className="settings-input-wrapper">
-                        <Calendar size={16} className="settings-input-icon" />
-                        <input
-                          id="settings-birthdate"
-                          type="date"
-                          className="settings-field-with-icon"
-                          value={birthdate}
-                          max={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)}
-                          onChange={(e) => setBirthdate(e.target.value)}
-                        />
-                      </div>
+                      <DatePicker
+                        id="settings-birthdate"
+                        value={birthdate}
+                        onChange={setBirthdate}
+                      />
                     </div>
 
                     <div className="settings-field-group">
@@ -1100,6 +1277,217 @@ function ProfileSettingsPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Blocked Accounts Card */}
+                <div className="settings-modern-card">
+                  <div className="settings-card-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <UserX size={20} style={{ color: 'var(--state-danger)' }} />
+                      <h2>Blocked Accounts</h2>
+                    </div>
+                    <p>Manage members you have blocked. Blocked members cannot view your profile or posts, send friend requests, or message you.</p>
+                  </div>
+
+                  {loadingBlocked && !blockedLoaded ? (
+                    <div className="settings-blocked-state" role="status">
+                      <LoaderCircle size={20} className="spinner" />
+                      <span>Loading blocked members...</span>
+                    </div>
+                  ) : blockedError ? (
+                    <div className="settings-blocked-state is-error" role="alert">
+                      <AlertCircle size={18} />
+                      <span>{blockedError}</span>
+                      <button
+                        type="button"
+                        className="settings-unblock-btn"
+                        onClick={loadBlockedMembers}
+                        style={{ marginTop: '0.5rem' }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : blockedMembers.length === 0 ? (
+                    <div className="settings-blocked-state is-empty">
+                      <Shield size={24} style={{ opacity: 0.6 }} />
+                      <span>You have not blocked any members.</span>
+                    </div>
+                  ) : (
+                    <div className="settings-blocked-list" aria-label="Blocked members list">
+                      {blockedMembers.map((member) => {
+                        const isThisUnblocking = unblockingId === member.user_id
+                        const memberName = member.display_name || member.username || 'Member'
+                        const blockedDate = formatBlockedDate(member.blocked_at)
+                        return (
+                          <div className="settings-blocked-item" key={member.user_id}>
+                            <div className="settings-blocked-user">
+                              <div className="settings-blocked-avatar" aria-hidden="true">
+                                {member.avatar_url ? (
+                                  <ProtectedMediaImage
+                                    path={member.avatar_url}
+                                    alt={memberName}
+                                    fallback={getMemberInitials(memberName)}
+                                  />
+                                ) : (
+                                  <span>{getMemberInitials(memberName)}</span>
+                                )}
+                              </div>
+                              <div className="settings-blocked-info">
+                                <div className="settings-blocked-name-row">
+                                  <span className="settings-blocked-name">{memberName}</span>
+                                  {member.username && (
+                                    <span className="settings-blocked-username">@{member.username}</span>
+                                  )}
+                                </div>
+                                {blockedDate && (
+                                  <span className="settings-blocked-date">Blocked on {blockedDate}</span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="settings-unblock-btn"
+                              disabled={Boolean(unblockingId)}
+                              onClick={() => handleUnblock(member)}
+                              aria-label={`Unblock ${memberName}`}
+                            >
+                              {isThisUnblocking ? (
+                                <>
+                                  <LoaderCircle size={14} className="spinner" />
+                                  <span>Unblocking...</span>
+                                </>
+                              ) : (
+                                <span>Unblock</span>
+                              )}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Password & Security Card */}
+                <div className="settings-modern-card">
+                  <div className="settings-card-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <Lock size={20} style={{ color: 'var(--accent-cyan)' }} />
+                      <h2>Password &amp; Security</h2>
+                    </div>
+                    <p>Manage your account password and security credentials.</p>
+                  </div>
+
+                  {passwordError && (
+                    <div className="settings-alert-banner is-error" role="alert" style={{ marginBottom: '1.25rem' }}>
+                      <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                      <span>{passwordError}</span>
+                    </div>
+                  )}
+
+                  {passwordNotice && (
+                    <div className="settings-alert-banner is-success" role="status" style={{ marginBottom: '1.25rem' }}>
+                      <CheckCircle2 size={18} style={{ flexShrink: 0 }} />
+                      <span>{passwordNotice}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handlePasswordChange} className="settings-form-grid single-column">
+                    <div className="settings-field-group">
+                      <label htmlFor="settings-current-password">Current Password</label>
+                      <span className="password-input">
+                        <input
+                          id="settings-current-password"
+                          type={showCurrentPassword ? 'text' : 'password'}
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          placeholder="Enter your current password"
+                          autoComplete="current-password"
+                          disabled={passwordLoading}
+                        />
+                        <button
+                          type="button"
+                          className="password-toggle"
+                          onClick={() => setShowCurrentPassword((prev) => !prev)}
+                          aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                          aria-pressed={showCurrentPassword}
+                          disabled={passwordLoading}
+                        >
+                          {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </span>
+                    </div>
+
+                    <div className="settings-field-group">
+                      <label htmlFor="settings-new-password">New Password</label>
+                      <span className="password-input">
+                        <input
+                          id="settings-new-password"
+                          type={showNewPassword ? 'text' : 'password'}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="At least 8 characters"
+                          autoComplete="new-password"
+                          disabled={passwordLoading}
+                        />
+                        <button
+                          type="button"
+                          className="password-toggle"
+                          onClick={() => setShowNewPassword((prev) => !prev)}
+                          aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                          aria-pressed={showNewPassword}
+                          disabled={passwordLoading}
+                        >
+                          {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </span>
+                      <span className="settings-field-hint">Must be 8 to 128 characters in length.</span>
+                    </div>
+
+                    <div className="settings-field-group">
+                      <label htmlFor="settings-confirm-password">Confirm New Password</label>
+                      <span className="password-input">
+                        <input
+                          id="settings-confirm-password"
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Re-enter your new password"
+                          autoComplete="new-password"
+                          disabled={passwordLoading}
+                        />
+                        <button
+                          type="button"
+                          className="password-toggle"
+                          onClick={() => setShowConfirmPassword((prev) => !prev)}
+                          aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'}
+                          aria-pressed={showConfirmPassword}
+                          disabled={passwordLoading}
+                        >
+                          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </span>
+                    </div>
+
+                    <div className="settings-save-actions" style={{ marginTop: '0.5rem' }}>
+                      <button
+                        type="submit"
+                        className="settings-save-btn"
+                        disabled={passwordLoading}
+                      >
+                        {passwordLoading ? (
+                          <>
+                            <LoaderCircle size={16} className="spinner" />
+                            <span>Updating Password...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock size={16} />
+                            <span>Update Password</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </>
             )}
 
@@ -1188,7 +1576,7 @@ function ProfileSettingsPage() {
                     <div className="settings-theme-copy">
                       <strong>
                         <span>Dark Theme</span>
-                        {themePreference === 'dark' && <Check size={16} color="#00d9f5" />}
+                        {themePreference === 'dark' && <Check size={16} color="var(--accent-cyan)" />}
                       </strong>
                       <small>Sleek dark interface designed for low-light environments.</small>
                     </div>
@@ -1205,7 +1593,7 @@ function ProfileSettingsPage() {
                     <div className="settings-theme-copy">
                       <strong>
                         <span>Light Theme</span>
-                        {themePreference === 'light' && <Check size={16} color="#0284c7" />}
+                        {themePreference === 'light' && <Check size={16} color="var(--accent-cyan)" />}
                       </strong>
                       <small>Clean and crisp bright interface for daytime productivity.</small>
                     </div>

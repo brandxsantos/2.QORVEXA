@@ -1,6 +1,7 @@
 import { LoaderCircle } from 'lucide-react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider } from '../context/AuthContext.jsx'
+import { NotificationProvider } from '../context/NotificationContext.jsx'
 import { useAuth } from '../context/useAuth.js'
 import AdminRoutes from './AdminRoutes.jsx'
 import AuthPage from './AuthPage.jsx'
@@ -47,7 +48,7 @@ function AuthRoutes() {
       : pathname === '/app/bookmarks'
         ? <BookmarksPage />
         : pathname === '/app/privacy'
-          ? <PrivacyPage />
+          ? <ProfileSettingsPage initialTab="privacy" />
           : <NetworkPage />
   const page = pathname.startsWith('/profile/') || pathname.startsWith('/post/') || pathname.startsWith('/hashtag/')
     ? memberPage
@@ -66,12 +67,14 @@ function AuthRoutes() {
     pathname.startsWith('/hashtag/')
   return (
     <AuthProvider>
-      <CallProvider>
-        <PresenceTracker />
-        {showFloatingChatDock && <FloatingChatDock />}
-        {page}
-        <CallOverlay />
-      </CallProvider>
+      <NotificationProvider>
+        <CallProvider>
+          <PresenceTracker />
+          {showFloatingChatDock && <FloatingChatDock />}
+          {page}
+          <CallOverlay />
+        </CallProvider>
+      </NotificationProvider>
     </AuthProvider>
   )
 }

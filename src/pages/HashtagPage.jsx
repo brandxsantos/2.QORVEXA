@@ -1,7 +1,7 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Hash, LoaderCircle } from 'lucide-react'
-import BrandMark from '../components/BrandMark.jsx'
+import AppHeader from '../components/AppHeader.jsx'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import LinkedText from '../components/social/LinkedText.jsx'
 import { getSupabaseClient } from '../lib/supabase.js'
@@ -83,18 +83,7 @@ function HashtagPage() {
       <div className="ambient ambient--one" aria-hidden="true" />
       <div className="matrix-grid" aria-hidden="true" />
 
-      <header className="member-header member-feed-header">
-        <Link className="brand-link" to="/" aria-label="QORVEXA home">
-          <BrandMark />
-        </Link>
-        <nav className="network-nav" aria-label="Community navigation">
-          <Link to="/" className="network-nav-link">
-            <ArrowLeft size={15} aria-hidden="true" />
-            Home
-          </Link>
-          <Link to="/login" className="network-nav-link">Sign in</Link>
-        </nav>
-      </header>
+      <AppHeader />
 
       <div className="member-feed-layout hashtag-feed-layout">
         <section className="member-feed" aria-label={`Posts tagged ${tag}`}>

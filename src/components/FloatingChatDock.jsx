@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
 import { useCall } from '../context/useCall.js'
+import { useNotifications } from '../context/useNotifications.js'
 import { getSupabaseClient, authorizeRealtimeSession } from '../lib/supabase.js'
 import ProtectedMediaImage from './ProtectedMediaImage.jsx'
 
@@ -44,7 +45,7 @@ import {
 import './FloatingChatDock.css'
 
 const profileFields = 'id, username, display_name, avatar_url, online_status_visibility'
-const messageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, created_at'
+const messageFields = 'id, conversation_id, sender_id, content, reply_to_message_id, message_type, call_session_id, created_at'
 
 const baseConversationFields = 'id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, created_at, updated_at'
 const fullConversationFields = 'id, user_low, user_high, user_low_last_read_at, user_high_last_read_at, user_low_last_delivered_at, user_high_last_delivered_at, created_at, updated_at'
@@ -97,11 +98,15 @@ function initials(name = '') {
 function FloatingChatDock() {
   const { user } = useAuth()
   const { call, startCall } = useCall()
+  const { refreshUnreadCount, broadcastNotificationSync } = useNotifications()
   const [conversations, setConversations] = useState([])
   const [friends, setFriends] = useState([])
   const [openIds, setOpenIds] = useState([])
   const [hiddenIds, setHiddenIds] = useState([])
   const [messagesByConversation, setMessagesByConversation] = useState({})
+  const [focusedChatId, setFocusedChatId] = useState(null)
+  const focusedChatIdRef = useRef(null)
+  focusedChatIdRef.current = focusedChatId
 
   const messagesByConversationRef = useRef(messagesByConversation)
   messagesByConversationRef.current = messagesByConversation
@@ -112,6 +117,7 @@ function FloatingChatDock() {
   const [lightboxMediaList, setLightboxMediaList] = useState([])
   const [replyingToByConversation, setReplyingToByConversation] = useState({})
   const [reactionWorkingIds, setReactionWorkingIds] = useState([])
+  const [workingMessageId, setWorkingMessageId] = useState('')
 
   const [callReceiptsByConversation, setCallReceiptsByConversation] = useState({})
   const messageContainerRefs = useRef({})
@@ -287,46 +293,87 @@ setLoadingIds((current) => current.includes(conversationId)
           [conversationId]: atts,
         }))
       })
-
-      Promise.resolve(
-        client.from('notifications')
-          .update({ is_read: true })
-          .eq('user_id', user.id)
-          .eq('type', 'message')
-          .eq('conversation_id', conversationId)
-          .eq('is_read', false)
-      ).catch(() => {})
-
-      Promise.resolve(
-        client.rpc('mark_conversation_read', {
-          target_conversation_id: conversationId,
-        })
-      ).catch(() => {})
     } catch (loadError) {
       setError(loadError.message || 'Messages could not be loaded.')
     } finally {
       setLoadingIds((current) => current.filter((id) => id !== conversationId))
     }
-  }, [user?.id])
+  }, [])
 
+  const isDocumentVisibleAndFocused = useCallback(() => {
+    const isVisible = typeof document !== 'undefined' ? document.visibilityState === 'visible' : true
+    const isFocused = typeof document !== 'undefined' && typeof document.hasFocus === 'function' ? document.hasFocus() : true
+    return isVisible && isFocused
+  }, [])
+
+  const markConversationAsViewed = useCallback(async (conversationId, force = false) => {
+    if (!conversationId || !user?.id) return
+    if (!isDocumentVisibleAndFocused()) return
+
+    if (typeof window !== 'undefined') {
+      if (!window.__qorvexa_last_viewed_at) {
+        window.__qorvexa_last_viewed_at = {}
+      }
+      const now = Date.now()
+      const last = window.__qorvexa_last_viewed_at[conversationId] || 0
+      if (!force && now - last < 2000) return
+      window.__qorvexa_last_viewed_at[conversationId] = now
+    }
+
+    const client = getSupabaseClient()
+    try {
+      const { data, error: notifError } = await client
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('type', 'message')
+        .eq('conversation_id', conversationId)
+        .eq('is_read', false)
+        .select('id')
+
+      if (!notifError && Array.isArray(data) && data.length > 0) {
+        refreshUnreadCount()
+        broadcastNotificationSync()
+      }
+
+      await client.rpc('mark_conversation_read', {
+        target_conversation_id: conversationId,
+      })
+
+      setConversations((current) =>
+        current.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
+      )
+    } catch (err) {
+      console.warn('[FloatingChatDock] Non-fatal markConversationAsViewed error:', err)
+    }
+  }, [isDocumentVisibleAndFocused, refreshUnreadCount, broadcastNotificationSync, user?.id])
+
+  const markConversationAsViewedRef = useRef(markConversationAsViewed)
+  markConversationAsViewedRef.current = markConversationAsViewed
+
+  const loadingReceiptIdsRef = useRef(new Set())
 
   const loadCallReceipts = useCallback(async (conversationId) => {
-    if (!conversationId) return
+    if (!conversationId || loadingReceiptIdsRef.current.has(conversationId)) return
 
-    setCallReceiptsByConversation((current) => ({ ...current, [conversationId]: null }))
+    loadingReceiptIdsRef.current.add(conversationId)
 
-    const { data, error: queryError } = await getSupabaseClient()
-      .from('call_sessions')
-      .select('id, conversation_id, caller_id, callee_id, call_type, status, created_at, accepted_at, ended_at')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
+    try {
+      const { data, error: queryError } = await getSupabaseClient()
+        .from('call_sessions')
+        .select('id, conversation_id, caller_id, callee_id, call_type, status, created_at, accepted_at, ended_at')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
 
-    if (queryError) throw queryError
+      if (queryError) throw queryError
 
-    setCallReceiptsByConversation((current) => ({
-      ...current,
-      [conversationId]: data || [],
-    }))
+      setCallReceiptsByConversation((current) => ({
+        ...current,
+        [conversationId]: data || [],
+      }))
+    } finally {
+      loadingReceiptIdsRef.current.delete(conversationId)
+    }
   }, [])
   const openIdsRef = useRef(openIds)
   openIdsRef.current = openIds
@@ -404,14 +451,23 @@ setLoadingIds((current) => current.includes(conversationId)
           }, (payload) => {
             const msg = payload?.new
             if (payload?.eventType === 'INSERT' && msg && msg.sender_id !== user.id) {
-              if (openIdsRef.current.includes(msg.conversation_id)) {
-                Promise.resolve(
-                  getSupabaseClient().rpc('mark_conversation_read', {
-                    target_conversation_id: msg.conversation_id,
-                  })
-                ).catch(() => {})
+              const isActivelyViewedInDock =
+                openIdsRef.current.includes(msg.conversation_id) &&
+                focusedChatIdRef.current === msg.conversation_id &&
+                isDocumentVisibleAndFocused()
+
+              if (isActivelyViewedInDock) {
+                markConversationAsViewedRef.current(msg.conversation_id, true)
               } else {
                 markConversationDelivered(getSupabaseClient(), msg.conversation_id).catch(() => {})
+              }
+            }
+
+            if ((payload?.eventType === 'INSERT' || payload?.eventType === 'UPDATE') && msg) {
+              if (msg.message_type === 'call' || msg.call_session_id) {
+                if (msg.conversation_id && openIdsRef.current.includes(msg.conversation_id)) {
+                  loadCallReceiptsRef.current(msg.conversation_id)?.catch(() => {})
+                }
               }
             }
             triggerDebouncedConversations()
@@ -503,6 +559,37 @@ setLoadingIds((current) => current.includes(conversationId)
   }, [loadConversations, user?.id])
 
   useEffect(() => {
+    const handleVisibilityOrFocus = () => {
+      if (
+        focusedChatIdRef.current &&
+        openIdsRef.current.includes(focusedChatIdRef.current) &&
+        isDocumentVisibleAndFocused()
+      ) {
+        markConversationAsViewedRef.current(focusedChatIdRef.current)
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus)
+    window.addEventListener('focus', handleVisibilityOrFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
+      window.removeEventListener('focus', handleVisibilityOrFocus)
+    }
+  }, [isDocumentVisibleAndFocused])
+
+  useEffect(() => {
+    const handleGlobalPointerDown = (event) => {
+      if (!event.target.closest('.floating-chat-window')) {
+        setFocusedChatId(null)
+      }
+    }
+    window.addEventListener('pointerdown', handleGlobalPointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', handleGlobalPointerDown)
+    }
+  }, [])
+
+  useEffect(() => {
     openIds.forEach((conversationId) => {
       if (
         !messagesByConversation[conversationId] &&
@@ -511,13 +598,10 @@ setLoadingIds((current) => current.includes(conversationId)
         loadMessages(conversationId)
       }
 
-      if (!Object.prototype.hasOwnProperty.call(callReceiptsByConversation, conversationId)) {
+      const hasLoadedReceipts = Array.isArray(callReceiptsByConversation[conversationId])
+      if (!hasLoadedReceipts && !loadingReceiptIdsRef.current.has(conversationId)) {
         loadCallReceipts(conversationId).catch((loadError) => {
           setError(loadError.message || 'Call receipts could not be loaded.')
-          setCallReceiptsByConversation((current) => ({
-            ...current,
-            [conversationId]: [],
-          }))
         })
       }
     })
@@ -735,9 +819,18 @@ setLoadingIds((current) => current.includes(conversationId)
   function openChat(conversationId) {
     setError('')
     promoteToVisibleSlot(conversationId)
+    setFocusedChatId(conversationId)
     setOpenIds((current) => current.includes(conversationId)
       ? current
       : [...current, conversationId])
+    if (!Array.isArray(callReceiptsByConversation[conversationId]) && !loadingReceiptIdsRef.current.has(conversationId)) {
+      loadCallReceipts(conversationId).catch((loadError) => {
+        setError(loadError.message || 'Call receipts could not be loaded.')
+      })
+    }
+    if (isDocumentVisibleAndFocused()) {
+      markConversationAsViewed(conversationId, true)
+    }
   }
 
   function handlePromoteFromOverflow(conversationId) {
@@ -842,6 +935,43 @@ setLoadingIds((current) => current.includes(conversationId)
     }
   }
 
+  const deleteMessage = useCallback(async (conversationId, message) => {
+    if (!message?.id || !user?.id) return
+    if (!window.confirm('Delete this message? This cannot be undone.')) return
+
+    setWorkingMessageId(message.id)
+    try {
+      const { data, error: deleteError } = await getSupabaseClient()
+        .from('messages')
+        .delete()
+        .eq('id', message.id)
+        .eq('sender_id', user.id)
+        .select('id')
+        .maybeSingle()
+
+      if (deleteError) throw deleteError
+      if (!data) throw new Error('You can delete only your own messages.')
+
+      setMessagesByConversation((current) => ({
+        ...current,
+        [conversationId]: (current[conversationId] || []).filter((item) => item.id !== message.id),
+      }))
+
+      setReplyingToByConversation((current) =>
+        current[conversationId]?.id === message.id
+          ? { ...current, [conversationId]: null }
+          : current
+      )
+
+      await loadConversations()
+      window.dispatchEvent(new CustomEvent('qorvexa:network-synced'))
+    } catch (deleteError) {
+      setError(deleteError.message || 'Message could not be deleted.')
+    } finally {
+      setWorkingMessageId('')
+    }
+  }, [user?.id, loadConversations])
+
   function jumpToFloatingMessage(conversationId, messageId) {
     document.getElementById(`floating-chat-message-${messageId}`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -873,12 +1003,18 @@ setLoadingIds((current) => current.includes(conversationId)
     if (voiceState?.conversationId === conversationId) {
       cancelVoiceRecording()
     }
+    if (focusedChatIdRef.current === conversationId) {
+      setFocusedChatId(null)
+    }
     setOpenIds((current) => current.filter((id) => id !== conversationId))
   }
 
   function hideChat(conversationId) {
     if (voiceState?.conversationId === conversationId) {
       cancelVoiceRecording()
+    }
+    if (focusedChatIdRef.current === conversationId) {
+      setFocusedChatId(null)
     }
     setOpenIds((current) => current.filter((id) => id !== conversationId))
     setHiddenIds((current) => [...new Set([...current, conversationId])])
@@ -1352,6 +1488,18 @@ setLoadingIds((current) => current.includes(conversationId)
               key={conversationId}
               style={{ '--chat-window-index': index }}
               aria-label={`Chat with ${name}`}
+              onFocusCapture={() => {
+                setFocusedChatId(conversationId)
+                if (isDocumentVisibleAndFocused()) {
+                  markConversationAsViewed(conversationId)
+                }
+              }}
+              onClickCapture={() => {
+                setFocusedChatId(conversationId)
+                if (isDocumentVisibleAndFocused()) {
+                  markConversationAsViewed(conversationId)
+                }
+              }}
             >
               <header className="floating-chat-header">
                 <Link to={`/profile/${encodeURIComponent(peer.username || '')}`} className="floating-chat-peer">
@@ -1434,6 +1582,16 @@ setLoadingIds((current) => current.includes(conversationId)
                                 peer={peer}
                                 isLastSeen={lastSeenId === item.id}
                               />
+                            )}
+                            {item.sender_id === user.id && (
+                              <button
+                                type="button"
+                                aria-label="Delete message"
+                                onClick={() => deleteMessage(conversationId, item)}
+                                disabled={workingMessageId === item.id}
+                              >
+                                <Trash2 size={12} />
+                              </button>
                             )}
                           </>
                         }

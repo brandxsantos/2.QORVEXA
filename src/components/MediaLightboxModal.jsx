@@ -6,20 +6,22 @@ export default function MediaLightboxModal({
   isOpen,
   onClose,
   initialMedia,
+  activeMedia: activeMediaProp,
   mediaList = [],
 }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [zoomLevel, setZoomLevel] = useState(1)
 
   useEffect(() => {
-    if (initialMedia && mediaList.length > 0) {
-      const idx = mediaList.findIndex((m) => m.id === initialMedia.id)
+    const targetMedia = activeMediaProp || initialMedia
+    if (targetMedia && mediaList.length > 0) {
+      const idx = mediaList.findIndex((m) => m.id === targetMedia.id || (m.signedUrl && m.signedUrl === targetMedia.signedUrl))
       setCurrentIndex(idx >= 0 ? idx : 0)
     } else {
       setCurrentIndex(0)
     }
     setZoomLevel(1)
-  }, [initialMedia, mediaList, isOpen])
+  }, [initialMedia, activeMediaProp, mediaList, isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -34,11 +36,23 @@ export default function MediaLightboxModal({
 
   if (!isOpen) return null
 
-  const activeMedia = mediaList[currentIndex] || initialMedia
+  const activeMedia = mediaList[currentIndex] || activeMediaProp || initialMedia
   if (!activeMedia) return null
 
   const isVideo = activeMedia.attachment_type === 'video'
   const hasMultiple = mediaList.length > 1
+  const filename =
+    activeMedia.original_filename ||
+    activeMedia.filename ||
+    activeMedia.name ||
+    (typeof activeMedia.storage_path === 'string' ? activeMedia.storage_path.split('/').pop() : '') ||
+    (typeof activeMedia === 'string' ? activeMedia.split('/').pop().split('?')[0] : '') ||
+    'Attachment'
+  const mediaUrl =
+    activeMedia.signedUrl ||
+    activeMedia.url ||
+    activeMedia.src ||
+    (typeof activeMedia === 'string' ? activeMedia : '')
 
   const handlePrev = (e) => {
     e?.stopPropagation()
@@ -57,16 +71,44 @@ export default function MediaLightboxModal({
     setZoomLevel((prev) => (prev === 1 ? 2 : prev === 2 ? 3 : 1))
   }
 
+  const handleDownload = async (e) => {
+    e?.stopPropagation()
+    if (!mediaUrl) return
+
+    try {
+      const response = await fetch(mediaUrl)
+      if (!response.ok) throw new Error('Download failed')
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+    } catch {
+      const a = document.createElement('a')
+      a.href = mediaUrl
+      a.download = filename
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    }
+  }
+
   return createPortal(
     <div className="qv-lightbox-overlay" onClick={onClose} role="dialog" aria-modal="true">
       {/* Top Bar Controls */}
-      <div className="qv-lightbox-top-bar" onClick={(e) => e.stopPropagation()}>
-        <div className="qv-lightbox-info">
-          <span className="qv-lightbox-filename" title={activeMedia.original_filename}>
-            {activeMedia.original_filename}
+      <div className="qv-lightbox-header qv-lightbox-top-bar" onClick={(e) => e.stopPropagation()}>
+        <div className="qv-lightbox-meta qv-lightbox-info">
+          <span className="qv-lightbox-title qv-lightbox-filename" title={filename}>
+            {filename}
           </span>
           {hasMultiple && (
-            <span className="qv-lightbox-counter">
+            <span className="qv-lightbox-subtitle qv-lightbox-counter">
               {currentIndex + 1} / {mediaList.length}
             </span>
           )}
@@ -76,7 +118,7 @@ export default function MediaLightboxModal({
           {!isVideo && (
             <button
               type="button"
-              className="qv-lightbox-btn"
+              className="qv-lightbox-action-btn qv-lightbox-btn"
               onClick={toggleZoom}
               title={zoomLevel > 1 ? 'Zoom Out' : 'Zoom In'}
               aria-label="Zoom image"
@@ -86,20 +128,21 @@ export default function MediaLightboxModal({
           )}
 
           <a
-            href={activeMedia.signedUrl}
-            download={activeMedia.original_filename}
+            href={mediaUrl || undefined}
+            download={filename}
             target="_blank"
             rel="noopener noreferrer"
-            className="qv-lightbox-btn"
+            className="qv-lightbox-action-btn qv-lightbox-btn qv-lightbox-download-btn"
             title="Download"
             aria-label="Download media"
+            onClick={handleDownload}
           >
             <Download size={18} />
           </a>
 
           <button
             type="button"
-            className="qv-lightbox-btn qv-lightbox-btn--close"
+            className="qv-lightbox-action-btn qv-lightbox-close-btn qv-lightbox-btn qv-lightbox-btn--close"
             onClick={onClose}
             title="Close"
             aria-label="Close viewer"
@@ -110,11 +153,11 @@ export default function MediaLightboxModal({
       </div>
 
       {/* Main Media Content */}
-      <div className="qv-lightbox-content" onClick={(e) => e.stopPropagation()}>
+      <div className="qv-lightbox-stage qv-lightbox-content" onClick={(e) => e.stopPropagation()}>
         {isVideo ? (
           <video
-            key={activeMedia.id}
-            src={activeMedia.signedUrl}
+            key={activeMedia.id || mediaUrl}
+            src={mediaUrl}
             controls
             autoPlay
             playsInline
@@ -130,8 +173,8 @@ export default function MediaLightboxModal({
             onClick={toggleZoom}
           >
             <img
-              src={activeMedia.signedUrl}
-              alt={activeMedia.original_filename}
+              src={mediaUrl}
+              alt={filename}
               className="qv-lightbox-image"
             />
           </div>
@@ -143,7 +186,7 @@ export default function MediaLightboxModal({
         <>
           <button
             type="button"
-            className="qv-lightbox-arrow qv-lightbox-arrow--prev"
+            className="qv-lightbox-nav-btn qv-lightbox-arrow qv-lightbox-nav-prev qv-lightbox-arrow--prev"
             onClick={handlePrev}
             aria-label="Previous item"
           >
@@ -151,7 +194,7 @@ export default function MediaLightboxModal({
           </button>
           <button
             type="button"
-            className="qv-lightbox-arrow qv-lightbox-arrow--next"
+            className="qv-lightbox-nav-btn qv-lightbox-arrow qv-lightbox-nav-next qv-lightbox-arrow--next"
             onClick={handleNext}
             aria-label="Next item"
           >

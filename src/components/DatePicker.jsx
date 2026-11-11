@@ -42,7 +42,7 @@ function toISO(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-export default function DatePicker({ name, value, onChange }) {
+export default function DatePicker({ id, name, value, onChange, disabled = false }) {
   const rootRef = useRef(null)
   const [internalValue, setInternalValue] = useState('')
   const [open, setOpen] = useState(false)
@@ -76,6 +76,7 @@ export default function DatePicker({ name, value, onChange }) {
   }, [])
 
   function showCalendar() {
+    if (disabled) return
     const date = parseDate(selectedValue) || new Date()
     setViewYear(date.getFullYear())
     setViewMonth(date.getMonth())
@@ -118,9 +119,11 @@ export default function DatePicker({ name, value, onChange }) {
       {name && <input type="hidden" name={name} value={selectedValue || ''} />}
 
       <button
+        id={id}
         type="button"
         className="q-date-trigger"
         onClick={showCalendar}
+        disabled={disabled}
         aria-haspopup="dialog"
         aria-expanded={open}
       >

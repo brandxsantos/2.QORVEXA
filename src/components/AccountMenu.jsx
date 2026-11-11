@@ -1,4 +1,4 @@
-
+import { useRef, useEffect } from 'react'
 import { Bookmark, ChevronDown, LogOut, Moon, Settings2, Shield, Sun } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext.jsx'
@@ -11,32 +11,83 @@ function AccountMenu({ onSignOut, signingOut, menuRef }) {
   const bookmarksActive = pathname === '/app/bookmarks'
   const active = profileActive || privacyActive || bookmarksActive
 
+  const internalRef = useRef(null)
+  const setRef = (node) => {
+    internalRef.current = node
+    if (typeof menuRef === 'function') menuRef(node)
+    else if (menuRef) menuRef.current = node
+  }
+
+  const closeMenu = () => {
+    if (internalRef.current) {
+      internalRef.current.removeAttribute('open')
+    }
+  }
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        internalRef.current &&
+        internalRef.current.open &&
+        !internalRef.current.contains(event.target)
+      ) {
+        closeMenu()
+      }
+    }
+
+    document.addEventListener('pointerdown', handleClickOutside)
+    return () => {
+      document.removeEventListener('pointerdown', handleClickOutside)
+    }
+  }, [])
+
+  // Close menu on route change
+  useEffect(() => {
+    closeMenu()
+  }, [pathname])
+
   const toggleTheme = () => {
     setThemePreference(themePreference === 'light' ? 'dark' : 'light')
   }
 
   return (
-    <details ref={menuRef} className="network-account-menu">
-      <summary className={`network-nav-link${active ? ' is-active' : ''}`} aria-label="Account settings">
+    <details ref={setRef} className="network-account-menu">
+      <summary
+        className={`network-nav-link${active ? ' is-active' : ''}`}
+        aria-label="Account settings"
+        title="Account settings"
+      >
         <Settings2 size={15} aria-hidden="true" />
-        Account
+        <span>Account</span>
         <ChevronDown size={14} aria-hidden="true" />
       </summary>
 
       <div className="network-account-menu-popover">
-        <Link className={profileActive ? 'is-active' : ''} to="/app/profile">
+        <Link
+          className={profileActive ? 'is-active' : ''}
+          to="/app/profile"
+          onClick={closeMenu}
+        >
           <Settings2 size={14} aria-hidden="true" />
-          Profile settings
+          <span>Profile settings</span>
         </Link>
 
-        <Link className={privacyActive ? 'is-active' : ''} to="/app/privacy">
+        <Link
+          className={privacyActive ? 'is-active' : ''}
+          to="/app/privacy"
+          onClick={closeMenu}
+        >
           <Shield size={14} aria-hidden="true" />
-          Privacy &amp; blocked accounts
+          <span>Privacy &amp; blocked accounts</span>
         </Link>
 
-        <Link className={bookmarksActive ? 'is-active' : ''} to="/app/bookmarks">
+        <Link
+          className={bookmarksActive ? 'is-active' : ''}
+          to="/app/bookmarks"
+          onClick={closeMenu}
+        >
           <Bookmark size={14} aria-hidden="true" />
-          Saved
+          <span>Saved</span>
         </Link>
 
         <button
@@ -49,12 +100,19 @@ function AccountMenu({ onSignOut, signingOut, menuRef }) {
           ) : (
             <Sun size={14} aria-hidden="true" />
           )}
-          {themePreference === 'light' ? 'Dark Theme' : 'Light Theme'}
+          <span>{themePreference === 'light' ? 'Dark Theme' : 'Light Theme'}</span>
         </button>
 
-        <button type="button" onClick={onSignOut} disabled={signingOut}>
+        <button
+          type="button"
+          onClick={() => {
+            closeMenu()
+            if (onSignOut) onSignOut()
+          }}
+          disabled={signingOut}
+        >
           <LogOut size={14} aria-hidden="true" />
-          {signingOut ? 'Signing out...' : 'Sign out'}
+          <span>{signingOut ? 'Signing out...' : 'Sign out'}</span>
         </button>
       </div>
     </details>
@@ -62,4 +120,3 @@ function AccountMenu({ onSignOut, signingOut, menuRef }) {
 }
 
 export default AccountMenu
-

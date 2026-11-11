@@ -6,7 +6,7 @@ import { getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import BrandMark from '../components/BrandMark.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
-import AccountMenu from '../components/AccountMenu.jsx'
+import AppHeader from '../components/AppHeader.jsx'
 
 function postDate(value) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
@@ -65,14 +65,9 @@ function BookmarksPage() {
     <main className="member-page member-feed-page settings-page">
       <div className="ambient ambient--one" aria-hidden="true" />
       <div className="matrix-grid" aria-hidden="true" />
-      <header className="member-header member-feed-header">
-        <Link className="brand-link" to="/app" aria-label="QORVEXA feed"><BrandMark /></Link>
-        <nav className="network-nav" aria-label="Community navigation">
-          <Link className="network-nav-link" to="/app">Feed</Link>
-         
-          <AccountMenu />
-        </nav>
-      </header>
+      <AppHeader
+        activeSection="account"
+      />
       <AccountRestrictionNotice userId={user.id} />
       <section className="settings-card bookmark-page" aria-labelledby="bookmarks-heading">
         <p className="eyebrow">YOUR COMMUNITY</p>

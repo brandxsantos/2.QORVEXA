@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Compass,
   Rss,
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
-import AccountMenu from '../components/AccountMenu.jsx'
+import AppHeader from '../components/AppHeader.jsx'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import LinkedText from '../components/social/LinkedText.jsx'
 import { useAuth } from '../context/useAuth.js'
@@ -278,19 +278,12 @@ function ExplorePage() {
       <div className="ambient ambient--one" aria-hidden="true" />
       <div className="matrix-grid" aria-hidden="true" />
 
-      <header className="member-header member-feed-header">
-        <Link className="brand-link" to="/app" aria-label="QORVEXA feed"><BrandMark /></Link>
-        <nav className="network-nav" aria-label="Community navigation">
-          <Link to="/app" className="network-nav-link"><Rss size={15} aria-hidden="true" />Feed</Link>
-          <Link to="/app/explore" className="network-nav-link is-active"><Compass size={15} />Explore</Link>
-          <Link to="/app/discover" className="network-nav-link"><UserPlus size={15} aria-hidden="true" />Discover</Link>
-          <Link to="/app/friends" className="network-nav-link"><Users size={15} />Friends</Link>
-          <Link to="/app/notifications" className="network-nav-link"><Bell size={15} aria-hidden="true" />Notifications</Link>
-          <Link to="/app/messages" className="network-nav-link"><MessageCircle size={15} aria-hidden="true" />Messages</Link>
-          {ownUsername && <Link to={`/profile/${encodeURIComponent(ownUsername)}`} className="network-nav-link"><UserRound size={15} aria-hidden="true" />My profile</Link>}
-          <AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
-        </nav>
-      </header>
+      <AppHeader
+        activeSection="explore"
+        username={ownUsername}
+        onSignOut={handleSignOut}
+        signingOut={signingOut}
+      />
 
       <section className="network-content explore-content">
         <div className="network-heading explore-heading">

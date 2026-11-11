@@ -1,35 +1,147 @@
 @import "tailwindcss";
 
 :root {
-  /* GLOBAL DARK THEME (Default) */
-  --bg-page: #0b0f19;
-  --bg-surface: #141b29;
-  --bg-surface-elevated: #1a2334;
-  --bg-input: #101725;
-  --bg-popover: #101927;
+  /* ==========================================================================
+     QORVEXA DESIGN TOKEN SYSTEM — DARK THEME (Default)
+     Brand Identity: Deep Obsidian Navy & Luminous Cyan
+     ========================================================================== */
+
+  /* 1. Page & Surface Hierarchy */
+  --bg-page: #111726;
+  --bg-page-deep: #0b0f19;
+  --bg-surface: rgba(21, 29, 44, 0.94);
+  --bg-surface-solid: #151d2c;
+  --bg-surface-secondary: rgba(16, 23, 37, 0.82);
+  --bg-surface-elevated: #1b2538;
+  --bg-header: rgba(17, 23, 38, 0.88);
+  --bg-input: #0e1523;
+  --bg-input-focus: #121c2e;
+  --bg-popover: #111a2b;
+  --bg-modal: #131d30;
+  --bg-overlay: rgba(4, 9, 18, 0.78);
   --bg-hover: rgba(148, 163, 184, 0.08);
+  --bg-active: rgba(0, 217, 245, 0.12);
 
-  --text-primary: #f8fafc;
+  /* 2. Typography & Content Colors */
+  --text-primary: #f3f7fc;
   --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
+  --text-muted: #93a2b6;
+  --text-dim: #687990;
+  --text-disabled: #475569;
+  --text-on-accent: #05131c;
 
-  --border-subtle: rgba(148, 163, 184, 0.12);
+  /* 3. Borders & Focus Indicators */
+  --border-subtle: rgba(148, 163, 184, 0.13);
   --border-medium: rgba(148, 163, 184, 0.22);
+  --border-strong: rgba(148, 163, 184, 0.34);
+  --border-divider: rgba(255, 255, 255, 0.07);
+  --border-accent: rgba(0, 217, 245, 0.28);
   --border-focus: #00d9f5;
+  --focus-ring: 0 0 0 3px rgba(0, 217, 245, 0.2);
 
-  --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.4);
-  --shadow-popover: 0 16px 40px rgba(0, 0, 0, 0.55);
+  /* 4. Brand Accents */
+  --accent-cyan: #00d9f5;
+  --accent-cyan-bright: #00e5ff;
+  --accent-cyan-hover: #5deeff;
+  --accent-cyan-subtle: rgba(0, 217, 245, 0.1);
+  --accent-cyan-glow: rgba(0, 229, 255, 0.22);
+  --accent-green: #4df5bd;
+  --accent-green-subtle: rgba(77, 245, 189, 0.1);
 
-  --ambient-opacity: 0.16;
+  /* 5. Semantic Status States (Success, Warning, Danger, Info) */
+  --state-success: #4df5bd;
+  --state-success-bg: rgba(77, 245, 189, 0.08);
+  --state-success-border: rgba(77, 245, 189, 0.22);
+  --state-success-text: #93f4d0;
+
+  --state-warning: #f59e0b;
+  --state-warning-bg: rgba(245, 187, 66, 0.08);
+  --state-warning-border: rgba(245, 187, 66, 0.24);
+  --state-warning-text: #e4c77e;
+
+  --state-danger: #f87171;
+  --state-danger-bg: rgba(255, 77, 77, 0.08);
+  --state-danger-border: rgba(255, 126, 126, 0.24);
+  --state-danger-text: #ffb1b1;
+
+  --state-info: #38bdf8;
+  --state-info-bg: rgba(56, 189, 248, 0.1);
+  --state-info-border: rgba(56, 189, 248, 0.25);
+  --state-info-text: #bae6fd;
+
+  /* 6. Elevation & Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.22);
+  --shadow-card: 0 14px 36px -10px rgba(0, 0, 0, 0.36);
+  --shadow-card-hover: 0 18px 42px -10px rgba(0, 0, 0, 0.48);
+  --shadow-popover: 0 14px 36px rgba(0, 0, 0, 0.52), 0 0 1px rgba(93, 238, 255, 0.2);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6);
+
+  /* 7. Border Radii */
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.65rem;
+  --radius-lg: 0.85rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-full: 9999px;
+
+  /* 8. Typography Families, Sizes & Line Heights */
+  --font-sans: 'Plus Jakarta Sans', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: 'Space Grotesk', 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+
+  --text-2xs: 0.6875rem;   /* 11px — compact badges & micro-labels */
+  --text-xs: 0.75rem;      /* 12px — timestamps, meta, secondary pills */
+  --text-sm: 0.8125rem;    /* 13px — buttons, nav links, form labels */
+  --text-base: 0.9375rem;  /* 15px — post body copy, comments, messages */
+  --text-md: 1rem;         /* 16px — author names, card subheadings */
+  --text-lg: 1.125rem;     /* 18px — section headings, modal titles */
+  --text-xl: 1.375rem;     /* 22px — profile & panel titles */
+  --text-2xl: clamp(1.65rem, 3.4vw, 2.25rem);
+
+  --leading-tight: 1.2;
+  --leading-snug: 1.375;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.68;
+
+  /* 9. Spacing Scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* 10. Layering & Z-Index Conventions */
+  --z-ambient: -1;
+  --z-base: 1;
+  --z-dropdown: 20;
+  --z-sticky: 30;
+  --z-drawer: 50;
+  --z-modal: 60;
+  --z-popover: 200;
+  --z-toast: 500;
+  --z-floating-portal: 9999;
+  --z-lightbox: 99999;
+
+  /* 11. Ambient Backdrop Opacity */
+  --ambient-opacity: 0.15;
   --matrix-opacity: 0.12;
 
-  --accent-cyan: #00d9f5;
-  --accent-cyan-hover: #22d3ee;
-  --accent-cyan-subtle: rgba(0, 217, 245, 0.1);
-  --accent-green: #10b981;
+  /* 12. Component & Interactive Tokens */
+  --btn-height-sm: 2.25rem;
+  --btn-height-md: 2.75rem;
+  --btn-height-lg: 3.125rem;
+  --btn-radius: var(--radius-md);
+  --btn-radius-pill: var(--radius-full);
+  --input-height: 2.75rem;
+  --input-radius: var(--radius-md);
+  --card-radius: var(--radius-xl);
+  --card-padding: 1.25rem;
 
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   color: var(--text-primary);
   background: var(--bg-page);
   font-synthesis: none;
@@ -42,33 +154,95 @@
 }
 
 :root[data-theme="light"] {
-  /* GLOBAL LIGHT THEME (Soft Warm Neutral Architecture) */
-  --bg-page: #F1F2F4;
-  --bg-surface: #FAFAFB;
+  /* ==========================================================================
+     QORVEXA DESIGN TOKEN SYSTEM — LIGHT THEME
+     Soft Cool-Neutral Architecture with Deep Ocean Cyan Accents
+     ========================================================================== */
+
+  /* 1. Page & Surface Hierarchy */
+  --bg-page: #F1F3F7;
+  --bg-page-deep: #E4E7ED;
+  --bg-surface: #FFFFFF;
+  --bg-surface-solid: #FFFFFF;
+  --bg-surface-secondary: #F8FAFC;
   --bg-surface-elevated: #FFFFFF;
-  --bg-input: #F4F5F6;
+  --bg-header: rgba(248, 250, 252, 0.94);
+  --bg-input: #F1F4F8;
+  --bg-input-focus: #FFFFFF;
   --bg-popover: #FFFFFF;
-  --bg-hover: #ECEEF1;
+  --bg-modal: #FFFFFF;
+  --bg-overlay: rgba(15, 23, 42, 0.55);
+  --bg-hover: rgba(15, 23, 42, 0.05);
+  --bg-active: rgba(2, 132, 199, 0.1);
 
-  --text-primary: #252A32;
-  --text-secondary: #69717D;
-  --text-muted: #8A92A0;
-  --text-dim: #A4ACB9;
+  /* 2. Typography & Content Colors */
+  --text-primary: #0F172A;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
+  --text-dim: #94A3B8;
+  --text-disabled: #CBD5E1;
+  --text-on-accent: #FFFFFF;
 
-  --border-subtle: #DFE2E6;
-  --border-medium: #D0D4DA;
+  /* 3. Borders & Focus Indicators */
+  --border-subtle: rgba(15, 23, 42, 0.09);
+  --border-medium: rgba(15, 23, 42, 0.17);
+  --border-strong: rgba(15, 23, 42, 0.28);
+  --border-divider: rgba(15, 23, 42, 0.06);
+  --border-accent: rgba(2, 132, 199, 0.28);
   --border-focus: #0284c7;
+  --focus-ring: 0 0 0 3px rgba(2, 132, 199, 0.2);
 
-  --shadow-card: 0 2px 12px -2px rgba(15, 23, 42, 0.04);
-  --shadow-popover: 0 12px 32px -4px rgba(15, 23, 42, 0.1);
+  /* 4. Brand Accents */
+  --accent-cyan: #0284c7;
+  --accent-cyan-bright: #0284c7;
+  --accent-cyan-hover: #0369a1;
+  --accent-cyan-subtle: rgba(2, 132, 199, 0.08);
+  --accent-cyan-glow: rgba(2, 132, 199, 0.16);
+  --accent-green: #059669;
+  --accent-green-subtle: rgba(5, 150, 105, 0.08);
 
+  /* 5. Semantic Status States */
+  --state-success: #059669;
+  --state-success-bg: #ECFDF5;
+  --state-success-border: #A7F3D0;
+  --state-success-text: #065F46;
+
+  --state-warning: #D97706;
+  --state-warning-bg: #FFFBEB;
+  --state-warning-border: #FDE68A;
+  --state-warning-text: #92400E;
+
+  --state-danger: #DC2626;
+  --state-danger-bg: #FEF2F2;
+  --state-danger-border: #FECACA;
+  --state-danger-text: #991B1B;
+
+  --state-info: #0284C7;
+  --state-info-bg: #F0F9FF;
+  --state-info-border: #BAE6FD;
+  --state-info-text: #075985;
+
+  /* 6. Elevation & Shadows */
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-card: 0 4px 16px -2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-card-hover: 0 8px 24px -4px rgba(15, 23, 42, 0.1);
+  --shadow-popover: 0 12px 36px -4px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.04);
+  --shadow-modal: 0 24px 60px -8px rgba(15, 23, 42, 0.22);
+
+  /* 11. Ambient Backdrop Opacity */
   --ambient-opacity: 0.03;
   --matrix-opacity: 0.015;
 
-  --accent-cyan: #0284c7;
-  --accent-cyan-hover: #0369a1;
-  --accent-cyan-subtle: rgba(2, 132, 199, 0.08);
-  --accent-green: #059669;
+  /* 12. Component & Interactive Tokens */
+  --btn-height-sm: 2.25rem;
+  --btn-height-md: 2.75rem;
+  --btn-height-lg: 3.125rem;
+  --btn-radius: var(--radius-md);
+  --btn-radius-pill: var(--radius-full);
+  --input-height: 2.75rem;
+  --input-radius: var(--radius-md);
+  --card-radius: var(--radius-xl);
+  --card-padding: 1.25rem;
 }
 
 * {
@@ -79,12 +253,14 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  font-family: var(--font-sans);
   background-color: var(--bg-page);
   color: var(--text-primary);
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 #root {
+  min-height: 100vh;
   background-color: var(--bg-page);
   color: var(--text-primary);
 }
@@ -99,9 +275,27 @@ a {
   touch-action: manipulation;
 }
 
+button, input, textarea, select {
+  font-family: inherit;
+}
+
+h1, h2, h3, h4, .font-display, .brand-mark, .eyebrow {
+  font-family: var(--font-display);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
 ::selection {
-  color: #171d2b;
+  color: #0b0f19;
   background: #00e5ff;
+}
+
+:root[data-theme="light"] ::selection {
+  color: #ffffff;
+  background: #0284c7;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -7,7 +7,9 @@ import {
   CornerDownRight,
   ExternalLink,
   Flag,
+  Globe,
   LoaderCircle,
+  Lock,
   LogOut,
   Bookmark,
   MessageCircle,
@@ -22,6 +24,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
 import { useAuth } from '../context/useAuth.js'
+import { useNotifications } from '../context/useNotifications.js'
 import { getSupabaseClient } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import NotificationToast from '../components/NotificationToast.jsx'
@@ -36,7 +39,7 @@ import LinkedText from '../components/social/LinkedText.jsx'
 import ProfilePhotoCropModal from '../components/ProfilePhotoCropModal.jsx'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
-import AccountMenu from '../components/AccountMenu.jsx'
+import AppHeader from '../components/AppHeader.jsx'
 
 const postSelection = 'id, author_id, content, media_path, media_type, post_visibility, created_at, profiles!posts_author_id_fkey(username, display_name, avatar_url)'
 
@@ -69,6 +72,29 @@ function formatPostDate(value) {
   }).format(new Date(value))
 }
 
+function shouldKeepPostAfterDelete(item, deletedPost) {
+  if (!item || !deletedPost) return true
+  if (item.id && deletedPost.id && item.id === deletedPost.id) {
+    return false
+  }
+  if (
+    typeof item.feed_entry_id === 'string' &&
+    item.feed_entry_id &&
+    typeof deletedPost.feed_entry_id === 'string' &&
+    deletedPost.feed_entry_id &&
+    item.feed_entry_id === deletedPost.feed_entry_id
+  ) {
+    return false
+  }
+  if (item.original_post_id && deletedPost.id && item.original_post_id === deletedPost.id) {
+    return false
+  }
+  if (item.post_id && deletedPost.id && item.post_id === deletedPost.id) {
+    return false
+  }
+  return true
+}
+
 function MemberPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -78,7 +104,7 @@ function MemberPage() {
   const [followingIds, setFollowingIds] = useState(() => new Set())
   const [memberProfile, setMemberProfile] = useState(null)
   const [likeCounts, setLikeCounts] = useState({})
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
+  const { unreadNotificationCount } = useNotifications()
   const [unreadMessageCount, setUnreadMessageCount] = useState(0)
   const [notificationToast, setNotificationToast] = useState('')
   const [likedPostIds, setLikedPostIds] = useState(() => new Set())
@@ -160,6 +186,17 @@ function MemberPage() {
     const timer = window.setTimeout(() => setNotificationToast(''), 4500)
     return () => window.clearTimeout(timer)
   }, [notificationToast])
+
+  useEffect(() => {
+    function handleRealtimeNotification(event) {
+      const payload = event.detail
+      if (payload?.eventType === 'INSERT' && payload?.new?.actor_id !== user.id) {
+        setNotificationToast(notificationToastText(payload.new?.type))
+      }
+    }
+    window.addEventListener('qorvexa:notification-realtime', handleRealtimeNotification)
+    return () => window.removeEventListener('qorvexa:notification-realtime', handleRealtimeNotification)
+  }, [user.id])
 
   useEffect(() => {
     let active = true
@@ -346,15 +383,10 @@ function MemberPage() {
   }, [loadFeedRelationships])
   const loadMemberBadges = useCallback(async () => {
     const client = getSupabaseClient()
-    const [notificationsResult, conversationsResult] = await Promise.all([
-      client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
-      client.rpc('get_conversation_summaries'),
-    ])
-    if (notificationsResult.error) throw notificationsResult.error
+    const conversationsResult = await client.rpc('get_conversation_summaries')
     if (conversationsResult.error) throw conversationsResult.error
-    setUnreadNotificationCount(notificationsResult.count || 0)
     setUnreadMessageCount((conversationsResult.data || []).reduce((total, item) => total + Number(item.unread_count || 0), 0))
-  }, [user.id])
+  }, [])
 
   const loadComments = useCallback(async (postId) => {
     setCommentsStatus((current) => ({ ...current, [postId]: 'loading' }))
@@ -444,12 +476,6 @@ function MemberPage() {
         if (postId && commentsOpenRef.current[postId]) {
           loadComments(postId).catch((loadError) => { if (active) setError(loadError.message) })
         }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload) => {
-        if (payload.eventType === 'INSERT' && payload.new?.actor_id !== user.id) {
-          setNotificationToast(notificationToastText(payload.new?.type))
-        }
-        loadMemberBadges().catch((loadError) => { if (active) setError(loadError.message || 'Notification counts could not be updated.') })
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
         loadMemberBadges().catch((loadError) => { if (active) setError(loadError.message || 'Message counts could not be updated.') })
@@ -643,6 +669,42 @@ function MemberPage() {
     }
   }
 
+  async function handleDeletePost(post) {
+    if (!post || post.author_id !== user.id) return
+    const confirmed = window.confirm('Are you sure you want to delete this post? This action cannot be undone.')
+    if (!confirmed) return
+
+    setPostActionId(post.id)
+    setError('')
+
+    try {
+      const { error: deleteError } = await getSupabaseClient()
+        .from('posts')
+        .delete()
+        .eq('id', post.id)
+        .eq('author_id', user.id)
+
+      if (deleteError) throw deleteError
+
+      setPosts((currentPosts) => currentPosts.filter((item) => shouldKeepPostAfterDelete(item, post)))
+      setCommentsOpen((current) => {
+        const next = { ...current }
+        delete next[post.id]
+        return next
+      })
+      setCommentsByPost((current) => {
+        const next = { ...current }
+        delete next[post.id]
+        return next
+      })
+      setNotificationToast('Post deleted.')
+    } catch (deleteError) {
+      setError(deleteError.message || 'The post could not be deleted.')
+    } finally {
+      setPostActionId('')
+    }
+  }
+
   async function handleSignOut() {
     setError('')
     setSigningOut(true)
@@ -687,20 +749,13 @@ function MemberPage() {
       <div className="ambient ambient--one" aria-hidden="true" />
       <div className="matrix-grid" aria-hidden="true" />
       <NotificationToast message={notificationToast} onDismiss={() => setNotificationToast('')} />
-      <header className="member-header member-feed-header">
-        <Link className="brand-link" to="/app" aria-label="QORVEXA feed"><BrandMark /></Link>
-        <nav className="network-nav" aria-label="Community navigation">
-          <span className="network-nav-link is-active"><Rss size={15} aria-hidden="true" />Feed</span>
-          <Link to="/app/explore" className="network-nav-link"><Compass size={15} aria-hidden="true" />Explore</Link>
-          <Link to="/app/discover" className="network-nav-link"><UserPlus size={15} aria-hidden="true" />Discover</Link>
-          <Link to="/app/friends" className="network-nav-link"><Users size={15} aria-hidden="true" />Friends</Link>
-          <Link to="/app/notifications" className="network-nav-link"><Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}</Link>
-          <Link to="/app/messages" className="network-nav-link"><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessageCount > 0 && <span className="network-badge">{unreadMessageCount}</span>}</Link>
-          {username && <Link to={`/profile/${encodeURIComponent(username)}`} className="network-nav-link"><UserRound size={15} aria-hidden="true" />My profile</Link>}
-<AccountMenu menuRef={accountMenuRef} onSignOut={handleSignOut} signingOut={signingOut} />
-        </nav>
-   
-      </header>
+      <AppHeader
+        activeSection="feed"
+        username={username}
+        unreadMessageCount={unreadMessageCount}
+        onSignOut={handleSignOut}
+        signingOut={signingOut}
+      />
 
       <AccountRestrictionNotice userId={user.id} />
       <div className="member-feed-layout">
@@ -858,6 +913,15 @@ function MemberPage() {
                               <Clock3 size={12} aria-hidden="true" />
                               <span>{formatPostDate(post.feed_created_at || post.created_at)}</span>
                             </Link>
+                            {post.author_id === user.id && (
+                              <>
+                                <span className="member-post-author-dot" aria-hidden="true">·</span>
+                                <span className="member-post-audience-badge" title={`Audience: ${post.post_visibility === 'only_me' ? 'Only me' : post.post_visibility === 'friends' ? 'Friends' : 'Public'}`}>
+                                  {post.post_visibility === 'only_me' ? <Lock size={11} aria-hidden="true" /> : post.post_visibility === 'friends' ? <Users size={11} aria-hidden="true" /> : <Globe size={11} aria-hidden="true" />}
+                                  <span>{post.post_visibility === 'only_me' ? 'Only me' : post.post_visibility === 'friends' ? 'Friends' : 'Public'}</span>
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="member-post-header-actions">
@@ -883,6 +947,14 @@ function MemberPage() {
                                 icon: ExternalLink,
                                 to: `/post/${post.id}`,
                               },
+                              post.author_id === user.id && {
+                                id: 'delete-post',
+                                label: 'Delete post',
+                                icon: Trash2,
+                                danger: true,
+                                disabled: postActionId === post.id,
+                                onClick: () => handleDeletePost(post),
+                              },
                               post.author_id !== user.id && {
                                 id: 'report',
                                 label: 'Report post',
@@ -894,7 +966,6 @@ function MemberPage() {
                           />
                         </div>
                       </div>
-                      {post.author_id === user.id && <span className="public-post-audience"><ShieldCheck size={12} />{post.post_visibility === 'only_me' ? 'Only me' : post.post_visibility === 'friends' ? 'Friends' : 'Public'}</span>}
                       {post.content && <p className="member-post-content"><LinkedText text={post.content} /></p>}
                       {post.media_path && (
                         <Link
@@ -917,25 +988,25 @@ function MemberPage() {
                           onReact={(type) => handlePostReaction(post, type)}
                         />
                         <button
-                          className={`member-comments-toggle${commentsOpen[post.id] ? ' is-active' : ''}`}
+                          className={`member-comments-toggle member-post-action-btn${commentsOpen[post.id] ? ' is-active' : ''}`}
                           type="button"
                           onClick={() => toggleComments(post.id)}
                           aria-expanded={Boolean(commentsOpen[post.id])}
                         >
-                          <MessageCircle size={14} aria-hidden="true" />
-                          <span>{commentsByPost[post.id]?.length ? `${commentsByPost[post.id].length} comments` : 'Comment'}</span>
+                          <MessageCircle size={15} aria-hidden="true" />
+                          <span className="member-action-label">{commentsByPost[post.id]?.length ? `${commentsByPost[post.id].length} comments` : 'Comment'}</span>
                         </button>
                         {post.author_id !== user.id && (
                           <button
-                            className={`member-comments-toggle${repostedPostIds.has(post.id) ? ' is-active' : ''}`}
+                            className={`member-comments-toggle member-post-action-btn${repostedPostIds.has(post.id) ? ' is-active' : ''}`}
                             type="button"
                             onClick={() => toggleRepost(post)}
                             disabled={Boolean(postActionId)}
                             aria-pressed={repostedPostIds.has(post.id)}
                           >
-                            <Repeat2 size={14} aria-hidden="true" />
-                            <span>{repostedPostIds.has(post.id) ? 'Undo repost' : 'Repost'}</span>
-                            {repostCounts[post.id] > 0 && <span>{repostCounts[post.id]}</span>}
+                            <Repeat2 size={15} aria-hidden="true" />
+                            <span className="member-action-label">{repostedPostIds.has(post.id) ? 'Undo repost' : 'Repost'}</span>
+                            {repostCounts[post.id] > 0 && <span className="member-repost-count">{repostCounts[post.id]}</span>}
                           </button>
                         )}
                         <PostShareButton url={`/post/${post.id}`} />

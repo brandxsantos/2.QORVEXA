@@ -35,13 +35,14 @@ import BrandMark from '../components/BrandMark.jsx'
 import CallReceipt from '../components/CallReceipt.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { useCall } from '../context/useCall.js'
+import { useNotifications } from '../context/useNotifications.js'
 import { authorizeRealtimeSession, getSupabaseClient, getOwnProfileSettingsCached } from '../lib/supabase.js'
 import ProtectedMediaImage from '../components/ProtectedMediaImage.jsx'
 import NotificationToast from '../components/NotificationToast.jsx'
 import notificationToastText from '../lib/notificationToastText.js'
 import ReportDialog from '../components/ReportDialog.jsx'
 import AccountRestrictionNotice from '../components/AccountRestrictionNotice.jsx'
-import AccountMenu from '../components/AccountMenu.jsx'
+import AppHeader from '../components/AppHeader.jsx'
 import EmojiPicker from '../components/EmojiPicker.jsx'
 import MessageInteractions from '../components/MessageInteractions.jsx'
 import { loadMessageInteractions, toggleMessageReaction } from '../lib/messageInteractions.js'
@@ -246,7 +247,7 @@ function NetworkPage() {
   const [presenceError, setPresenceError] = useState('')
   const [workingId, setWorkingId] = useState('')
   const [sending, setSending] = useState(false)
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(() => cachedNetwork?.unreadNotificationCount || 0)
+  const { unreadNotificationCount, setUnreadNotificationCount, refreshUnreadCount, broadcastNotificationSync } = useNotifications()
   const activeSectionRef = useRef(activeSection)
   activeSectionRef.current = activeSection
   const callsListCacheRef = useRef(cachedNetwork?.callsList || [])
@@ -502,7 +503,6 @@ function NetworkPage() {
       !isNotifications
         ? client.from('notifications').select(notificationFields).eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)
         : Promise.resolve({ data: stage1NotificationsResult.data, error: null }),
-      client.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
       client.from('call_sessions')
         .select('id, conversation_id, caller_id, callee_id, call_type, status, created_at, accepted_at, ended_at')
         .or(`caller_id.eq.${user.id},callee_id.eq.${user.id}`)
@@ -511,7 +511,7 @@ function NetworkPage() {
       !isDiscover
         ? client.from('profiles').select(profileFields).neq('id', user.id).order('created_at', { ascending: false }).range(0, 49)
         : Promise.resolve({ data: null, error: null }),
-    ]).then(([ownSettingsResult, bgNotificationsResult, unreadCountResult, callsResult, bgProfilesResult]) => {
+    ]).then(([ownSettingsResult, bgNotificationsResult, callsResult, bgProfilesResult]) => {
       if (ownSettingsResult?.data?.[0]) {
         setAvailabilityById((current) => ({
           ...current,
@@ -521,9 +521,6 @@ function NetworkPage() {
 
       if (!bgNotificationsResult?.error && bgNotificationsResult?.data) {
         setNotifications(bgNotificationsResult.data)
-      }
-      if (!unreadCountResult?.error && typeof unreadCountResult?.count === 'number') {
-        setUnreadNotificationCount(unreadCountResult.count)
       }
 
       let enrichedProfileMap = { ...currentProfileMap }
@@ -561,7 +558,7 @@ function NetworkPage() {
         ...prevCache,
         profiles: Object.values(enrichedProfileMap).filter((p) => p.id !== user.id),
         notifications: bgNotificationsResult?.data || prevCache.notifications || [],
-        unreadNotificationCount: typeof unreadCountResult?.count === 'number' ? unreadCountResult.count : (prevCache.unreadNotificationCount || 0),
+        unreadNotificationCount: unreadNotificationCount || 0,
         conversations: finalConversations,
         callsList: callsListCacheRef.current || [],
       })
@@ -604,25 +601,58 @@ function NetworkPage() {
       console.warn('Non-fatal interactions load failure:', intErr)
     })
     setHasMoreMessages((data || []).length === 100)
-    
-    // Mark as read non-fatally in the background (fire-and-forget, do not block message display)
+  }, [refreshMessageInteractions])
+
+  const isDocumentVisibleAndFocused = useCallback(() => {
+    const isVisible = typeof document !== 'undefined' ? document.visibilityState === 'visible' : true
+    const isFocused = typeof document !== 'undefined' && typeof document.hasFocus === 'function' ? document.hasFocus() : true
+    return isVisible && isFocused
+  }, [])
+
+  const markConversationAsViewed = useCallback(async (conversationId, force = false) => {
+    if (!conversationId || !user?.id) return
+    if (!isDocumentVisibleAndFocused()) return
+
+    if (typeof window !== 'undefined') {
+      if (!window.__qorvexa_last_viewed_at) {
+        window.__qorvexa_last_viewed_at = {}
+      }
+      const now = Date.now()
+      const last = window.__qorvexa_last_viewed_at[conversationId] || 0
+      if (!force && now - last < 2000) return
+      window.__qorvexa_last_viewed_at[conversationId] = now
+    }
+
     const client = getSupabaseClient()
-    Promise.resolve(
-      client
+    try {
+      const { data, error: notifError } = await client
         .from('notifications')
         .update({ is_read: true })
         .eq('user_id', user.id)
         .eq('type', 'message')
         .eq('conversation_id', conversationId)
         .eq('is_read', false)
-    ).catch((notifErr) => console.warn('Non-fatal notifications read update failure:', notifErr))
+        .select('id')
 
-    Promise.resolve(
-      client.rpc('mark_conversation_read', {
+      if (!notifError && Array.isArray(data) && data.length > 0) {
+        refreshUnreadCount()
+        broadcastNotificationSync()
+      }
+
+      await client.rpc('mark_conversation_read', {
         target_conversation_id: conversationId,
       })
-    ).catch((readErr) => console.warn('Non-fatal mark_conversation_read failure:', readErr))
-  }, [refreshMessageInteractions, user.id])
+
+      setConversations((current) =>
+        current.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
+      )
+    } catch (err) {
+      console.warn('Non-fatal markConversationAsViewed failure:', err)
+    }
+  }, [isDocumentVisibleAndFocused, refreshUnreadCount, broadcastNotificationSync, user?.id])
+
+  const markConversationAsViewedRef = useRef(markConversationAsViewed)
+  markConversationAsViewedRef.current = markConversationAsViewed
 
   const loadCallReceipts = useCallback(async (conversationId) => {
     if (!conversationId) {
@@ -828,6 +858,10 @@ function NetworkPage() {
       .finally(() => { if (active) setLoadingMessages(false) })
     loadCallReceipts(selectedConversationId).catch((loadError) => { if (active) handleMessageLoadError(loadError) })
 
+    if (isDocumentVisibleAndFocused()) {
+      markConversationAsViewed(selectedConversationId)
+    }
+
     const client = getSupabaseClient()
     const channel = client.channel(`conversation-${selectedConversationId}`, { config: { private: true } })
       .on('postgres_changes', {
@@ -838,11 +872,11 @@ function NetworkPage() {
       }, (payload) => {
         loadMessages(selectedConversationId).catch((loadError) => setError(loadError.message))
         if (payload?.eventType === 'INSERT' && payload?.new?.sender_id !== user.id) {
-          Promise.resolve(
-            getSupabaseClient().rpc('mark_conversation_read', {
-              target_conversation_id: selectedConversationId,
-            })
-          ).catch(() => {})
+          if (isDocumentVisibleAndFocused()) {
+            markConversationAsViewed(selectedConversationId, true)
+          } else {
+            markConversationDelivered(getSupabaseClient(), selectedConversationId).catch(() => {})
+          }
         }
       })
       .on('postgres_changes', {
@@ -903,7 +937,7 @@ function NetworkPage() {
       if (chatChannelRef.current === channel) chatChannelRef.current = null
       client.removeChannel(channel)
     }
-  }, [activeSection, handleMessageLoadError, loadCallReceipts, loadMessages, refreshMessageInteractions, selectedConversationId, user.id])
+  }, [activeSection, handleMessageLoadError, isDocumentVisibleAndFocused, loadCallReceipts, loadMessages, markConversationAsViewed, refreshMessageInteractions, selectedConversationId, user.id])
 
   useEffect(() => {
     if (skipNextMessageScrollRef.current) {
@@ -914,43 +948,57 @@ function NetworkPage() {
   }, [messages, callReceipts])
 
   useEffect(() => {
-    const client = getSupabaseClient()
-    const channel = client.channel(`user-notifications-${user.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`,
-      }, (payload) => {
-        const notification = payload.new
-        const currentSelectedId = selectedConversationIdRef.current
-        const isCurrentConversationMessage = notification?.type === 'message'
-          && activeSection === 'messages'
-          && notification.conversation_id === currentSelectedId
-        if (payload.eventType === 'INSERT' && notification?.actor_id !== user.id && !isCurrentConversationMessage) {
-          setNotificationToast(notificationToastText(notification?.type))
-        }
-        const update = isCurrentConversationMessage
-          ? client.from('notifications')
-            .update({ is_read: true })
-            .eq('id', notification.id)
-            .eq('user_id', user.id)
-            .eq('is_read', false)
-          : Promise.resolve({ error: null })
-        update
+    const handleRealtimeNotification = (event) => {
+      const payload = event.detail
+      const notification = payload?.new
+      const currentSelectedId = selectedConversationIdRef.current
+      const isCurrentConversationMessage =
+        notification?.type === 'message' &&
+        activeSection === 'messages' &&
+        notification.conversation_id === currentSelectedId
+
+      if (payload?.eventType === 'INSERT' && notification?.actor_id !== user.id && !isCurrentConversationMessage) {
+        setNotificationToast(notificationToastText(notification?.type))
+      }
+
+      if (isCurrentConversationMessage) {
+        getSupabaseClient()
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('id', notification.id)
+          .eq('user_id', user.id)
+          .eq('is_read', false)
           .then(({ error: updateError }) => {
-            if (updateError) throw updateError
-            return loadNetwork()
+            if (!updateError) {
+              refreshUnreadCount()
+              broadcastNotificationSync()
+            }
           })
-          .catch((loadError) => setError(loadError.message || 'Notifications could not be updated.'))
-      })
-      .subscribe((channelStatus) => {
-        if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
-          setError('Live notifications are temporarily unavailable. Reconnecting...')
-        }
-      })
-    return () => { client.removeChannel(channel) }
-  }, [activeSection, loadNetwork, user.id])
+          .catch(() => {})
+      }
+
+      // If currently viewing the notifications tab, refresh the notification list without reloading everything else
+      if (activeSection === 'notifications') {
+        getSupabaseClient()
+          .from('notifications')
+          .select(notificationFields)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(50)
+          .then(({ data, error: notifError }) => {
+            if (!notifError && data) {
+              setNotifications(data)
+            }
+          })
+          .catch(() => {})
+      }
+    }
+
+    window.addEventListener('qorvexa:notification-realtime', handleRealtimeNotification)
+    return () => {
+      window.removeEventListener('qorvexa:notification-realtime', handleRealtimeNotification)
+    }
+  }, [activeSection, broadcastNotificationSync, refreshUnreadCount, user.id])
 
   useEffect(() => {
     const client = getSupabaseClient()
@@ -972,12 +1020,13 @@ function NetworkPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         const msg = payload?.new
         if (payload?.eventType === 'INSERT' && msg && msg.sender_id !== user.id) {
-          if (msg.conversation_id === selectedConversationIdRef.current) {
-            Promise.resolve(
-              getSupabaseClient().rpc('mark_conversation_read', {
-                target_conversation_id: msg.conversation_id,
-              })
-            ).catch(() => {})
+          const isActivelyViewed =
+            msg.conversation_id === selectedConversationIdRef.current &&
+            activeSectionRef.current === 'messages' &&
+            isDocumentVisibleAndFocused()
+
+          if (isActivelyViewed) {
+            markConversationAsViewedRef.current(msg.conversation_id, true)
           } else {
             markConversationDelivered(getSupabaseClient(), msg.conversation_id).catch(() => {})
           }
@@ -1012,6 +1061,25 @@ function NetworkPage() {
       client.removeChannel(channel)
     }
   }, [loadNetwork, user.id])
+
+  useEffect(() => {
+    const handleVisibilityOrFocus = () => {
+      if (
+        activeSection === 'messages' &&
+        selectedConversationId &&
+        isDocumentVisibleAndFocused()
+      ) {
+        markConversationAsViewed(selectedConversationId)
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus)
+    window.addEventListener('focus', handleVisibilityOrFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
+      window.removeEventListener('focus', handleVisibilityOrFocus)
+    }
+  }, [activeSection, isDocumentVisibleAndFocused, markConversationAsViewed, selectedConversationId])
 
   const conversationTimeline = useMemo(() => {
     const callIds = new Set(callReceipts.map((s) => s.id))
@@ -1159,7 +1227,10 @@ function NetworkPage() {
     if (!conv?.id) return
     setDirectActiveConversation(conv)
     navigate(`/app/messages/${encodeURIComponent(conv.id)}`)
-  }, [navigate])
+    if (isDocumentVisibleAndFocused()) {
+      markConversationAsViewed(conv.id, true)
+    }
+  }, [navigate, isDocumentVisibleAndFocused, markConversationAsViewed])
 
   function handleStoryReply({ peerId, caption }) {
     openConversation({ id: peerId }).then(() => {
@@ -1178,7 +1249,9 @@ function NetworkPage() {
       .eq('user_id', user.id)
     if (updateError) {
       setError(updateError.message)
-      loadNetwork().catch((loadError) => setError(loadError.message))
+      refreshUnreadCount()
+    } else {
+      broadcastNotificationSync()
     }
   }
 
@@ -1193,7 +1266,9 @@ function NetworkPage() {
       .eq('is_read', false)
     if (updateError) {
       setError(updateError.message)
-      loadNetwork().catch((loadError) => setError(loadError.message))
+      refreshUnreadCount()
+    } else {
+      broadcastNotificationSync()
     }
   }
 
@@ -1715,23 +1790,13 @@ function NetworkPage() {
       <div className="ambient ambient--one" aria-hidden="true" />
       <div className="matrix-grid" aria-hidden="true" />
       <NotificationToast message={notificationToast} onDismiss={() => setNotificationToast('')} />
-      <header className="member-header member-feed-header">
-        <Link className="brand-link" to="/app" aria-label="QORVEXA feed"><BrandMark /></Link>
-        <nav className="network-nav" aria-label="Community navigation">
-          <Link to="/app" className="network-nav-link"><Rss size={15} aria-hidden="true" />Feed</Link>
-          <Link to="/app/explore" className={`network-nav-link${activeSection === 'explore' ? ' is-active' : ''}`}><Compass size={15} aria-hidden="true" />Explore</Link>
-          <Link to="/app/discover" className={`network-nav-link${activeSection === 'discover' ? ' is-active' : ''}`}><UserPlus size={15} aria-hidden="true" />Discover</Link>
-          <Link to="/app/friends" className={`network-nav-link${activeSection === 'friends' ? ' is-active' : ''}`}><Users size={15} aria-hidden="true" />Friends</Link>
-          <Link to="/app/notifications" className={`network-nav-link${activeSection === 'notifications' ? ' is-active' : ''}`}>
-          <Bell size={15} aria-hidden="true" />Notifications{unreadNotificationCount > 0 && <span className="network-badge">{unreadNotificationCount}</span>}
-          </Link>
-          <Link to="/app/messages" className={`network-nav-link${activeSection === 'messages' ? ' is-active' : ''}`}><MessageCircle size={15} aria-hidden="true" />Messages{unreadMessages > 0 && <span className="network-badge">{unreadMessages}</span>}</Link>
-
-   {ownUsername && <Link to={`/profile/${encodeURIComponent(ownUsername)}`} className="network-nav-link"><UserRound size={15} aria-hidden="true" />My profile</Link>}
-<AccountMenu onSignOut={handleSignOut} signingOut={signingOut} />
-        </nav>
-
-      </header>
+      <AppHeader
+        activeSection={activeSection}
+        username={ownUsername}
+        unreadMessageCount={unreadMessages}
+        onSignOut={handleSignOut}
+        signingOut={signingOut}
+      />
 
       <AccountRestrictionNotice userId={user.id} />
       <section className={`network-content network-content--${activeSection}`}>

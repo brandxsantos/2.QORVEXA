@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export const POST_REACTIONS = [
   { type: 'like', emoji: '👍', label: 'Like' },
@@ -12,13 +12,38 @@ export const POST_REACTIONS = [
 
 export default function PostReactionButton({ reaction, count = 0, disabled = false, onReact }) {
   const [open, setOpen] = useState(false)
+  const containerRef = useRef(null)
   const selected = POST_REACTIONS.find((item) => item.type === reaction)
 
+  useEffect(() => {
+    if (!open) return
+
+    function handlePointerDown(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setOpen(false)
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
   return (
-    <div className="qv-reaction-picker">
+    <div className={`qv-reaction-picker${open ? ' is-open' : ''}`} ref={containerRef}>
       <button
         type="button"
-        className={`member-comments-toggle${selected ? ' is-active' : ''}`}
+        className={`member-comments-toggle member-post-action-btn${selected ? ' is-active' : ''}`}
         disabled={disabled}
         aria-expanded={open}
         aria-pressed={Boolean(selected)}
@@ -28,8 +53,8 @@ export default function PostReactionButton({ reaction, count = 0, disabled = fal
           setOpen(true)
         }}
       >
-        <span aria-hidden="true">{selected?.emoji || '👍'}</span>
-        <span>{selected?.label || 'Like'} · {count}</span>
+        <span className="member-reaction-emoji" aria-hidden="true">{selected?.emoji || '👍'}</span>
+        <span className="member-action-label">{selected?.label || 'Like'}{count > 0 ? ` · ${count}` : ''}</span>
       </button>
       {open && (
         <div className="qv-reaction-menu" role="group" aria-label="Choose a reaction">
@@ -39,7 +64,7 @@ export default function PostReactionButton({ reaction, count = 0, disabled = fal
               key={item.type}
               title={item.label}
               aria-label={item.label}
-              className={reaction === item.type ? 'is-selected' : ''}
+              className={`qv-reaction-item${reaction === item.type ? ' is-selected' : ''}`}
               disabled={disabled}
               onClick={() => {
                 onReact(item.type)

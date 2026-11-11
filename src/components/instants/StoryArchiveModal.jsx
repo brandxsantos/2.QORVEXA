@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { fetchStoryArchive, deleteStory, repostStoryFromArchive } from '../../lib/stories.js'
 import ProtectedMediaImage from '../ProtectedMediaImage.jsx'
+import StoryThumbnail from './StoryThumbnail.jsx'
 import './Instants.css'
 
 function formatShortDate(isoString) {
@@ -166,8 +167,8 @@ export default function StoryArchiveModal({ isOpen, onClose, user, onStoryRepost
             /* Story Detail & Insights View */
             <div className="story-archive-detail">
               <div className="story-archive-preview-frame">
-                <ProtectedMediaImage
-                  path={selectedStory.image_path}
+                <StoryThumbnail
+                  imagePath={selectedStory.image_path}
                   alt="Archived story"
                   className="story-archive-full-img"
                 />
@@ -255,8 +256,8 @@ export default function StoryArchiveModal({ isOpen, onClose, user, onStoryRepost
                   role="button"
                   tabIndex={0}
                 >
-                  <ProtectedMediaImage
-                    path={story.image_path}
+                  <StoryThumbnail
+                    imagePath={story.image_path}
                     alt="Archived story thumbnail"
                     className="story-archive-card-thumb"
                   />
